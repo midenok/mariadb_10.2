@@ -18,6 +18,13 @@
 # If you use the same .cnf file for MySQL and MariaDB,
 # you can put MariaDB-only options here
 [mariadb]
+plugin-maturity=stable
+plugin-load-add=server_audit
+
+feedback-user-info='enterprise'
+
+## remove the following line to enable feedback reporting to mariadb.org
+feedback-url=''
 
 # This group is only read by MariaDB-10.0 servers.
 # If you use the same .cnf file for MariaDB of different versions,
