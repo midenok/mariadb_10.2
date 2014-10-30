@@ -124,6 +124,9 @@ IF(UNIX)
 	    COMPONENT IniFiles)
     INSTALL(FILES rpm/mariadb-enterprise.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
 	    COMPONENT IniFiles)
+  ELSE()
+    INSTALL(FILES rpm/mariadb-enterprise.cnf DESTINATION ${INSTALL_DOCREADMEDIR}
+	    COMPONENT IniFiles)
   ENDIF()
 
 ENDIF()
