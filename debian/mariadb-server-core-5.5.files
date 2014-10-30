@@ -1,3 +1,7 @@
+etc/mysql/conf.d/client.cnf
+etc/mysql/conf.d/mariadb-enterprise.cnf
+etc/mysql/conf.d/mysql-clients.cnf
+etc/mysql/conf.d/server.cnf
 usr/sbin/mysqld
 usr/share/man/man8/mysqld.8
 usr/share/mysql/charsets

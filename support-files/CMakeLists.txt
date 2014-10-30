@@ -107,17 +107,6 @@ IF(UNIX)
     INSTALL(FILES rpm/my.cnf DESTINATION ${INSTALL_SYSCONFDIR}
             COMPONENT Common)
 
-    IF (INSTALL_SYSCONF2DIR)
-      INSTALL(FILES rpm/client.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
-              COMPONENT SharedLibraries)
-      INSTALL(FILES rpm/mysql-clients.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
-              COMPONENT Client)
-      INSTALL(FILES rpm/server.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
-              COMPONENT IniFiles)
-      INSTALL(FILES rpm/mariadb-enterprise.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
-              COMPONENT IniFiles)
-    ENDIF()
-
     # This is for SuSE:
     INSTALL(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E create_symlink
                    ${INSTALL_SYSCONFDIR}/init.d/mysql
@@ -125,4 +114,16 @@ IF(UNIX)
                    WORKING_DIRECTORY \$ENV{DESTDIR}${prefix})"
                    COMPONENT SupportFiles)
   ENDIF(INSTALL_SYSCONFDIR)
+
+  IF (INSTALL_SYSCONF2DIR)
+    INSTALL(FILES rpm/client.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
+	    COMPONENT SharedLibraries)
+    INSTALL(FILES rpm/mysql-clients.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
+	    COMPONENT Client)
+    INSTALL(FILES rpm/server.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
+	    COMPONENT IniFiles)
+    INSTALL(FILES rpm/mariadb-enterprise.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
+	    COMPONENT IniFiles)
+  ENDIF()
+
 ENDIF()
