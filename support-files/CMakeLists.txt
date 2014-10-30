@@ -114,6 +114,8 @@ IF(UNIX)
               COMPONENT Client)
       INSTALL(FILES rpm/server.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
               COMPONENT IniFiles)
+      INSTALL(FILES rpm/mariadb-enterprise.cnf DESTINATION ${INSTALL_SYSCONF2DIR}
+              COMPONENT IniFiles)
     ENDIF()
 
     # This is for SuSE:

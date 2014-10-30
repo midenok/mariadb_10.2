@@ -1,0 +1,10 @@
+
+[mariadb]
+enable-secure-auth
+plugin-maturity=gamma
+plugin-load=server_audit
+
+feedback-user-info='enterprise'
+
+## remove the following line to enable feedback reporting to mariadb.org
+feedback-url=''
