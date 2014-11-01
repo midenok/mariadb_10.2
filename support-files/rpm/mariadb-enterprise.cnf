@@ -1,10 +1,150 @@
-
 [mariadb]
-enable-secure-auth
 plugin-maturity=gamma
-plugin-load=server_audit
 
 feedback-user-info='enterprise'
 
 ## remove the following line to enable feedback reporting to mariadb.org
 feedback-url=''
+
+[mysqld]
+enable-secure-auth
+plugin-load=server_audit
+
+###########################################
+[mysqld]
+
+# General
+# bind_address = 127.0.0.1
+skip-name-resolve
+max-allowed-packet                       = 64M
+open-files-limit                         = 65535
+max-connect-errors                       = 100000
+max-connections                          = 1000
+thread-cache-size                        = 200
+back-log                                 = 128
+#net_buffer_length                       = 16K
+#connect_timeout                         = 10
+#net_read_timeout                        = 30
+#net_write_timeout                       = 60
+#interactive_timeout                     = 28800
+#wait_timeout                            = 28800
+#net_retry_count                         = 10
+character-set-server                     = 'utf8'
+collation-server                         = 'utf8_general_ci'
+# -- Do not change these defaults, unless you really know.
+#read_rnd_buffer_size                    = 256K
+#sort_buffer_size                        = 2M
+#read_buffer_size                        = 128K
+#max_tmp_tables                          = 32
+tmp-table-size                           = 32M
+max-heap-table-size                      = 32M
+# -- This will enable a stricter SQL mode to avoid bad data
+sql-mode                                 = STRICT_TRANS_TABLES
+
+optimizer_switch                         = 'index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on,index_merge_sort_intersection=off,index_condition_pushdown=on,derived_merge=on,derived_with_keys=on,firstmatch=on,loosescan=on,materialization=on,in_to_exists=on,semijoin=on,partial_match_rowid_merge=on,partial_match_table_scan=on,subquery_cache=on,mrr=on,mrr_cost_based=on,mrr_sort_keys=off,outer_join_with_cache=on,semijoin_with_cache=on,join_cache_incremental=on,join_cache_hashed=on,join_cache_bka=on,optimize_join_buffer_size=on,table_elimination=on,extended_keys=on'
+join-buffer-space-limit                  = 4M
+join-cache-level                         = 6
+join-buffer-size                         = 4M
+
+# Security
+symbolic-links                           = 0
+local-infile                             = 0
+
+# Logging
+log-warnings                             = 2
+slow-query-log                           = 1
+long-query-time                          = 5
+log-slow-verbosity                       = 'query_plan,innodb'
+#log_slow_rate_limit                     = 1000
+
+# Replication / Binary logs
+# -- Set to unique number on each server participating in replication
+server-id                                 = 1
+# -- Annotate queries as comments in binary log, for row based events (Breaks replication to MySQL)
+#If you plan to downgrade to MySQL don’t set binlog_annotate_row_events to ON.
+binlog-annotate-row-events               = ON
+log-bin=mariadb-bin
+# BIN.2  Binlog File
+binlog-format                            = MIXED
+expire-logs-days                         = 7
+max-binlog-size                          = 1024M
+# -- Recommended for binary log durability. Expect 60% performance hit without write cache on controller
+sync-binlog                              = 1
+binlog-stmt-cache-size                   = 128K
+binlog-cache-size                        = 256K
+#slave_compressed_protocol                = ON
+slave-transaction-retries                = 10
+#relay_log_recovery                       = ON
+#sync_master_info                         = 1
+#sync_relay_log                           = 0
+#sync_relay_log_info                      = 1
+
+# InnoDB
+default-storage-engine                   = 'InnoDB'
+innodb-stats-on-metadata                 = 0
+innodb-stats-sample-pages                = 32
+table-definition-cache                   = 2048
+table-open-cache                         = 2048
+transaction-isolation                    = READ-COMMITTED
+# To be set to 0 if not multi transactional storage engine
+innodb-support-xa                        = ON
+
+# Query Cache
+query-cache-size                         = 0
+query-cache-type                         = 0
+innodb-buffer-pool-instances             = 8
+# -- Set the following to maximum 60/70% of physical RAM.
+innodb-buffer-pool-size                  = 2G
+# innodb_max_dirty_pages_pct should be compute with redo log size in mind: It’s recommended to set the dirty pages smaller than redo log space. The more you have dirty page, the less io will be produced on disk.
+innodb-max-dirty-pages-pct               = 50
+innodb-file-per-table                    = 1
+innodb-file-format                       = Barracuda
+innodb-flush-log-at-trx-commit           = 1
+#Save and restore buffer pool to be transparent for user
+#innodb_flush_method                      = O_DIRECT
+innodb-log-buffer-size                   = 64M
+innodb-log-files-in-group                = 2
+innodb-log-file-size                     = 1024M
+#innodb_purge_threads                     = 1
+# -- Raid1: 200. Raid10: 200 x write arrays. SSD: 5000. FusionIO: 20000.
+#innodb_io_capacity                      = 200
+# -- Increase these numbers to increase global throughput on SAN (16,32,64)
+innodb-read-io-threads                   = 8
+innodb-write-io-threads                  = 8
+# -- Set this to 2-4 times # of Cpus, maximum recommended is 64.
+# -- iostat report io service time: io_capacity / service_time is a good starting point for innodb_write_io_threads
+# -- innodb_read_io_threads starting point monitoring status # read ahead per second
+innodb-thread-concurrency                = 64
+
+innodb-open-files                       = 2048
+
+# MyISAM
+key-buffer-size                          = 64M
+flush                                    = OFF
+myisam-recover-options                   = BACKUP,FORCE
+myisam-sort-buffer-size                  = 64M
+
+# Other
+# -- Enable INFORMATION_SCHEMA.%_STATISTICS tables
+userstat                                 = ON
+archive                                  = OFF
+blackhole                                = OFF
+#federated                               = OFF
+#innodb                                  = FORCE
+
+[mysql]
+default-character-set                    = 'utf8'
+auto-rehash                              = FALSE
+local-infile                             = 1
+max-allowed-packet                       = 64M
+secure-auth                              = TRUE
+
+[mysqldump]
+max-allowed-packet                       = 1G
+default-character-set                    = 'utf8'
+
+[myisamchk]
+key-buffer-size                          = 1G
+sort-buffer-size                         = 1G
+read-buffer-size                         = 8M
+write-buffer-size                        = 8M
