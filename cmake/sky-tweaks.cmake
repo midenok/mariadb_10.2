@@ -6,6 +6,7 @@ MACRO(SKY_FIX_PLUGINDIR plugin)
       ${plugin} STREQUAL "cassandra"     OR
       ${plugin} STREQUAL "connect"       OR
       ${plugin} STREQUAL "federated"     OR 
+      ${plugin} STREQUAL "federatedx"    OR
       ${plugin} STREQUAL "handlersocket" OR
       ${plugin} STREQUAL "oqgraph"       OR
      FALSE)
