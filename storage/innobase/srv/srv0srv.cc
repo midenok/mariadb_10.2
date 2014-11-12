@@ -3,6 +3,7 @@
 Copyright (c) 1995, 2013, Oracle and/or its affiliates. All Rights Reserved.
 Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2013, 2014, SkySQL Ab. All Rights Reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -355,7 +356,12 @@ UNIV_INTERN ibool	srv_use_posix_fallocate = TRUE;
 UNIV_INTERN ulong	srv_replication_delay		= 0;
 
 /*-------------------------------------------*/
+#ifdef HAVE_MEMORY_BARRIER
+/* No idea to wait long with memory barriers */
+UNIV_INTERN ulong	srv_n_spin_wait_rounds	= 15;
+#else
 UNIV_INTERN ulong	srv_n_spin_wait_rounds	= 30;
+#endif
 UNIV_INTERN ulong	srv_spin_wait_delay	= 6;
 UNIV_INTERN ibool	srv_priority_boost	= TRUE;
 
@@ -464,6 +470,9 @@ current_time % 5 != 0. */
 # define	SRV_MASTER_MEM_VALIDATE_INTERVAL	(13)
 #endif /* MEM_PERIODIC_CHECK */
 # define	SRV_MASTER_DICT_LRU_INTERVAL		(47)
+
+/** Simulate compression failures. */
+UNIV_INTERN uint srv_simulate_comp_failures = 0;
 
 /** Acquire the system_mutex. */
 #define srv_sys_mutex_enter() do {			\
@@ -1705,9 +1714,10 @@ loop:
 	/* Try to track a strange bug reported by Harald Fuchs and others,
 	where the lsn seems to decrease at times */
 
-	new_lsn = log_get_lsn();
+        /* We have to use nowait to ensure we don't block */
+	new_lsn= log_get_lsn_nowait();
 
-	if (new_lsn < old_lsn) {
+	if (new_lsn && new_lsn < old_lsn) {
 		ut_print_timestamp(stderr);
 		fprintf(stderr,
 			"  InnoDB: Error: old log sequence number " LSN_PF
@@ -1719,7 +1729,8 @@ loop:
 		ut_ad(0);
 	}
 
-	old_lsn = new_lsn;
+        if (new_lsn)
+		old_lsn = new_lsn;
 
 	if (difftime(time(NULL), srv_last_monitor_time) > 60) {
 		/* We referesh InnoDB Monitor values so that averages are
