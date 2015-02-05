@@ -29,6 +29,7 @@
 #pragma implementation				// gcc: Class implementation
 #endif
 
+#include <my_global.h>
 #include "sql_priv.h"
 #include "unireg.h"
 #include "sql_select.h"
@@ -290,18 +291,18 @@ static double table_cond_selectivity(JOIN *join, uint idx, JOIN_TAB *s,
 void dbug_serve_apcs(THD *thd, int n_calls)
 {
   const char *save_proc_info= thd->proc_info;
-  /* This is so that mysqltest knows we're ready to serve requests: */
-  thd_proc_info(thd, "show_explain_trap");
   
   /* Busy-wait for n_calls APC requests to arrive and be processed */
   int n_apcs= thd->apc_target.n_calls_processed + n_calls;
   while (thd->apc_target.n_calls_processed < n_apcs)
   {
-    my_sleep(300);
+    /* This is so that mysqltest knows we're ready to serve requests: */
+    thd_proc_info(thd, "show_explain_trap");
+    my_sleep(30000);
+    thd_proc_info(thd, save_proc_info);
     if (thd->check_killed())
       break;
   }
-  thd_proc_info(thd, save_proc_info);
 }
 
 
@@ -632,7 +633,7 @@ inline int setup_without_group(THD *thd, Item **ref_pointer_array,
   res= setup_conds(thd, tables, leaves, conds);
   if (thd->lex->current_select->first_cond_optimization)
   {
-    if (!res && *conds)
+    if (!res && *conds && ! thd->lex->current_select->merged_into)
       (*reserved)= (*conds)->exists2in_reserved_items();
     else
       (*reserved)= 0;
@@ -3031,6 +3032,7 @@ void JOIN::exec_inner()
       const ha_rows select_limit_arg=
         select_options & OPTION_FOUND_ROWS
         ? HA_POS_ERROR : unit->select_limit_cnt;
+      curr_join->filesort_found_rows= filesort_limit_arg != HA_POS_ERROR;
 
       DBUG_PRINT("info", ("has_group_by %d "
                           "curr_join->table_count %d "
@@ -3078,7 +3080,8 @@ void JOIN::exec_inner()
                                    Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF);
   error= do_select(curr_join, curr_fields_list, NULL, procedure);
   thd->limit_found_rows= curr_join->send_records;
-  if (curr_join->order && curr_join->filesort_found_rows)
+  if (curr_join->order && curr_join->sortorder &&
+      curr_join->filesort_found_rows)
   {
     /* Use info provided by filesort. */
     DBUG_ASSERT(curr_join->table_count > curr_join->const_tables);
@@ -3833,6 +3836,7 @@ make_join_statistics(JOIN *join, List<TABLE_LIST> &tables_list,
   join->impossible_where= false;
   if (conds && const_count)
   { 
+    COND_EQUAL *orig_cond_equal = join->cond_equal;
     conds->update_used_tables();
     conds= remove_eq_conds(join->thd, conds, &join->cond_value);
     if (conds && conds->type() == Item::COND_ITEM &&
@@ -3859,7 +3863,21 @@ make_join_statistics(JOIN *join, List<TABLE_LIST> &tables_list,
         join->cond_equal->current_level.empty();
         join->cond_equal->current_level.push_back((Item_equal*) conds);
       }
-    }     
+    }
+
+    if (orig_cond_equal != join->cond_equal)
+    {
+      /*
+        If join->cond_equal has changed all references to it from COND_EQUAL
+        objects associated with ON expressions must be updated.
+      */
+      for (JOIN_TAB **pos=stat_vector+const_count ; (s= *pos) ; pos++) 
+      {
+        if (*s->on_expr_ref && s->cond_equal &&
+	    s->cond_equal->upper_levels == orig_cond_equal)
+          s->cond_equal->upper_levels= join->cond_equal;
+      }
+    }
   }
 
   /* Calc how many (possible) matched records in each table */
@@ -4406,8 +4424,7 @@ add_key_field(JOIN *join,
       if (is_const)
       {
         stat[0].const_keys.merge(possible_keys);
-        if (possible_keys.is_clear_all())
-          bitmap_set_bit(&field->table->cond_set, field->field_index);
+        bitmap_set_bit(&field->table->cond_set, field->field_index);
       }
       else if (!eq_func)
       {
@@ -4423,6 +4440,32 @@ add_key_field(JOIN *join,
         (*sargables)->num_values= num_values;
       }
       if (!eq_func) // eq_func is NEVER true when num_values > 1
+        return;
+
+      if ((*value)->cmp_type() == TIME_RESULT &&
+          field->cmp_type() != TIME_RESULT)
+        return;
+
+      /*
+        Note, for ITEM/ENUM columns:
+        - field->cmp_type() returns INT_RESULT
+        - field->result_type() returns STRING_RESULT
+        - field->type() returns MYSQL_TYPE_STRING
+
+        Using field->real_type() to detect ENUM/SET,
+        as they need a special handling:
+        - Conditions between a ENUM/SET filter and a TIME expression
+          cannot be optimized. They were filtered out in the previous if block.
+        - It's Ok to use ref access for an ENUM/SET field compared to an
+          INT/REAL/DECIMAL expression.
+        - It's Ok to use ref for an ENUM/SET field compared to a STRING
+          expression if the collation of the field and the collation of
+          the condition match.
+      */
+      if ((field->real_type() == MYSQL_TYPE_ENUM ||
+           field->real_type() == MYSQL_TYPE_SET) &&
+          (*value)->cmp_type () == STRING_RESULT &&
+          field->charset() != cond->compare_collation())
         return;
 
       /*
@@ -7199,17 +7242,20 @@ double table_multi_eq_cond_selectivity(JOIN *join, uint idx, JOIN_TAB *s,
         uint i;
         KEYUSE *keyuse= pos->key;
         uint key= keyuse->key;
-
         for (i= 0; i < keyparts; i++)
 	{
+          if (i > 0)
+            keyuse+= ref_keyuse_steps[i-1];
           uint fldno;
           if (is_hash_join_key_no(key))
 	    fldno= keyuse->keypart;
           else
-            fldno= table->key_info[key].key_part[keyparts-1].fieldnr - 1;        
+            fldno= table->key_info[key].key_part[i].fieldnr - 1;        
           if (fld->field_index == fldno)
             break;
         }
+        keyuse= pos->key;
+
         if (i == keyparts)
 	{
           /* 
@@ -7372,6 +7418,7 @@ double table_cond_selectivity(JOIN *join, uint idx, JOIN_TAB *s,
       already taken into account in table->cond_selectivity.
     */
     keyuse= pos->key;
+    keyparts=0;
     while (keyuse->table == table && keyuse->key == key)
     {
       if (!(keyuse->used_tables & (rem_tables | table->map)))
@@ -8858,6 +8905,9 @@ static bool create_ref_for_key(JOIN *join, JOIN_TAB *j,
   }
   else
     j->type=JT_EQ_REF;
+
+  j->read_record.unlock_row= (j->type == JT_EQ_REF)? 
+                             join_read_key_unlock_row : rr_unlock_row; 
   DBUG_RETURN(0);
 }
 
@@ -9941,7 +9991,7 @@ bool generate_derived_keys_for_table(KEYUSE *keyuse, uint count, uint keys)
       else
       {
         /* Mark keyuses for this key to be excluded */
-        for (KEYUSE *curr=save_first_keyuse; curr < first_keyuse; curr++)
+        for (KEYUSE *curr=save_first_keyuse; curr < keyuse; curr++)
 	{
           curr->key= MAX_KEY;
         }
@@ -10545,6 +10595,19 @@ uint check_join_cache_usage(JOIN_TAB *tab,
   }
     
   /*
+    Don't use BKA for materialized tables. We could actually have a
+    meaningful use of BKA when linked join buffers are used.
+
+    The problem is, the temp.table is not filled (actually not even opened
+    properly) yet, and this doesn't let us call
+    handler->multi_range_read_info(). It is possible to come up with
+    estimates, etc. without acessing the table, but it seems not to worth the
+    effort now.
+  */
+  if (tab->table->pos_in_table_list->is_materialized_derived())
+    no_bka_cache= true;
+
+  /*
     Don't use join buffering if we're dictated not to by no_jbuf_after
     (This is not meaningfully used currently)
   */
@@ -10609,8 +10672,8 @@ uint check_join_cache_usage(JOIN_TAB *tab,
       goto no_join_cache;
     if (tab->ref.is_access_triggered())
       goto no_join_cache;
-      
-    if (!tab->is_ref_for_hash_join())
+
+    if (!tab->is_ref_for_hash_join() && !no_bka_cache)
     {
       flags= HA_MRR_NO_NULL_ENDPOINTS | HA_MRR_SINGLE_POINT;
       if (tab->table->covering_keys.is_set(tab->ref.key))
@@ -12152,8 +12215,8 @@ public:
   { TRASH(ptr, size); }
 
   Item *and_level;
-  Item_func *cmp_func;
-  COND_CMP(Item *a,Item_func *b) :and_level(a),cmp_func(b) {}
+  Item_bool_func2 *cmp_func;
+  COND_CMP(Item *a,Item_bool_func2 *b) :and_level(a),cmp_func(b) {}
 };
 
 /**
@@ -13168,10 +13231,18 @@ Item *eliminate_item_equal(COND *cond, COND_EQUAL *upper_levels,
     if (upper)
     {
       TABLE_LIST *native_sjm= embedding_sjm(item_equal->context_field);
-      if (item_const && upper->get_const())
+      Item *upper_const= upper->get_const();
+      if (item_const && upper_const)
       {
-        /* Upper item also has "field_item=const". Don't produce equality here */
-        item= 0;
+        /* 
+          Upper item also has "field_item=const".
+          Don't produce equality if const is equal to item_const.
+        */
+        Item_func_eq *func= new Item_func_eq(item_const, upper_const);
+        func->set_cmp_func();
+        func->quick_fix_field();
+        if (func->val_int())
+          item= 0;
       }
       else
       {
@@ -13534,6 +13605,75 @@ static void update_const_equal_items(COND *cond, JOIN_TAB *tab, bool const_key)
 }
 
 
+/**
+  Check if
+    WHERE expr=value AND expr=const
+  can be rewritten as:
+    WHERE const=value AND expr=const
+
+  @param target       - the target operator whose "expr" argument will be
+                        replaced to "const".
+  @param target_expr  - the target's "expr" which will be replaced to "const".
+  @param target_value - the target's second argument, it will remain unchanged.
+  @param source       - the equality expression ("=" or "<=>") that
+                        can be used to rewrite the "target" part
+                        (under certain conditions, see the code).
+  @param source_expr  - the source's "expr". It should be exactly equal to 
+                        the target's "expr" to make condition rewrite possible.
+  @param source_const - the source's "const" argument, it will be inserted
+                        into "target" instead of "expr".
+*/
+static bool
+can_change_cond_ref_to_const(Item_bool_func2 *target,
+                             Item *target_expr, Item *target_value,
+                             Item_bool_func2 *source,
+                             Item *source_expr, Item *source_const)
+{
+  if (!target_expr->eq(source_expr,0) ||
+       target_value == source_const ||
+       target_expr->cmp_context != source_expr->cmp_context)
+    return false;
+  if (target_expr->cmp_context == STRING_RESULT)
+  {
+    /*
+      In this example:
+        SET NAMES utf8 COLLATE utf8_german2_ci;
+        DROP TABLE IF EXISTS t1;
+        CREATE TABLE t1 (a CHAR(10) CHARACTER SET utf8);
+        INSERT INTO t1 VALUES ('o-umlaut'),('oe');
+        SELECT * FROM t1 WHERE a='oe' COLLATE utf8_german2_ci AND a='oe';
+
+      the query should return only the row with 'oe'.
+      It should not return 'o-umlaut', because 'o-umlaut' does not match
+      the right part of the condition: a='oe'
+      ('o-umlaut' is not equal to 'oe' in utf8_general_ci,
+       which is the collation of the field "a").
+
+      If we change the right part from:
+         ... AND a='oe'
+      to
+         ... AND 'oe' COLLATE utf8_german2_ci='oe'
+      it will be evalulated to TRUE and removed from the condition,
+      so the overall query will be simplified to:
+
+        SELECT * FROM t1 WHERE a='oe' COLLATE utf8_german2_ci;
+
+      which will erroneously start to return both 'oe' and 'o-umlaut'.
+      So changing "expr" to "const" is not possible if the effective
+      collations of "target" and "source" are not exactly the same.
+
+      Note, the code before the fix for MDEV-7152 only checked that
+      collations of "source_const" and "target_value" are the same.
+      This was not enough, as the bug report demonstrated.
+    */
+    return
+      target->compare_collation() == source->compare_collation() &&
+      target_value->collation.collation == source_const->collation.collation;
+  }
+  return true; // Non-string comparison
+}
+
+
 /*
   change field = field to field = const for each found field = const in the
   and_level
@@ -13542,6 +13682,7 @@ static void update_const_equal_items(COND *cond, JOIN_TAB *tab, bool const_key)
 static void
 change_cond_ref_to_const(THD *thd, I_List<COND_CMP> *save_list,
                          Item *and_father, Item *cond,
+                         Item_bool_func2 *field_value_owner,
                          Item *field, Item *value)
 {
   if (cond->type() == Item::COND_ITEM)
@@ -13552,7 +13693,7 @@ change_cond_ref_to_const(THD *thd, I_List<COND_CMP> *save_list,
     Item *item;
     while ((item=li++))
       change_cond_ref_to_const(thd, save_list,and_level ? cond : item, item,
-			       field, value);
+			       field_value_owner, field, value);
     return;
   }
   if (cond->eq_cmp_result() == Item::COND_OK)
@@ -13564,11 +13705,8 @@ change_cond_ref_to_const(THD *thd, I_List<COND_CMP> *save_list,
   Item *right_item= args[1];
   Item_func::Functype functype=  func->functype();
 
-  if (right_item->eq(field,0) && left_item != value &&
-      right_item->cmp_context == field->cmp_context &&
-      (left_item->result_type() != STRING_RESULT ||
-       value->result_type() != STRING_RESULT ||
-       left_item->collation.collation == value->collation.collation))
+  if (can_change_cond_ref_to_const(func, right_item, left_item,
+                                   field_value_owner, field, value))
   {
     Item *tmp=value->clone_item();
     if (tmp)
@@ -13587,11 +13725,8 @@ change_cond_ref_to_const(THD *thd, I_List<COND_CMP> *save_list,
       func->set_cmp_func();
     }
   }
-  else if (left_item->eq(field,0) && right_item != value &&
-           left_item->cmp_context == field->cmp_context &&
-           (right_item->result_type() != STRING_RESULT ||
-            value->result_type() != STRING_RESULT ||
-            right_item->collation.collation == value->collation.collation))
+  else if (can_change_cond_ref_to_const(func, left_item, right_item,
+                                        field_value_owner, field, value))
   {
     Item *tmp= value->clone_item();
     if (tmp)
@@ -13640,7 +13775,8 @@ propagate_cond_constants(THD *thd, I_List<COND_CMP> *save_list,
         Item **args= cond_cmp->cmp_func->arguments();
         if (!args[0]->const_item())
           change_cond_ref_to_const(thd, &save,cond_cmp->and_level,
-                                   cond_cmp->and_level, args[0], args[1]);
+                                   cond_cmp->and_level,
+                                   cond_cmp->cmp_func, args[0], args[1]);
       }
     }
   }
@@ -13662,14 +13798,14 @@ propagate_cond_constants(THD *thd, I_List<COND_CMP> *save_list,
           resolve_const_item(thd, &args[1], args[0]);
 	  func->update_used_tables();
           change_cond_ref_to_const(thd, save_list, and_father, and_father,
-                                   args[0], args[1]);
+                                   func, args[0], args[1]);
 	}
 	else if (left_const)
 	{
           resolve_const_item(thd, &args[0], args[1]);
 	  func->update_used_tables();
           change_cond_ref_to_const(thd, save_list, and_father, and_father,
-                                   args[1], args[0]);
+                                   func, args[1], args[0]);
 	}
       }
     }
@@ -18766,7 +18902,8 @@ end_send(JOIN *join, JOIN_TAB *join_tab __attribute__((unused)),
         records are read. Because of optimization in some cases it can
         provide only select_limit_cnt+1 records.
       */
-      if (join->order && join->filesort_found_rows &&
+      if (join->order && join->sortorder &&
+          join->filesort_found_rows &&
           join->select_options & OPTION_FOUND_ROWS)
       {
         DBUG_PRINT("info", ("filesort NESTED_LOOP_QUERY_LIMIT"));
@@ -18788,8 +18925,9 @@ end_send(JOIN *join, JOIN_TAB *join_tab __attribute__((unused)),
 	  /* Join over all rows in table;  Return number of found rows */
 	  TABLE *table=jt->table;
 
-          join->select_options ^= OPTION_FOUND_ROWS;
-          if (join->filesort_found_rows)
+	  join->select_options ^= OPTION_FOUND_ROWS;
+	  if (table->sort.record_pointers ||
+	      (table->sort.io_cache && my_b_inited(table->sort.io_cache)))
 	  {
 	    /* Using filesort */
 	    join->send_records= table->sort.found_records;
@@ -20620,11 +20758,7 @@ create_sort_index(THD *thd, JOIN *join, ORDER *order,
                             select, filesort_limit, 0,
                             &examined_rows, &found_rows);
   table->sort.found_records= filesort_retval;
-  if (found_rows != HA_POS_ERROR)
-  {
-    tab->records= found_rows;                     // For SQL_CALC_ROWS
-    join->filesort_found_rows= true;
-  }
+  tab->records= found_rows;                     // For SQL_CALC_ROWS
 
   if (quick_created)
   {
@@ -21176,7 +21310,7 @@ find_order_in_list(THD *thd, Item **ref_pointer_array, TABLE_LIST *tables,
         order_item_type == Item::REF_ITEM)
     {
       from_field= find_field_in_tables(thd, (Item_ident*) order_item, tables,
-                                       NULL, &view_ref, IGNORE_ERRORS, TRUE,
+                                       NULL, &view_ref, IGNORE_ERRORS, FALSE,
                                        FALSE);
       if (!from_field)
         from_field= (Field*) not_found_field;

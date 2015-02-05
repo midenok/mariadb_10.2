@@ -16,12 +16,11 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 
+#include <my_global.h>
 #include "sql_priv.h"
 #include "mysqld_error.h"
 
 #ifndef MYSQL_CLIENT
-#include "my_global.h" // REQUIRED by log_event.h > m_string.h > my_bitmap.h
-#include "sql_priv.h"
 #include "unireg.h"
 #include "log_event.h"
 #include "sql_base.h"                           // close_thread_tables
@@ -88,23 +87,6 @@ TYPELIB binlog_checksum_typelib=
   exponent digits + '\0'
 */
 #define FMT_G_BUFSIZE(PREC) (3 + (PREC) + 5 + 1)
-
-/*
-  Explicit instantiation to unsigned int of template available_buffer
-  function.
-*/
-template unsigned int available_buffer<unsigned int>(const char*,
-                                                     const char*,
-                                                     unsigned int);
-
-/*
-  Explicit instantiation to unsigned int of template valid_buffer_range
-  function.
-*/
-template bool valid_buffer_range<unsigned int>(unsigned int,
-                                               const char*,
-                                               const char*,
-                                               unsigned int);
 
 /* 
    replication event checksum is introduced in the following "checksum-home" version.
@@ -1687,7 +1669,7 @@ Log_event* Log_event::read_log_event(const char* buf, uint event_len,
       ev = new Execute_load_log_event(buf, event_len, description_event);
       break;
     case START_EVENT_V3: /* this is sent only by MySQL <=4.x */
-      ev = new Start_log_event_v3(buf, description_event);
+      ev = new Start_log_event_v3(buf, event_len, description_event);
       break;
     case STOP_EVENT:
       ev = new Stop_log_event(buf, description_event);
@@ -3218,7 +3200,10 @@ Query_log_event::Query_log_event(THD* thd_arg, const char* query_arg,
                    thd->in_multi_stmt_transaction_mode()) || trx_cache;
       break;
     case SQLCOM_SET_OPTION:
-      use_cache= trx_cache= (lex->autocommit ? FALSE : TRUE);
+      if (lex->autocommit)
+        use_cache= trx_cache= FALSE;
+      else
+        use_cache= TRUE;
       break;
     case SQLCOM_RELEASE_SAVEPOINT:
     case SQLCOM_ROLLBACK_TO_SAVEPOINT:
@@ -4677,11 +4662,16 @@ void Start_log_event_v3::print(FILE* file, PRINT_EVENT_INFO* print_event_info)
   Start_log_event_v3::Start_log_event_v3()
 */
 
-Start_log_event_v3::Start_log_event_v3(const char* buf,
+Start_log_event_v3::Start_log_event_v3(const char* buf, uint event_len,
                                        const Format_description_log_event
                                        *description_event)
-  :Log_event(buf, description_event)
+  :Log_event(buf, description_event), binlog_version(BINLOG_VERSION)
 {
+  if (event_len < LOG_EVENT_MINIMAL_HEADER_LEN + ST_COMMON_HEADER_LEN_OFFSET)
+  {
+    server_version[0]= 0;
+    return;
+  }
   buf+= LOG_EVENT_MINIMAL_HEADER_LEN;
   binlog_version= uint2korr(buf+ST_BINLOG_VER_OFFSET);
   memcpy(server_version, buf+ST_SERVER_VER_OFFSET,
@@ -4986,9 +4976,12 @@ Format_description_log_event(const char* buf,
                              const
                              Format_description_log_event*
                              description_event)
-  :Start_log_event_v3(buf, description_event), event_type_permutation(0)
+  :Start_log_event_v3(buf, event_len, description_event),
+   common_header_len(0), post_header_len(NULL), event_type_permutation(0)
 {
   DBUG_ENTER("Format_description_log_event::Format_description_log_event(char*,...)");
+  if (!Start_log_event_v3::is_valid())
+    DBUG_VOID_RETURN; /* sanity check */
   buf+= LOG_EVENT_MINIMAL_HEADER_LEN;
   if ((common_header_len=buf[ST_COMMON_HEADER_LEN_OFFSET]) < OLD_HEADER_LEN)
     DBUG_VOID_RETURN; /* sanity check */
@@ -7537,9 +7530,9 @@ User_var_log_event(const char* buf, uint event_len,
 #endif
 {
   bool error= false;
-  const char* buf_start= buf;
+  const char* buf_start= buf, *buf_end= buf + event_len;
+
   /* The Post-Header is empty. The Variable Data part begins immediately. */
-  const char *start= buf;
   buf+= description_event->common_header_len +
     description_event->post_header_len[USER_VAR_EVENT-1];
   name_len= uint4korr(buf);
@@ -7550,8 +7543,7 @@ User_var_log_event(const char* buf, uint event_len,
     may have the bigger value possible, is_null= True and there is no
     payload for val, or even that name_len is 0.
   */
-  if (!valid_buffer_range<uint>(name_len, buf_start, name,
-                                event_len - UV_VAL_IS_NULL))
+  if (name + name_len + UV_VAL_IS_NULL > buf_end)
   {
     error= true;
     goto err;
@@ -7569,9 +7561,10 @@ User_var_log_event(const char* buf, uint event_len,
   }
   else
   {
-    if (!valid_buffer_range<uint>(UV_VAL_IS_NULL + UV_VAL_TYPE_SIZE
-                                  + UV_CHARSET_NUMBER_SIZE + UV_VAL_LEN_SIZE,
-                                  buf_start, buf, event_len))
+    val= (char *) (buf + UV_VAL_IS_NULL + UV_VAL_TYPE_SIZE +
+                   UV_CHARSET_NUMBER_SIZE + UV_VAL_LEN_SIZE);
+
+    if (val > buf_end)
     {
       error= true;
       goto err;
@@ -7581,10 +7574,8 @@ User_var_log_event(const char* buf, uint event_len,
     charset_number= uint4korr(buf + UV_VAL_IS_NULL + UV_VAL_TYPE_SIZE);
     val_len= uint4korr(buf + UV_VAL_IS_NULL + UV_VAL_TYPE_SIZE +
                        UV_CHARSET_NUMBER_SIZE);
-    val= (char *) (buf + UV_VAL_IS_NULL + UV_VAL_TYPE_SIZE +
-                   UV_CHARSET_NUMBER_SIZE + UV_VAL_LEN_SIZE);
 
-    if (!valid_buffer_range<uint>(val_len, buf_start, val, event_len))
+    if (val + val_len > buf_end)
     {
       error= true;
       goto err;
@@ -7601,7 +7592,7 @@ User_var_log_event(const char* buf, uint event_len,
       Old events will not have this extra byte, thence,
       we keep the flags set to UNDEF_F.
     */
-    uint bytes_read= ((val + val_len) - start);
+    uint bytes_read= ((val + val_len) - buf_start);
 #ifndef DBUG_OFF
     bool old_pre_checksum_fd= description_event->is_version_before_checksum(
         &description_event->server_version_split);

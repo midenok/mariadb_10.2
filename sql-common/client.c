@@ -113,7 +113,7 @@ my_bool	net_flush(NET *net);
 #define native_password_plugin_name "mysql_native_password"
 #define old_password_plugin_name    "mysql_old_password"
 
-
+uint            mariadb_deinitialize_ssl= 1;
 uint		mysql_port=0;
 char		*mysql_unix_port= 0;
 const char	*unknown_sqlstate= "HY000";
@@ -1964,6 +1964,12 @@ static int ssl_verify_server_cert(Vio *vio, const char* server_hostname, const c
     DBUG_RETURN(1);
   }
 
+  if (X509_V_OK != SSL_get_verify_result(ssl))
+  {
+    *errptr= "Failed to verify the server certificate";
+    X509_free(server_cert);
+    DBUG_RETURN(1);
+  }
   /*
     We already know that the certificate exchanged was valid; the SSL library
     handled that. Now we need to verify that the contents of the certificate

@@ -96,9 +96,6 @@ extern buf_block_t*	back_block1;	/*!< first block, for --apply-log */
 extern buf_block_t*	back_block2;	/*!< second block, for page reorganize */
 #endif /* !UNIV_HOTBACKUP */
 
-/** Magic value to use instead of checksums when they are disabled */
-#define BUF_NO_CHECKSUM_MAGIC 0xDEADBEEFUL
-
 /** @brief States of a control block
 @see buf_page_t
 
@@ -794,7 +791,7 @@ Returns the ratio in percents of modified pages in the buffer pool /
 database pages in the buffer pool.
 @return	modified page percentage ratio */
 UNIV_INTERN
-ulint
+double
 buf_get_modified_ratio_pct(void);
 /*============================*/
 /**********************************************************************//**

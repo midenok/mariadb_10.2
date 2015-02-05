@@ -243,9 +243,9 @@ static TYPELIB innodb_checksum_algorithm_typelib = {
 };
 
 /* The following counter is used to convey information to InnoDB
-about server activity: in selects it is not sensible to call
-srv_active_wake_master_thread after each fetch or search, we only do
-it every INNOBASE_WAKE_INTERVAL'th step. */
+about server activity: in case of normal DML ops it is not
+sensible to call srv_active_wake_master_thread after each
+operation, we only do it every INNOBASE_WAKE_INTERVAL'th step. */
 
 #define INNOBASE_WAKE_INTERVAL	32
 static ulong	innobase_active_counter	= 0;
@@ -669,6 +669,14 @@ static SHOW_VAR innodb_status_variables[]= {
   (char*) &export_vars.innodb_rows_read,		  SHOW_LONG},
   {"rows_updated",
   (char*) &export_vars.innodb_rows_updated,		  SHOW_LONG},
+  {"system_rows_deleted",
+  (char*) &export_vars.innodb_system_rows_deleted, SHOW_LONG},
+  {"system_rows_inserted",
+  (char*) &export_vars.innodb_system_rows_inserted, SHOW_LONG},
+  {"system_rows_read",
+  (char*) &export_vars.innodb_system_rows_read, SHOW_LONG},
+  {"system_rows_updated",
+  (char*) &export_vars.innodb_system_rows_updated, SHOW_LONG},
   {"num_open_files",
   (char*) &export_vars.innodb_num_open_files,		  SHOW_LONG},
   {"truncated_status_writes",
@@ -2532,11 +2540,25 @@ innobase_invalidate_query_cache(
 	above the InnoDB trx_sys_t->lock. The caller of this function must
 	not have latches of a lower rank. */
 
-	/* Argument TRUE below means we are using transactions */
 #ifdef HAVE_QUERY_CACHE
+	char	qcache_key_name[2 * (NAME_LEN + 1)];
+	size_t	tabname_len;
+	size_t	dbname_len;
+
+	/* Construct the key("db-name\0table$name\0") for the query cache using
+	the path name("db@002dname\0table@0024name\0") of the table in its
+        canonical form. */
+	dbname_len = filename_to_tablename(full_name, qcache_key_name,
+					   sizeof(qcache_key_name));
+	tabname_len = filename_to_tablename(full_name + strlen(full_name) + 1,
+					    qcache_key_name + dbname_len + 1,
+					    sizeof(qcache_key_name)
+                                            - dbname_len - 1);
+
+	/* Argument TRUE below means we are using transactions */
 	mysql_query_cache_invalidate4(trx->mysql_thd,
-				      full_name,
-				      (uint32) full_name_len,
+				      qcache_key_name,
+				      (dbname_len + tabname_len + 2),
 				      TRUE);
 #endif
 }
@@ -2881,7 +2903,8 @@ innobase_init(
 
 	innobase_hton->flush_logs = innobase_flush_logs;
 	innobase_hton->show_status = innobase_show_status;
-	innobase_hton->flags = HTON_SUPPORTS_EXTENDED_KEYS;
+	innobase_hton->flags =
+		HTON_SUPPORTS_EXTENDED_KEYS | HTON_SUPPORTS_FOREIGN_KEYS;
 
 	innobase_hton->release_temporary_latches =
 		innobase_release_temporary_latches;
@@ -3115,7 +3138,7 @@ innobase_change_buffering_inited_ok:
 				  " cannot be set higher than"
 				  " innodb_max_dirty_pages_pct.\n"
 				  "InnoDB: Setting"
-				  " innodb_max_dirty_pages_pct_lwm to %lu\n",
+				  " innodb_max_dirty_pages_pct_lwm to %lf\n",
 				  srv_max_buf_pool_modified_pct);
 
 		srv_max_dirty_pages_pct_lwm = srv_max_buf_pool_modified_pct;
@@ -3749,10 +3772,6 @@ innobase_commit(
 	trx->fts_next_doc_id = 0;
 
 	innobase_srv_conc_force_exit_innodb(trx);
-
-	/* Tell the InnoDB server that there might be work for utility
-	threads: */
-	srv_active_wake_master_thread();
 
 	DBUG_RETURN(0);
 }
@@ -7846,7 +7865,8 @@ ha_innobase::index_read(
 
 		row_sel_convert_mysql_key_to_innobase(
 			prebuilt->search_tuple,
-			srch_key_val1, sizeof(srch_key_val1),
+			prebuilt->srch_key_val1,
+			prebuilt->srch_key_val_len,
 			index,
 			(byte*) key_ptr,
 			(ulint) key_len,
@@ -7892,7 +7912,13 @@ ha_innobase::index_read(
 	case DB_SUCCESS:
 		error = 0;
 		table->status = 0;
-		srv_stats.n_rows_read.add((size_t) prebuilt->trx->id, 1);
+		if (prebuilt->table->is_system_db) {
+			srv_stats.n_system_rows_read.add(
+				(size_t) prebuilt->trx->id, 1);
+		} else {
+			srv_stats.n_rows_read.add(
+				(size_t) prebuilt->trx->id, 1);
+		}
 		break;
 	case DB_RECORD_NOT_FOUND:
 		error = HA_ERR_KEY_NOT_FOUND;
@@ -8168,7 +8194,13 @@ ha_innobase::general_fetch(
 	case DB_SUCCESS:
 		error = 0;
 		table->status = 0;
-		srv_stats.n_rows_read.add((size_t) prebuilt->trx->id, 1);
+		if (prebuilt->table->is_system_db) {
+			srv_stats.n_system_rows_read.add(
+				(size_t) prebuilt->trx->id, 1);
+		} else {
+			srv_stats.n_rows_read.add(
+				(size_t) prebuilt->trx->id, 1);
+		}
 		break;
 	case DB_RECORD_NOT_FOUND:
 		error = HA_ERR_END_OF_FILE;
@@ -10451,11 +10483,6 @@ ha_innobase::delete_table(
 
 	log_buffer_flush_to_disk();
 
-	/* Tell the InnoDB server that there might be work for
-	utility threads: */
-
-	srv_active_wake_master_thread();
-
 	innobase_commit_low(trx);
 
 	trx_free_for_mysql(trx);
@@ -10536,11 +10563,6 @@ innobase_drop_database(
 	with innodb_flush_log_at_trx_commit = 0 */
 
 	log_buffer_flush_to_disk();
-
-	/* Tell the InnoDB server that there might be work for
-	utility threads: */
-
-	srv_active_wake_master_thread();
 
 	innobase_commit_low(trx);
 	trx_free_for_mysql(trx);
@@ -10691,11 +10713,6 @@ ha_innobase::rename_table(
 
 	DEBUG_SYNC(thd, "after_innobase_rename_table");
 
-	/* Tell the InnoDB server that there might be work for
-	utility threads: */
-
-	srv_active_wake_master_thread();
-
 	innobase_commit_low(trx);
 	trx_free_for_mysql(trx);
 
@@ -10811,7 +10828,8 @@ ha_innobase::records_in_range(
 
 	row_sel_convert_mysql_key_to_innobase(
 				range_start,
-				srch_key_val1, sizeof(srch_key_val1),
+				prebuilt->srch_key_val1,
+				prebuilt->srch_key_val_len,
 				index,
 				(byte*) (min_key ? min_key->key :
 					 (const uchar*) 0),
@@ -10823,7 +10841,8 @@ ha_innobase::records_in_range(
 
 	row_sel_convert_mysql_key_to_innobase(
 				range_end,
-				srch_key_val2, sizeof(srch_key_val2),
+				prebuilt->srch_key_val2,
+				prebuilt->srch_key_val_len,
 				index,
 				(byte*) (max_key ? max_key->key :
 					 (const uchar*) 0),
@@ -10842,7 +10861,7 @@ ha_innobase::records_in_range(
 
 		n_rows = btr_estimate_n_rows_in_range(index, range_start,
 						      mode1, range_end,
-						      mode2);
+						      mode2, prebuilt->trx);
 	} else {
 
 		n_rows = HA_POS_ERROR;
@@ -12396,6 +12415,7 @@ ha_innobase::start_stmt(
 	thr_lock_type	lock_type)
 {
 	trx_t*		trx;
+	DBUG_ENTER("ha_innobase::start_stmt");
 
 	update_thd(thd);
 
@@ -12418,6 +12438,29 @@ ha_innobase::start_stmt(
 	prebuilt->sql_stat_start = TRUE;
 	prebuilt->hint_need_to_fetch_extra_cols = 0;
 	reset_template();
+
+	if (dict_table_is_temporary(prebuilt->table)
+	    && prebuilt->mysql_has_locked
+	    && prebuilt->select_lock_type == LOCK_NONE) {
+		dberr_t error;
+
+		switch (thd_sql_command(thd)) {
+		case SQLCOM_INSERT:
+		case SQLCOM_UPDATE:
+		case SQLCOM_DELETE:
+			init_table_handle_for_HANDLER();
+			prebuilt->select_lock_type = LOCK_X;
+			prebuilt->stored_select_lock_type = LOCK_X;
+			error = row_lock_table_for_mysql(prebuilt, NULL, 1);
+
+			if (error != DB_SUCCESS) {
+				int st = convert_error_code_to_mysql(
+					error, 0, thd);
+				DBUG_RETURN(st);
+			}
+			break;
+		}
+	}
 
 	if (!prebuilt->mysql_has_locked) {
 		/* This handle is for a temporary table created inside
@@ -12456,7 +12499,7 @@ ha_innobase::start_stmt(
 		++trx->will_lock;
 	}
 
-	return(0);
+	DBUG_RETURN(0);
 }
 
 /******************************************************************//**
@@ -14023,11 +14066,6 @@ innobase_xa_prepare(
 		trx_mark_sql_stat_end(trx);
 	}
 
-	/* Tell the InnoDB server that there might be work for utility
-	threads: */
-
-	srv_active_wake_master_thread();
-
 	return(error);
 }
 
@@ -14215,14 +14253,17 @@ innodb_io_capacity_max_update(
 {
 	ulong	in_val = *static_cast<const ulong*>(save);
 	if (in_val < srv_io_capacity) {
-		in_val = srv_io_capacity;
 		push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
 				    ER_WRONG_ARGUMENTS,
-				    "innodb_io_capacity_max cannot be"
-				    " set lower than innodb_io_capacity.");
+				    "Setting innodb_io_capacity_max %lu"
+			" lower than innodb_io_capacity %lu.",
+			in_val, srv_io_capacity);
+
+		srv_io_capacity = in_val;
+
 		push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
 				    ER_WRONG_ARGUMENTS,
-				    "Setting innodb_io_capacity_max to %lu",
+				    "Setting innodb_io_capacity to %lu",
 				    srv_io_capacity);
 	}
 
@@ -14245,15 +14286,19 @@ innodb_io_capacity_update(
 						from check function */
 {
 	ulong	in_val = *static_cast<const ulong*>(save);
+
 	if (in_val > srv_max_io_capacity) {
-		in_val = srv_max_io_capacity;
 		push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
 				    ER_WRONG_ARGUMENTS,
-				    "innodb_io_capacity cannot be set"
-				    " higher than innodb_io_capacity_max.");
+				    "Setting innodb_io_capacity to %lu"
+			" higher than innodb_io_capacity_max %lu",
+			in_val, srv_max_io_capacity);
+
+		srv_max_io_capacity = in_val * 2;
+
 		push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
 				    ER_WRONG_ARGUMENTS,
-				    "Setting innodb_io_capacity to %lu",
+				    "Setting innodb_max_io_capacity to %lu",
 				    srv_max_io_capacity);
 	}
 
@@ -14275,7 +14320,7 @@ innodb_max_dirty_pages_pct_update(
 	const void*			save)	/*!< in: immediate result
 						from check function */
 {
-	ulong	in_val = *static_cast<const ulong*>(save);
+	double	in_val = *static_cast<const double*>(save);
 	if (in_val < srv_max_dirty_pages_pct_lwm) {
 		push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
 				    ER_WRONG_ARGUMENTS,
@@ -14285,7 +14330,7 @@ innodb_max_dirty_pages_pct_update(
 		push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
 				    ER_WRONG_ARGUMENTS,
 				    "Lowering"
-				    " innodb_max_dirty_page_pct_lwm to %lu",
+				    " innodb_max_dirty_page_pct_lwm to %lf",
 				    in_val);
 
 		srv_max_dirty_pages_pct_lwm = in_val;
@@ -14309,7 +14354,7 @@ innodb_max_dirty_pages_pct_lwm_update(
 	const void*			save)	/*!< in: immediate result
 						from check function */
 {
-	ulong	in_val = *static_cast<const ulong*>(save);
+	double	in_val = *static_cast<const double*>(save);
 	if (in_val > srv_max_buf_pool_modified_pct) {
 		in_val = srv_max_buf_pool_modified_pct;
 		push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
@@ -14320,7 +14365,7 @@ innodb_max_dirty_pages_pct_lwm_update(
 		push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
 				    ER_WRONG_ARGUMENTS,
 				    "Setting innodb_max_dirty_page_pct_lwm"
-				    " to %lu",
+				    " to %lf",
 				    in_val);
 	}
 
@@ -16019,9 +16064,8 @@ innodb_status_output_update(
 	const void*			save __attribute__((unused)))
 {
 	*static_cast<my_bool*>(var_ptr) = *static_cast<const my_bool*>(save);
-	/* The lock timeout monitor thread also takes care of this
-	output. */
-	os_event_set(lock_sys->timeout_event);
+	/* Wakeup server monitor thread. */
+	os_event_set(srv_monitor_event);
 }
 
 static SHOW_VAR innodb_status_variables_export[]= {
@@ -16248,22 +16292,22 @@ static MYSQL_SYSVAR_STR(log_group_home_dir, srv_log_group_home_dir,
   PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
   "Path to InnoDB log files.", NULL, NULL, NULL);
 
-static MYSQL_SYSVAR_ULONG(max_dirty_pages_pct, srv_max_buf_pool_modified_pct,
+static MYSQL_SYSVAR_DOUBLE(max_dirty_pages_pct, srv_max_buf_pool_modified_pct,
   PLUGIN_VAR_RQCMDARG,
   "Percentage of dirty pages allowed in bufferpool.",
-  NULL, innodb_max_dirty_pages_pct_update, 75, 0, 99, 0);
+  NULL, innodb_max_dirty_pages_pct_update, 75.0, 0.001, 99.999, 0);
 
-static MYSQL_SYSVAR_ULONG(max_dirty_pages_pct_lwm,
+static MYSQL_SYSVAR_DOUBLE(max_dirty_pages_pct_lwm,
   srv_max_dirty_pages_pct_lwm,
   PLUGIN_VAR_RQCMDARG,
   "Percentage of dirty pages at which flushing kicks in.",
-  NULL, innodb_max_dirty_pages_pct_lwm_update, 0, 0, 99, 0);
+  NULL, innodb_max_dirty_pages_pct_lwm_update, 0.001, 0.000, 99.999, 0);
 
-static MYSQL_SYSVAR_ULONG(adaptive_flushing_lwm,
+static MYSQL_SYSVAR_DOUBLE(adaptive_flushing_lwm,
   srv_adaptive_flushing_lwm,
   PLUGIN_VAR_RQCMDARG,
   "Percentage of log capacity below which no adaptive flushing happens.",
-  NULL, NULL, 10, 0, 70, 0);
+  NULL, NULL, 10.0, 0.0, 70.0, 0);
 
 static MYSQL_SYSVAR_BOOL(adaptive_flushing, srv_adaptive_flushing,
   PLUGIN_VAR_NOCMDARG,
@@ -16337,6 +16381,16 @@ static MYSQL_SYSVAR_ULONGLONG(stats_persistent_sample_pages,
   "The number of leaf index pages to sample when calculating persistent "
   "statistics (by ANALYZE, default 20)",
   NULL, NULL, 20, 1, ~0ULL, 0);
+
+static MYSQL_SYSVAR_ULONGLONG(stats_modified_counter, srv_stats_modified_counter,
+  PLUGIN_VAR_RQCMDARG,
+  "The number of rows modified before we calculate new statistics (default 0 = current limits)",
+  NULL, NULL, 0, 0, ~0ULL, 0);
+
+static MYSQL_SYSVAR_BOOL(stats_traditional, srv_stats_sample_traditional,
+  PLUGIN_VAR_RQCMDARG,
+  "Enable traditional statistic calculation based on number of configured pages (default true)",
+  NULL, NULL, TRUE);
 
 static MYSQL_SYSVAR_BOOL(adaptive_hash_index, btr_search_enabled,
   PLUGIN_VAR_OPCMDARG,
@@ -16963,6 +17017,8 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(stats_persistent),
   MYSQL_SYSVAR(stats_persistent_sample_pages),
   MYSQL_SYSVAR(stats_auto_recalc),
+  MYSQL_SYSVAR(stats_modified_counter),
+  MYSQL_SYSVAR(stats_traditional),
   MYSQL_SYSVAR(adaptive_hash_index),
   MYSQL_SYSVAR(stats_method),
   MYSQL_SYSVAR(replication_delay),
@@ -17528,3 +17584,27 @@ innobase_convert_to_system_charset(
                           static_cast<uint>(len), errors));
 }
 
+/**********************************************************************
+Issue a warning that the row is too big. */
+void
+ib_warn_row_too_big(const dict_table_t*	table)
+{
+	/* If prefix is true then a 768-byte prefix is stored
+	locally for BLOB fields. Refer to dict_table_get_format() */
+	const bool prefix = (dict_tf_get_format(table->flags)
+			     == UNIV_FORMAT_A);
+
+	const ulint	free_space = page_get_free_space_of_empty(
+		table->flags & DICT_TF_COMPACT) / 2;
+
+	THD*	thd = current_thd;
+
+	push_warning_printf(
+		thd, Sql_condition::WARN_LEVEL_WARN, HA_ERR_TO_BIG_ROW,
+		"Row size too large (> %lu). Changing some columns to TEXT"
+		" or BLOB %smay help. In current row format, BLOB prefix of"
+		" %d bytes is stored inline.", free_space
+		, prefix ? "or using ROW_FORMAT=DYNAMIC or"
+		" ROW_FORMAT=COMPRESSED ": ""
+		, prefix ? DICT_MAX_FIXED_COL_LEN : 0);
+}

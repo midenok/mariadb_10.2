@@ -23,6 +23,7 @@
   @{
 */
 
+#include <my_global.h>
 #include "sql_base.h"
 #include "key.h"
 #include "sql_statistics.h"
@@ -2354,8 +2355,14 @@ int collect_statistics_for_index(THD *thd, TABLE *table, uint index)
   int rc= 0;
   KEY *key_info= &table->key_info[index];
   ha_rows rows= 0;
-  Index_prefix_calc index_prefix_calc(table, key_info);
+
   DBUG_ENTER("collect_statistics_for_index");
+
+  /* No statistics for FULLTEXT indexes. */
+  if (key_info->flags & HA_FULLTEXT)
+    DBUG_RETURN(rc);
+
+  Index_prefix_calc index_prefix_calc(table, key_info);
 
   DEBUG_SYNC(table->in_use, "statistics_collection_start1");
   DEBUG_SYNC(table->in_use, "statistics_collection_start2");
@@ -2390,7 +2397,7 @@ int collect_statistics_for_index(THD *thd, TABLE *table, uint index)
   if (!rc)
     index_prefix_calc.get_avg_frequency();
 
-  DBUG_RETURN(rc);            
+  DBUG_RETURN(rc);
 }
 
 
@@ -2466,6 +2473,8 @@ int collect_statistics_for_table(THD *thd, TABLE *table)
       continue; 
     table_field->collected_stats->init(thd, table_field);
   }
+
+  restore_record(table, s->default_values);
 
   /* Perform a full table scan to collect statistics on 'table's columns */
   if (!(rc= file->ha_rnd_init(TRUE)))
@@ -3501,7 +3510,12 @@ double get_column_range_cardinality(Field *field,
                    !(range_flag & NEAR_MIN);
 
   if (col_non_nulls < 1)
-    res= 0;
+  {
+    if (nulls_incl)
+      res= col_nulls;
+    else
+      res= 0;
+  }
   else if (min_endp && max_endp && min_endp->length == max_endp->length &&
            !memcmp(min_endp->key, max_endp->key, min_endp->length))
   { 
@@ -3514,6 +3528,15 @@ double get_column_range_cardinality(Field *field,
     {
       double avg_frequency= col_stats->get_avg_frequency();
       res= avg_frequency;   
+      /*
+        psergey-todo: what does check for min_value, max_value mean? 
+          min/max_value are set to NULL in alloc_statistics_for_table() and
+          alloc_statistics_for_table_share().  Both functions will immediately
+          call create_min_max_statistical_fields_for_table and 
+          create_min_max_statistical_fields_for_table_share() respectively,
+          which will set min/max_value to be valid pointers, unless OOM
+          occurs.
+      */
       if (avg_frequency > 1.0 + 0.000001 && 
           col_stats->min_value && col_stats->max_value)
       {
@@ -3521,13 +3544,18 @@ double get_column_range_cardinality(Field *field,
         if (hist->is_available())
         {
           store_key_image_to_rec(field, (uchar *) min_endp->key,
-                                 min_endp->length);
+                                 field->key_length());
           double pos= field->pos_in_interval(col_stats->min_value,
                                              col_stats->max_value);
           res= col_non_nulls * 
 	       hist->point_selectivity(pos,
                                        avg_frequency / col_non_nulls);
         }
+      }
+      else if (avg_frequency == 0.0)
+      {
+        /* This actually means there is no statistics data */
+        res= tab_records;
       }
     }
   }  
@@ -3540,7 +3568,7 @@ double get_column_range_cardinality(Field *field,
       if (min_endp && !(field->null_ptr && min_endp->key[0]))
       {
         store_key_image_to_rec(field, (uchar *) min_endp->key,
-                               min_endp->length);
+                               field->key_length());
         min_mp_pos= field->pos_in_interval(col_stats->min_value,
                                            col_stats->max_value);
       }
@@ -3549,7 +3577,7 @@ double get_column_range_cardinality(Field *field,
       if (max_endp)
       {
         store_key_image_to_rec(field, (uchar *) max_endp->key,
-                               max_endp->length);
+                               field->key_length());
         max_mp_pos= field->pos_in_interval(col_stats->min_value,
                                            col_stats->max_value);
       }

@@ -75,6 +75,15 @@ in thrashing. */
 
 /* @} */
 
+/** Handled page counters for a single flush */
+struct flush_counters_t {
+	ulint	flushed;	/*!< number of dirty pages flushed */
+	ulint	evicted;	/*!< number of clean pages evicted, including
+			        evicted uncompressed page images */
+	ulint	unzip_LRU_evicted;/*!< number of uncompressed page images
+				evicted */
+};
+
 /******************************************************************//**
 Increases flush_list size in bytes with zip_size for compressed page,
 UNIV_PAGE_SIZE for uncompressed page in inline function */
@@ -828,39 +837,35 @@ buf_flush_init_for_writing(
 	case SRV_CHECKSUM_ALGORITHM_CRC32:
 	case SRV_CHECKSUM_ALGORITHM_STRICT_CRC32:
 		checksum = buf_calc_page_crc32(page);
+		mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, checksum);
 		break;
 	case SRV_CHECKSUM_ALGORITHM_INNODB:
 	case SRV_CHECKSUM_ALGORITHM_STRICT_INNODB:
 		checksum = (ib_uint32_t) buf_calc_page_new_checksum(page);
+		mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, checksum);
+		checksum = (ib_uint32_t) buf_calc_page_old_checksum(page);
 		break;
 	case SRV_CHECKSUM_ALGORITHM_NONE:
 	case SRV_CHECKSUM_ALGORITHM_STRICT_NONE:
 		checksum = BUF_NO_CHECKSUM_MAGIC;
+		mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, checksum);
 		break;
 	/* no default so the compiler will emit a warning if new enum
 	is added and not handled here */
 	}
 
-	mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, checksum);
+	/* With the InnoDB checksum, we overwrite the first 4 bytes of
+	the end lsn field to store the old formula checksum. Since it
+	depends also on the field FIL_PAGE_SPACE_OR_CHKSUM, it has to
+	be calculated after storing the new formula checksum.
 
-	/* We overwrite the first 4 bytes of the end lsn field to store
-	the old formula checksum. Since it depends also on the field
-	FIL_PAGE_SPACE_OR_CHKSUM, it has to be calculated after storing the
-	new formula checksum. */
-
-	if (srv_checksum_algorithm == SRV_CHECKSUM_ALGORITHM_STRICT_INNODB
-	    || srv_checksum_algorithm == SRV_CHECKSUM_ALGORITHM_INNODB) {
-
-		checksum = (ib_uint32_t) buf_calc_page_old_checksum(page);
-
-		/* In other cases we use the value assigned from above.
-		If CRC32 is used then it is faster to use that checksum
-		(calculated above) instead of calculating another one.
-		We can afford to store something other than
-		buf_calc_page_old_checksum() or BUF_NO_CHECKSUM_MAGIC in
-		this field because the file will not be readable by old
-		versions of MySQL/InnoDB anyway (older than MySQL 5.6.3) */
-	}
+	In other cases we write the same value to both fields.
+	If CRC32 is used then it is faster to use that checksum
+	(calculated above) instead of calculating another one.
+	We can afford to store something other than
+	buf_calc_page_old_checksum() or BUF_NO_CHECKSUM_MAGIC in
+	this field because the file will not be readable by old
+	versions of MySQL/InnoDB anyway (older than MySQL 5.6.3) */
 
 	mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM,
 			checksum);
@@ -1434,12 +1439,14 @@ it is a best effort attempt and it is not guaranteed that after a call
 to this function there will be 'max' blocks in the free list.
 @return number of blocks for which the write request was queued. */
 static
-ulint
+void
 buf_flush_LRU_list_batch(
 /*=====================*/
 	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
-	ulint		max)		/*!< in: desired number of
+	ulint		max,		/*!< in: desired number of
 					blocks in the free_list */
+	flush_counters_t*	n)	/*!< out: flushed/evicted page
+					counts */
 {
 	buf_page_t*	bpage;
 	ulint		count = 0;
@@ -1449,8 +1456,13 @@ buf_flush_LRU_list_batch(
 
 	ut_ad(buf_pool_mutex_own(buf_pool));
 
+	n->flushed = 0;
+	n->evicted = 0;
+	n->unzip_LRU_evicted = 0;
+
 	bpage = UT_LIST_GET_LAST(buf_pool->LRU);
 	while (bpage != NULL && count < max
+	       && (n->flushed + n->evicted) < max
 	       && free_len < srv_LRU_scan_depth
 	       && lru_len > BUF_LRU_MIN_LEN) {
 
@@ -1478,6 +1490,7 @@ buf_flush_LRU_list_batch(
 			if (buf_LRU_free_page(bpage, true)) {
 				/* buf_pool->mutex was potentially
 				released and reacquired. */
+				n->evicted++;
 				bpage = UT_LIST_GET_LAST(buf_pool->LRU);
 			} else {
 				bpage = UT_LIST_GET_PREV(LRU, bpage);
@@ -1500,7 +1513,7 @@ buf_flush_LRU_list_batch(
 			}
 
 			if (!buf_flush_page_and_try_neighbors(
-				bpage, BUF_FLUSH_LRU, max, &count)) {
+				bpage, BUF_FLUSH_LRU, max, &n->flushed)) {
 
 				bpage = prev_bpage;
 			} else {
@@ -1529,7 +1542,7 @@ buf_flush_LRU_list_batch(
 	/* We keep track of all flushes happening as part of LRU
 	flush. When estimating the desired rate at which flush_list
 	should be flushed, we factor in this value. */
-	buf_lru_flush_page_count += count;
+	buf_lru_flush_page_count += n->flushed;
 
 	ut_ad(buf_pool_mutex_own(buf_pool));
 
@@ -1540,8 +1553,6 @@ buf_flush_LRU_list_batch(
 			MONITOR_LRU_BATCH_SCANNED_PER_CALL,
 			scanned);
 	}
-
-	return(count);
 }
 
 /*******************************************************************//**
@@ -1551,24 +1562,28 @@ Whether LRU or unzip_LRU is used depends on the state of the system.
 or in case of unzip_LRU the number of blocks actually moved to the
 free list */
 static
-ulint
+void
 buf_do_LRU_batch(
 /*=============*/
 	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
-	ulint		max)		/*!< in: desired number of
+	ulint		max,		/*!< in: desired number of
 					blocks in the free_list */
+	flush_counters_t*	n)	/*!< out: flushed/evicted page
+					counts */
 {
-	ulint	count = 0;
 
 	if (buf_LRU_evict_from_unzip_LRU(buf_pool)) {
-		count += buf_free_from_unzip_LRU_list_batch(buf_pool, max);
+		n->unzip_LRU_evicted = buf_free_from_unzip_LRU_list_batch(buf_pool, max);
+	} else {
+		n->unzip_LRU_evicted = 0;
 	}
 
-	if (max > count) {
-		count += buf_flush_LRU_list_batch(buf_pool, max - count);
+	if (max > n->unzip_LRU_evicted) {
+		buf_flush_LRU_list_batch(buf_pool, max - n->unzip_LRU_evicted, n);
+	} else {
+		n->evicted = 0;
+		n->flushed = 0;
 	}
-
-	return(count);
 }
 
 /*******************************************************************//**
@@ -1667,7 +1682,7 @@ end up waiting for these latches! NOTE 2: in the case of a flush list flush,
 the calling thread is not allowed to own any latches on pages!
 @return number of blocks for which the write request was queued */
 static
-ulint
+void
 buf_flush_batch(
 /*============*/
 	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
@@ -1678,13 +1693,14 @@ buf_flush_batch(
 	ulint		min_n,		/*!< in: wished minimum mumber of blocks
 					flushed (it is not guaranteed that the
 					actual number is that big, though) */
-	lsn_t		lsn_limit)	/*!< in: in the case of BUF_FLUSH_LIST
+	lsn_t		lsn_limit,	/*!< in: in the case of BUF_FLUSH_LIST
 					all blocks whose oldest_modification is
 					smaller than this should be flushed
 					(if their number does not exceed
 					min_n), otherwise ignored */
+	flush_counters_t*	n)	/*!< out: flushed/evicted page
+					counts  */
 {
-	ulint		count	= 0;
 
 	ut_ad(flush_type == BUF_FLUSH_LRU || flush_type == BUF_FLUSH_LIST);
 #ifdef UNIV_SYNC_DEBUG
@@ -1698,10 +1714,11 @@ buf_flush_batch(
 	the flush functions. */
 	switch (flush_type) {
 	case BUF_FLUSH_LRU:
-		count = buf_do_LRU_batch(buf_pool, min_n);
+		buf_do_LRU_batch(buf_pool, min_n, n);
 		break;
 	case BUF_FLUSH_LIST:
-		count = buf_do_flush_list_batch(buf_pool, min_n, lsn_limit);
+		n->flushed = buf_do_flush_list_batch(buf_pool, min_n, lsn_limit);
+		n->evicted = 0;
 		break;
 	default:
 		ut_error;
@@ -1710,15 +1727,13 @@ buf_flush_batch(
 	buf_pool_mutex_exit(buf_pool);
 
 #ifdef UNIV_DEBUG
-	if (buf_debug_prints && count > 0) {
+	if (buf_debug_prints && n->flushed > 0) {
 		fprintf(stderr, flush_type == BUF_FLUSH_LRU
 			? "Flushed %lu pages in LRU flush\n"
 			: "Flushed %lu pages in flush list flush\n",
-			(ulong) count);
+			(ulong) n->flushed);
 	}
 #endif /* UNIV_DEBUG */
-
-	return(count);
 }
 
 /******************************************************************//**
@@ -1847,29 +1862,21 @@ buf_flush_LRU(
 	ulint		min_n,		/*!< in: wished minimum mumber of blocks
 					flushed (it is not guaranteed that the
 					actual number is that big, though) */
-	ulint*		n_processed)	/*!< out: the number of pages
-					which were processed is passed
-					back to caller. Ignored if NULL */
+	flush_counters_t	*n)	/*!< out: flushed/evicted page
+					counts */
 {
-	ulint		page_count;
-
-	if (n_processed) {
-		*n_processed = 0;
-	}
-
 	if (!buf_flush_start(buf_pool, BUF_FLUSH_LRU)) {
+		n->flushed = 0;
+		n->evicted = 0;
+		n->unzip_LRU_evicted = 0;
 		return(false);
 	}
 
-	page_count = buf_flush_batch(buf_pool, BUF_FLUSH_LRU, min_n, 0);
+	buf_flush_batch(buf_pool, BUF_FLUSH_LRU, min_n, 0, n);
 
 	buf_flush_end(buf_pool, BUF_FLUSH_LRU);
 
-	buf_flush_common(BUF_FLUSH_LRU, page_count);
-
-	if (n_processed) {
-		*n_processed = page_count;
-	}
+	buf_flush_common(BUF_FLUSH_LRU, n->flushed);
 
 	return(true);
 }
@@ -1917,7 +1924,7 @@ buf_flush_list(
 	/* Flush to lsn_limit in all buffer pool instances */
 	for (i = 0; i < srv_buf_pool_instances; i++) {
 		buf_pool_t*	buf_pool;
-		ulint		page_count = 0;
+		flush_counters_t n;
 
 		buf_pool = buf_pool_from_array(i);
 
@@ -1937,23 +1944,23 @@ buf_flush_list(
 			continue;
 		}
 
-		page_count = buf_flush_batch(
-			buf_pool, BUF_FLUSH_LIST, min_n, lsn_limit);
+		buf_flush_batch(
+			buf_pool, BUF_FLUSH_LIST, min_n, lsn_limit, &n);
 
 		buf_flush_end(buf_pool, BUF_FLUSH_LIST);
 
-		buf_flush_common(BUF_FLUSH_LIST, page_count);
+		buf_flush_common(BUF_FLUSH_LIST, n.flushed);
 
 		if (n_processed) {
-			*n_processed += page_count;
+			*n_processed += n.flushed;
 		}
 
-		if (page_count) {
+		if (n.flushed) {
 			MONITOR_INC_VALUE_CUMULATIVE(
 				MONITOR_FLUSH_BATCH_TOTAL_PAGE,
 				MONITOR_FLUSH_BATCH_COUNT,
 				MONITOR_FLUSH_BATCH_PAGES,
-				page_count);
+				n.flushed);
 		}
 	}
 
@@ -2091,7 +2098,7 @@ buf_flush_LRU_tail(void)
 		     j < scan_depth;
 		     j += PAGE_CLEANER_LRU_BATCH_CHUNK_SIZE) {
 
-			ulint	n_flushed = 0;
+			flush_counters_t	n;
 
 			/* Currently page_cleaner is the only thread
 			that can trigger an LRU flush. It is possible
@@ -2099,7 +2106,7 @@ buf_flush_LRU_tail(void)
 			still running, */
 			if (buf_flush_LRU(buf_pool,
 					  PAGE_CLEANER_LRU_BATCH_CHUNK_SIZE,
-					  &n_flushed)) {
+					  &n)) {
 
 				/* Allowed only one batch per
 				buffer pool instance. */
@@ -2107,8 +2114,8 @@ buf_flush_LRU_tail(void)
 					buf_pool, BUF_FLUSH_LRU);
 			}
 
-			if (n_flushed) {
-				total_flushed += n_flushed;
+			if (n.flushed) {
+				total_flushed += n.flushed;
 			} else {
 				/* Nothing to flush */
 				break;
@@ -2277,7 +2284,14 @@ page_cleaner_flush_pages_if_needed(void)
 	ulint			pct_total = 0;
 	int			age_factor = 0;
 
-	cur_lsn = log_get_lsn();
+	cur_lsn = log_get_lsn_nowait();
+
+	/* log_get_lsn_nowait tries to get log_sys->mutex with
+	mutex_enter_nowait, if this does not succeed function
+	returns 0, do not use that value to update stats. */
+	if (cur_lsn == 0) {
+		return(0);
+	}
 
 	if (prev_lsn == 0) {
 		/* First time around. */
@@ -2411,25 +2425,16 @@ DECLARE_THREAD(buf_flush_page_cleaner_thread)(
 
 	while (srv_shutdown_state == SRV_SHUTDOWN_NONE) {
 
-		/* The page_cleaner skips sleep if the server is
-		idle and there are no pending IOs in the buffer pool
-		and there is work to do. */
-		if (srv_check_activity(last_activity)
-		    || buf_get_n_pending_read_ios()
-		    || n_flushed == 0) {
-			page_cleaner_sleep_if_needed(next_loop_time);
-		}
+		page_cleaner_sleep_if_needed(next_loop_time);
 
 		next_loop_time = ut_time_ms() + 1000;
 
 		if (srv_check_activity(last_activity)) {
 			last_activity = srv_get_activity_count();
 
-			/* Flush pages from end of LRU if required */
-			n_flushed = buf_flush_LRU_tail();
-
 			/* Flush pages from flush_list if required */
-			n_flushed += page_cleaner_flush_pages_if_needed();
+			page_cleaner_flush_pages_if_needed();
+			n_flushed = 0;
 		} else {
 			n_flushed = page_cleaner_do_flush_batch(
 							PCT_IO(100),
@@ -2443,6 +2448,9 @@ DECLARE_THREAD(buf_flush_page_cleaner_thread)(
 					n_flushed);
 			}
 		}
+
+		/* Flush pages from end of LRU if required */
+		n_flushed = buf_flush_LRU_tail();
 	}
 
 	ut_ad(srv_shutdown_state > 0);

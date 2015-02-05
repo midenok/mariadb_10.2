@@ -26,6 +26,8 @@ Created 3/26/1996 Heikki Tuuri
 #ifndef trx0undo_h
 #define trx0undo_h
 
+#ifndef UNIV_INNOCHECKSUM
+
 #include "univ.i"
 #include "trx0types.h"
 #include "mtr0mtr.h"
@@ -243,22 +245,13 @@ Truncates an undo log from the end. This function is used during a rollback
 to free space from an undo log. */
 UNIV_INTERN
 void
-trx_undo_truncate_end_func(
+trx_undo_truncate_end(
 /*=======================*/
-#ifdef UNIV_DEBUG
-	const trx_t*	trx,	/*!< in: transaction whose undo log it is */
-#endif /* UNIV_DEBUG */
+	trx_t*		trx,	/*!< in: transaction whose undo log it is */
 	trx_undo_t*	undo,	/*!< in/out: undo log */
 	undo_no_t	limit)	/*!< in: all undo records with undo number
 				>= this value should be truncated */
 	__attribute__((nonnull));
-#ifdef UNIV_DEBUG
-# define trx_undo_truncate_end(trx,undo,limit)		\
-	trx_undo_truncate_end_func(trx,undo,limit)
-#else /* UNIV_DEBUG */
-# define trx_undo_truncate_end(trx,undo,limit)		\
-	trx_undo_truncate_end_func(undo,limit)
-#endif /* UNIV_DEBUG */
 
 /***********************************************************************//**
 Truncates an undo log from the start. This function is used during a purge
@@ -394,6 +387,8 @@ trx_undo_mem_free(
 /*==============*/
 	trx_undo_t*	undo);		/* in: the undo object to be freed */
 
+#endif /* !UNIV_INNOCHECKSUM */
+
 /* Types of an undo log segment */
 #define	TRX_UNDO_INSERT		1	/* contains undo entries for inserts */
 #define	TRX_UNDO_UPDATE		2	/* contains undo entries for updates
@@ -412,6 +407,7 @@ trx_undo_mem_free(
 					prepared transaction */
 
 #ifndef UNIV_HOTBACKUP
+#ifndef UNIV_INNOCHECKSUM
 /** Transaction undo log memory object; this is protected by the undo_mutex
 in the corresponding transaction object */
 
@@ -470,6 +466,7 @@ struct trx_undo_t{
 					/*!< undo log objects in the rollback
 					segment are chained into lists */
 };
+#endif /* !UNIV_INNOCHECKSUM */
 #endif /* !UNIV_HOTBACKUP */
 
 /** The offset of the undo log page header on pages of the undo log */
@@ -597,8 +594,10 @@ quite a large overhead. */
 					with the XA XID */
 /* @} */
 
+#ifndef UNIV_INNOCHECKSUM
 #ifndef UNIV_NONINL
 #include "trx0undo.ic"
 #endif
+#endif /* !UNIV_INNOCHECKSUM */
 
 #endif

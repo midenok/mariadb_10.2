@@ -26,6 +26,7 @@
 #pragma implementation				// gcc: Class implementation
 #endif
 
+#include <my_global.h>
 #include "sql_priv.h"
 #include <m_ctype.h>
 #include "sql_select.h"
@@ -620,17 +621,6 @@ int Arg_comparator::set_compare_func(Item_result_field *item, Item_result type)
   }
   case STRING_RESULT:
   {
-    /*
-      We must set cmp_charset here as we may be called from for an automatic
-      generated item, like in natural join
-    */
-    if (cmp_collation.set((*a)->collation, (*b)->collation) || 
-	cmp_collation.derivation == DERIVATION_NONE)
-    {
-      my_coll_agg_error((*a)->collation, (*b)->collation,
-                        owner->func_name());
-      return 1;
-    }
     if (cmp_collation.collation == &my_charset_bin)
     {
       /*
@@ -754,6 +744,37 @@ bool get_mysql_time_from_str(THD *thd, String *str, timestamp_type warn_type,
 
 
 /**
+  Aggregate comparator argument charsets for comparison.
+  One of the arguments ("a" or "b") can be replaced,
+  typically by Item_string or Item_func_conv_charset.
+
+  @return Aggregation result
+  @retval false - if no conversion is needed,
+                  or if one of the arguments was converted
+  @retval true  - on error, if arguments are not comparable.
+
+  TODO: get rid of this method eventually and refactor the calling code.
+  Argument conversion should happen on the Item_func level.
+  Arg_comparator should get comparable arguments.
+*/
+bool Arg_comparator::agg_arg_charsets_for_comparison()
+{
+  if (cmp_collation.set((*a)->collation, (*b)->collation, MY_COLL_CMP_CONV) ||
+      cmp_collation.derivation == DERIVATION_NONE)
+  {
+    my_coll_agg_error((*a)->collation, (*b)->collation, owner->func_name());
+    return true;
+  }
+  if (agg_item_set_converter(cmp_collation, owner->func_name(),
+                             a, 1, MY_COLL_CMP_CONV, 1) ||
+      agg_item_set_converter(cmp_collation, owner->func_name(),
+                             b, 1, MY_COLL_CMP_CONV, 1))
+    return true;
+  return false;
+}
+
+
+/**
   Prepare the comparator (set the comparison function) for comparing
   items *a1 and *a2 in the context of 'type'.
 
@@ -780,10 +801,11 @@ int Arg_comparator::set_cmp_func(Item_result_field *owner_arg,
       (*a)->result_type() == STRING_RESULT &&
       (*b)->result_type() == STRING_RESULT)
   {
-    DTCollation coll;
-    coll.set((*a)->collation.collation);
-    if (agg_item_set_converter(coll, owner->func_name(),
-                               b, 1, MY_COLL_CMP_CONV, 1))
+    /*
+      We must set cmp_collation here as we may be called from for an automatic
+      generated item, like in natural join
+    */
+    if (agg_arg_charsets_for_comparison())
       return 1;
   }
   if (type == INT_RESULT &&
@@ -1969,14 +1991,14 @@ longlong Item_func_lt::val_int()
 longlong Item_func_strcmp::val_int()
 {
   DBUG_ASSERT(fixed == 1);
-  String *a=args[0]->val_str(&cmp.value1);
-  String *b=args[1]->val_str(&cmp.value2);
+  String *a= args[0]->val_str(&value1);
+  String *b= args[1]->val_str(&value2);
   if (!a || !b)
   {
     null_value=1;
     return 0;
   }
-  int value= sortcmp(a,b,cmp.cmp_collation.collation);
+  int value= cmp_collation.sortcmp(a, b);
   null_value=0;
   return !value ? 0 : (value < 0 ? (longlong) -1 : (longlong) 1);
 }

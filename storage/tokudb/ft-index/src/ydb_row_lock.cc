@@ -89,6 +89,8 @@ PATENT RIGHTS GRANT:
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 #ident "$Id$"
 
+#include <config.h>
+
 #include <db.h>
 
 #include <locktree/lock_request.h>
@@ -305,6 +307,7 @@ void toku_db_grab_write_lock (DB *db, DBT *key, TOKUTXN tokutxn) {
     int r = request.start();
     invariant_zero(r);
     db_txn_note_row_lock(db, txn_anc, key, key);
+    request.destroy();
 }
 
 void toku_db_release_lt_key_ranges(DB_TXN *txn, txn_lt_key_ranges *ranges) {

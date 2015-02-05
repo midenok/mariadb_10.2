@@ -831,39 +831,35 @@ buf_flush_init_for_writing(
 	case SRV_CHECKSUM_ALGORITHM_CRC32:
 	case SRV_CHECKSUM_ALGORITHM_STRICT_CRC32:
 		checksum = buf_calc_page_crc32(page);
+		mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, checksum);
 		break;
 	case SRV_CHECKSUM_ALGORITHM_INNODB:
 	case SRV_CHECKSUM_ALGORITHM_STRICT_INNODB:
 		checksum = (ib_uint32_t) buf_calc_page_new_checksum(page);
+		mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, checksum);
+		checksum = (ib_uint32_t) buf_calc_page_old_checksum(page);
 		break;
 	case SRV_CHECKSUM_ALGORITHM_NONE:
 	case SRV_CHECKSUM_ALGORITHM_STRICT_NONE:
 		checksum = BUF_NO_CHECKSUM_MAGIC;
+		mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, checksum);
 		break;
 	/* no default so the compiler will emit a warning if new enum
 	is added and not handled here */
 	}
 
-	mach_write_to_4(page + FIL_PAGE_SPACE_OR_CHKSUM, checksum);
+	/* With the InnoDB checksum, we overwrite the first 4 bytes of
+	the end lsn field to store the old formula checksum. Since it
+	depends also on the field FIL_PAGE_SPACE_OR_CHKSUM, it has to
+	be calculated after storing the new formula checksum.
 
-	/* We overwrite the first 4 bytes of the end lsn field to store
-	the old formula checksum. Since it depends also on the field
-	FIL_PAGE_SPACE_OR_CHKSUM, it has to be calculated after storing the
-	new formula checksum. */
-
-	if (srv_checksum_algorithm == SRV_CHECKSUM_ALGORITHM_STRICT_INNODB
-	    || srv_checksum_algorithm == SRV_CHECKSUM_ALGORITHM_INNODB) {
-
-		checksum = (ib_uint32_t) buf_calc_page_old_checksum(page);
-
-		/* In other cases we use the value assigned from above.
-		If CRC32 is used then it is faster to use that checksum
-		(calculated above) instead of calculating another one.
-		We can afford to store something other than
-		buf_calc_page_old_checksum() or BUF_NO_CHECKSUM_MAGIC in
-		this field because the file will not be readable by old
-		versions of MySQL/InnoDB anyway (older than MySQL 5.6.3) */
-	}
+	In other cases we write the same value to both fields.
+	If CRC32 is used then it is faster to use that checksum
+	(calculated above) instead of calculating another one.
+	We can afford to store something other than
+	buf_calc_page_old_checksum() or BUF_NO_CHECKSUM_MAGIC in
+	this field because the file will not be readable by old
+	versions of MySQL/InnoDB anyway (older than MySQL 5.6.3) */
 
 	mach_write_to_4(page + UNIV_PAGE_SIZE - FIL_PAGE_END_LSN_OLD_CHKSUM,
 			checksum);
@@ -2474,7 +2470,14 @@ page_cleaner_flush_pages_if_needed(void)
 	ulint			pct_total = 0;
 	int			age_factor = 0;
 
-	cur_lsn = log_get_lsn();
+	cur_lsn = log_get_lsn_nowait();
+
+	/* log_get_lsn_nowait tries to get log_sys->mutex with
+	mutex_enter_nowait, if this does not succeed function
+	returns 0, do not use that value to update stats. */
+	if (cur_lsn == 0) {
+		return(0);
+	}
 
 	if (prev_lsn == 0) {
 		/* First time around. */
@@ -2694,14 +2697,7 @@ DECLARE_THREAD(buf_flush_page_cleaner_thread)(
 
 		srv_current_thread_priority = srv_cleaner_thread_priority;
 
-		/* The page_cleaner skips sleep if the server is
-		idle and there are no pending IOs in the buffer pool
-		and there is work to do. */
-		if (srv_check_activity(last_activity)
-		    || buf_get_n_pending_read_ios()
-		    || n_flushed == 0) {
-			page_cleaner_sleep_if_needed(next_loop_time);
-		}
+		page_cleaner_sleep_if_needed(next_loop_time);
 
 		page_cleaner_sleep_time
 			= page_cleaner_adapt_flush_sleep_time();
@@ -2709,6 +2705,7 @@ DECLARE_THREAD(buf_flush_page_cleaner_thread)(
 		next_loop_time = ut_time_ms() + page_cleaner_sleep_time;
 
 		server_active = srv_check_activity(last_activity);
+
 		if (server_active
 		    || ut_time_ms() - last_activity_time < 1000) {
 
@@ -2719,7 +2716,8 @@ DECLARE_THREAD(buf_flush_page_cleaner_thread)(
 			}
 
 			/* Flush pages from flush_list if required */
-			n_flushed += page_cleaner_flush_pages_if_needed();
+			page_cleaner_flush_pages_if_needed();
+			n_flushed = 0;
 		} else {
 			n_flushed = page_cleaner_do_flush_batch(
 							PCT_IO(100),
@@ -2733,6 +2731,9 @@ DECLARE_THREAD(buf_flush_page_cleaner_thread)(
 					n_flushed);
 			}
 		}
+
+		/* Flush pages from end of LRU if required */
+		n_flushed = buf_flush_LRU_tail();
 	}
 
 	ut_ad(srv_shutdown_state > 0);
