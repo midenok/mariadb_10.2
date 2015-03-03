@@ -46,6 +46,8 @@ MariaDB bug reports should be submitted through https://mariadb.atlassian.net/
 
 ")
 
+SKY_FIX_VARS()
+
 SET(CPACK_RPM_SPEC_MORE_DEFINE "
 %define mysql_vendor ${CPACK_PACKAGE_VENDOR}
 %define mysqlversion ${MYSQL_NO_DASH_VERSION}
