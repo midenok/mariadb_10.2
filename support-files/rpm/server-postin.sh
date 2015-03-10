@@ -56,8 +56,8 @@ SETARGETDIR=/etc/selinux/targeted/src/policy
 SEDOMPROG=$SETARGETDIR/domains/program
 SECONPROG=$SETARGETDIR/file_contexts/program
 if [ -f /etc/redhat-release ] ; then 
-   if grep -q "Red Hat Enterprise Linux .. release 4" /etc/redhat-release \
-     || grep -q "CentOS release 4" /etc/redhat-release ; then
+   if grep '\(Red Hat Enterprise Linux ..\|CentOS\) release 4' \
+     /etc/redhat-release >/dev/null 2>&1; then
      echo
      echo
      echo 'Notes regarding SELinux on this platform:'
