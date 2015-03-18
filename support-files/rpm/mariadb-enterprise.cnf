@@ -104,7 +104,7 @@ innodb-flush-log-at-trx-commit           = 1
 #innodb_flush_method                      = O_DIRECT
 innodb-log-buffer-size                   = 64M
 innodb-log-files-in-group                = 2
-innodb-log-file-size                     = 1024M
+#innodb-log-file-size                     = 1024M
 #innodb_purge_threads                     = 1
 # -- Raid1: 200. Raid10: 200 x write arrays. SSD: 5000. FusionIO: 20000.
 #innodb_io_capacity                      = 200
@@ -114,7 +114,7 @@ innodb-write-io-threads                  = 8
 # -- Set this to 2-4 times # of Cpus, maximum recommended is 64.
 # -- iostat report io service time: io_capacity / service_time is a good starting point for innodb_write_io_threads
 # -- innodb_read_io_threads starting point monitoring status # read ahead per second
-innodb-thread-concurrency                = 64
+#innodb-thread-concurrency                = 64
 
 innodb-open-files                       = 2048
 
