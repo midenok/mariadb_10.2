@@ -722,6 +722,20 @@
      Property="FailureProgram"
      Execute="deferred" />
 
+    <CustomAction Id="PostInstallAction"
+      ExeCommand='cmd /c "cd &quot;[INSTALLDIR]\share\unsupported-plugins\&quot; &amp; FOR /R . %F IN (*.dll) DO (cat %TMP%\usedplugins.txt | findstr %~nxF &amp; copy /y &quot;%F&quot; &quot;[INSTALLDIR]\lib\plugin\&quot;)"'
+      Execute="deferred"
+      Directory='INSTALLDIR'
+      Return='ignore'
+    />
+
+    <CustomAction Id="PreInstallAction"
+      ExeCommand='cmd /c "cd &quot;[INSTALLDIR]\lib\plugin\&quot; &amp; forfiles /s /m *.dll > %TMP%/usedplugins.txt"'
+      Execute="deferred"
+      Directory='INSTALLDIR'
+      Return='ignore'
+    />
+
     <CustomAction Id='ErrorDataDirNotEmpty' 
                   Error='Chosen data directory [DATADIR] is not empty. It must be empty prior to installation.'/>
     <InstallExecuteSequence>
@@ -745,6 +759,8 @@
       <Custom Action='FakeFailure' Before='InstallFinalize'>
         <![CDATA[&DBInstance=3 AND NOT !DBInstance=3 AND OLDERVERSIONBEINGUPGRADED="" AND TESTFAIL]]>
       </Custom>
+      <Custom Action='PostInstallAction' Before='InstallFinalize'>Installed</Custom>
+      <Custom Action='PreInstallAction' After='InstallInitialize'>Installed</Custom>
     </InstallExecuteSequence>
 
 

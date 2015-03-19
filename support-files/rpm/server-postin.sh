@@ -51,6 +51,24 @@ if [ $1 = 1 ] ; then
   chmod -R og-rw $datadir/mysql
 fi
 
+PLUGINS_DIR="%{_libdir}/mysql/plugin"
+UNSUPPORTED_PLUGINS_DIR="%{_datadir}/mysql/unsupported-plugins/"
+TMP_FILE=/tmp/mysql_plugins_list.tmp
+
+if test -f $TMP_FILE; then
+  # Create links to unsupported but used plugin's
+  for plugin in `ls $UNSUPPORTED_PLUGINS_DIR`; do
+    plugin_name=`echo $plugin | sed s/.so//g`
+    if grep $plugin_name $TMP_FILE; then
+        echo "$plugin is used but it is not supported!"
+        rm -fr $PLUGINS_DIR/$plugin
+        ln -s $UNSUPPORTED_PLUGINS_DIR/$plugin $PLUGINS_DIR/$plugin
+    fi
+  done
+  
+  rm -f $TMP_FILE
+fi
+
 # install SELinux files - but don't override existing ones
 SETARGETDIR=/etc/selinux/targeted/src/policy
 SEDOMPROG=$SETARGETDIR/domains/program
