@@ -58,6 +58,25 @@ EOF
        return $retval
 }
 
+# Check for usage of unsupported plugins
+PLUGINS_DIR="/usr/lib/mysql/plugin"
+UNSUPPORTED_PLUGINS_DIR="/usr/share/mysql/unsupported-plugins/"
+TMP_FILE=/tmp/mysql_plugins_list.tmp
+
+if test -f $TMP_FILE; then
+  # Create links to unsupported but used plugin's
+  for plugin in `ls $UNSUPPORTED_PLUGINS_DIR`; do
+    plugin_name=`echo $plugin | sed s/.so//g`
+    if grep $plugin_name $TMP_FILE; then
+        echo "$plugin is used but it is not supported!"
+        rm -fr $PLUGINS_DIR/$plugin
+        ln -s $UNSUPPORTED_PLUGINS_DIR/$plugin $PLUGINS_DIR/$plugin
+    fi
+  done
+  
+  rm -f $TMP_FILE
+fi
+
 # This is necessary because mysql_install_db removes the pid file in /var/run
 # and because changed configuration options should take effect immediately.
 # In case the server wasn't running at all it should be ok if the stop
