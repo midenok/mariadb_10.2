@@ -139,6 +139,8 @@ innodb-log-files-in-group                = 2
 #innodb_purge_threads                     = 1
 # -- Raid1: 200. Raid10: 200 x write arrays. SSD: 5000. FusionIO: 20000.
 #innodb_io_capacity                      = 200
+# -- SSD & FusionIO can flush pages in random disk order, keep default for spinning disks
+#innodb_flush_neighbors                   = 0
 # -- Increase these numbers to increase global throughput on SAN (16,32,64)
 innodb-read-io-threads                   = 8
 innodb-write-io-threads                  = 8
