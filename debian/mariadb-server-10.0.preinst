@@ -19,26 +19,11 @@ LOGDIR=/var/log/mysql
 UPGRADEDIR=/var/lib/mysql-upgrade
 
 PLUGINS_DIR="/usr/lib/mysql/plugin"
-UNSUPPORTED_PLUGINS_DIR="/usr/share/mysql/unsupported-plugins/"
 TMP_FILE=/tmp/mysql_plugins_list.tmp
-
-# Run server
-if [ -x "/etc/init.d/mysql" ] || [ -e "/etc/init/mysql.conf" ]; then
-	invoke-rc.d mysql status || invoke-rc.d mysql start
-fi
 
 # Check for usage of unsupported plugins
 touch $TMP_FILE
-if invoke-rc.d mysql status &> /dev/null; then
-  # Assemble used plugins
-  mysql > $TMP_FILE << EOD
-SELECT name,dl FROM mysql.plugin;
-EOD
-  my_print_defaults mysqld | grep plugin-load >> $TMP_FILE
-else
-  # Or just all active plugins
-  test -d $PLUGINS_DIR && ls $PLUGINS_DIR > $TMP_FILE
-fi
+test -d $PLUGINS_DIR && ls $PLUGINS_DIR > $TMP_FILE
 
 # Try to stop the server in a sane way. If it does not success let the admin
 # do it himself. No database directories should be removed while the server
