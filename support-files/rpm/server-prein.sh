@@ -20,22 +20,9 @@ if [ $? -eq 0 -a -n "$installed" ]; then
   UNSUPPORTED_PLUGINS_DIR="%{_datadir}/mysql/unsupported-plugins/"
   TMP_FILE=/tmp/mysql_plugins_list.tmp
 
-  if ! %{_sysconfdir}/init.d/mysql status &> /dev/null; then
-    %{_sysconfdir}/init.d/mysql start &> /dev/null;
-  fi
-
   # Check for usage of unsupported plugins
   touch $TMP_FILE
-  if %{_sysconfdir}/init.d/mysql status &> /dev/null; then
-    # Assemble used plugins
-    mysql > $TMP_FILE << EOD
-SELECT name,dl FROM mysql.plugin;
-EOD
-    my_print_defaults mysqld | grep plugin-load >> $TMP_FILE
-  else
-    # Or just all active plugins
-    test -d $PLUGINS_DIR && ls $PLUGINS_DIR > $TMP_FILE
-  fi
+  test -d $PLUGINS_DIR && ls $PLUGINS_DIR > $TMP_FILE
 
   error_text=
   if [ "$vendor" != "$myvendor" ]; then
