@@ -8,6 +8,7 @@ if [ $? -eq 0 -a -n "$installed" ]; then
   version=`rpm -q --queryformat='%{VERSION}' "$installed" 2>&1`
   myvendor='%{mysql_vendor}'
   myversion='%{mysqlversion}'
+  communityvendor="Monty Program AB"
 
   old_family=`echo $version   | sed -n -e 's,^\([1-9][0-9]*\.[0-9][0-9]*\)\..*$,\1,p'`
   new_family=`echo $myversion | sed -n -e 's,^\([1-9][0-9]*\.[0-9][0-9]*\)\..*$,\1,p'`
@@ -25,7 +26,7 @@ if [ $? -eq 0 -a -n "$installed" ]; then
   test -d $PLUGINS_DIR && ls $PLUGINS_DIR > $TMP_FILE
 
   error_text=
-  if [ "$vendor" != "$myvendor" ]; then
+  if [ "$vendor" != "$myvendor" ] && [ "$vendor" != "$communityvendor" ]; then
     error_text="$error_text
 The current MariaDB server package is provided by a different
 vendor ($vendor) than $myvendor.  Some files may be installed
