@@ -128,7 +128,7 @@ IF (NOT CPACK_GENERATOR)
   ENDIF(WIN32) 
 ENDIF(NOT CPACK_GENERATOR)
 
-include(sky-tweaks)
+INCLUDE(sky-tweaks)
 
 INCLUDE(mysql_version)
 INCLUDE(cpack_source_ignore_files)
