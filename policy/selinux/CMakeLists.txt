@@ -25,8 +25,15 @@ IF(RPM)
   )
   SET(SELINUX_MAKEFILE /usr/share/selinux/devel/Makefile)
   IF((SEMODULE_PACKAGE_PROGRAM) AND (CHECKMODULE_PROGRAM) AND (EXISTS ${SELINUX_MAKEFILE}))
-    CONFIGURE_FILE(mariadb-server.fc ${CMAKE_CURRENT_BINARY_DIR}/mariadb-server.fc @ONLY)
-    CONFIGURE_FILE(mariadb-server.te ${CMAKE_CURRENT_BINARY_DIR}/mariadb-server.te @ONLY)
+    SET(OSNAME ${RPM})
+    IF(${RPM} STREQUAL "centos7")
+      SET(OSNAME "rhel7")
+    ENDIF()
+    IF(${RPM} STREQUAL "centos6")
+      SET(OSNAME "rhel6")
+    ENDIF()
+    CONFIGURE_FILE(mariadb-server.${OSNAME}.fc ${CMAKE_CURRENT_BINARY_DIR}/mariadb-server.fc @ONLY)
+    CONFIGURE_FILE(mariadb-server.${OSNAME}.te ${CMAKE_CURRENT_BINARY_DIR}/mariadb-server.te @ONLY)
     add_custom_target(SE ALL 
       COMMAND make -f ${SELINUX_MAKEFILE}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
