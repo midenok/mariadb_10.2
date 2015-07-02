@@ -1,0 +1,1 @@
+semodule -i %{_datadir}/mysql/SELinux/mariadb-server.pp
