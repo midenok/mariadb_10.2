@@ -29,3 +29,25 @@ MACRO(SKY_FIX_VARS)
 
   ")
 ENDMACRO()
+
+#
+# Remove not-so-important components from the binary archive.
+#
+
+OPTION(LEAN_ARCHIVE "Remove extra stuff from archive" ON)
+
+IF (LEAN_ARCHIVE)
+  IF (RPM)
+    MESSAGE(STATUS "RPM and LEAN_ARCHIVE are both set, ignoring LEAN_ARCHIVE.")
+  ELSE()
+    SET(CPACK_COMPONENTS_ALL
+        Server IniFiles Server_Scripts SupportFiles
+        Development Readme Common Client SharedLibraries
+        ClientPlugins)
+    MESSAGE(STATUS "Generating archive with following components : ${CPACK_COMPONENTS_ALL}")
+
+    SET(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
+    SET(CPACK_COMPONENT_INCLUDE_TOPLEVEL_DIRECTORY ON)
+    SET(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
+  ENDIF()
+ENDIF()
