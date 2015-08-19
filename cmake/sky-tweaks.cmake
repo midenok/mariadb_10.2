@@ -37,7 +37,9 @@ ENDMACRO()
 OPTION(LEAN_ARCHIVE "Remove extra stuff from archive" ON)
 
 IF (LEAN_ARCHIVE)
-  IF (RPM)
+  IF (WIN32)
+    MESSAGE(STATUS "LEAN_ARCHIVE is currently not supported on Windows.")
+  ELSEIF (RPM)
     MESSAGE(STATUS "RPM and LEAN_ARCHIVE are both set, ignoring LEAN_ARCHIVE.")
   ELSE()
     SET(CPACK_COMPONENTS_ALL
