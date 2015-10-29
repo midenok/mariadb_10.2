@@ -23,10 +23,11 @@ SET(CPACK_COMPONENT_SHAREDLIBRARIES_GROUP "shared")
 SET(CPACK_COMPONENT_COMMON_GROUP "common")
 SET(CPACK_COMPONENT_CLIENTPLUGINS_GROUP "common")
 SET(CPACK_COMPONENT_COMPAT_GROUP "compat")
+SET(CPACK_COMPONENT_SELINUX_GROUP "selinux")
 SET(CPACK_COMPONENTS_ALL Server ManPagesServer IniFiles Server_Scripts
                          SupportFiles Development ManPagesDevelopment
                          ManPagesTest Readme ManPagesClient Test 
-                         Common Client SharedLibraries ClientPlugins)
+                         Common Client SharedLibraries ClientPlugins selinux)
 
 SET(CPACK_RPM_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
 SET(CPACK_PACKAGE_FILE_NAME "${CPACK_RPM_PACKAGE_NAME}-${VERSION}-${RPM}-${CMAKE_SYSTEM_PROCESSOR}")
@@ -47,6 +48,8 @@ MariaDB documentation can be found at http://kb.askmonty.org/
 MariaDB bug reports should be submitted through https://mariadb.atlassian.net/
 
 ")
+
+SKY_FIX_VARS()
 
 SET(CPACK_RPM_SPEC_MORE_DEFINE "
 %define mysql_vendor ${CPACK_PACKAGE_VENDOR}
@@ -81,6 +84,7 @@ SET(ignored
   "%ignore ${CMAKE_INSTALL_PREFIX}/lib64"
   "%ignore ${CMAKE_INSTALL_PREFIX}/sbin"
   "%ignore ${CMAKE_INSTALL_PREFIX}/share"
+  "%ignore ${CMAKE_INSTALL_PREFIX}/share/mysql"
   "%ignore ${CMAKE_INSTALL_PREFIX}/share/aclocal"
   "%ignore ${CMAKE_INSTALL_PREFIX}/share/doc"
   "%ignore ${CMAKE_INSTALL_PREFIX}/share/man"
@@ -88,7 +92,8 @@ SET(ignored
   "%ignore ${CMAKE_INSTALL_PREFIX}/share/man/man8*"
   )
 
-SET(CPACK_RPM_server_USER_FILELIST ${ignored} "%config(noreplace) ${INSTALL_SYSCONF2DIR}/*")
+SET(CPACK_RPM_server_USER_FILELIST ${ignored} "%config(noreplace) ${INSTALL_SYSCONF2DIR}/*" "%ignore ${INSTALL_SYSCONFDIR}/my.cnf.d")
+SET(CPACK_RPM_selinux_USER_FILELIST ${ignored} "%ignore ${CMAKE_INSTALL_PREFIX}/share/mysql/SELinux")
 SET(CPACK_RPM_common_USER_FILELIST ${ignored} "%config(noreplace) ${INSTALL_SYSCONFDIR}/my.cnf")
 SET(CPACK_RPM_shared_USER_FILELIST ${ignored} "%config(noreplace) ${INSTALL_SYSCONF2DIR}/*")
 SET(CPACK_RPM_client_USER_FILELIST ${ignored} "%config(noreplace) ${INSTALL_SYSCONF2DIR}/*")
@@ -165,6 +170,8 @@ SET(CPACK_RPM_server_POST_INSTALL_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/
 SET(CPACK_RPM_server_POST_UNINSTALL_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/server-postun.sh)
 SET(CPACK_RPM_shared_POST_INSTALL_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/shared-post.sh)
 SET(CPACK_RPM_shared_POST_UNINSTALL_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/shared-post.sh)
+SET(CPACK_RPM_selinux_POST_INSTALL_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/selinux-postin.sh)
+SET(CPACK_RPM_selinux_POST_UNINSTALL_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/selinux-postun.sh)
 
 MACRO(ALTERNATIVE_NAME real alt)
   SET(ver "%{version}-%{release}")

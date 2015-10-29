@@ -1,0 +1,1 @@
+semodule -d mariadb-server 
