@@ -72,7 +72,7 @@ endif
 		cmake .. \
 		-DMYSQL_SERVER_SUFFIX="-$(DEBVERSION)" \
 		-DBUILD_CONFIG=mysql_release \
-		-DCOMPILATION_COMMENT="mariadb.org binary distribution" \
+		-DCOMPILATION_COMMENT="MariaDB Enterprise Certified Binary" \
 		-DSYSTEM_TYPE="debian-linux-gnu" \
 		-DDEB=ubuntu'
 
