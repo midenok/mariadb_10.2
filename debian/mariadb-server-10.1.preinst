@@ -18,6 +18,13 @@ DATADIR=/var/lib/mysql
 LOGDIR=/var/log/mysql
 UPGRADEDIR=/var/lib/mysql-upgrade
 
+PLUGINS_DIR="/usr/lib/mysql/plugin"
+TMP_FILE=/tmp/mysql_plugins_list.tmp
+
+# Check for usage of unsupported plugins
+touch $TMP_FILE
+test -d $PLUGINS_DIR && ls $PLUGINS_DIR > $TMP_FILE
+
 # Try to stop the server in a sane way. If it does not success let the admin
 # do it himself. No database directories should be removed while the server
 # is running! Another mysqld in e.g. a different chroot is fine for us.
