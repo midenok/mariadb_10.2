@@ -160,9 +160,9 @@ myisam-sort-buffer-size                  = 64M
 # Other
 # -- Enable INFORMATION_SCHEMA.%_STATISTICS tables
 userstat                                 = ON
-archive                                  = OFF
-blackhole                                = OFF
-#federated                               = OFF
+loose-archive                            = OFF
+loose-blackhole                          = OFF
+#loose-federated                         = OFF
 #innodb                                  = FORCE
 
 [mysql]
