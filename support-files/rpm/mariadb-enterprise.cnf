@@ -10,7 +10,7 @@ feedback-url=''
 # -- Disable for applications using old auth protocol
 enable-secure-auth
 # -- Auditing - pre-load Plugin
-plugin-load=server_audit
+#plugin-load=server_audit
 
 ###########################################
 [mysqld]
