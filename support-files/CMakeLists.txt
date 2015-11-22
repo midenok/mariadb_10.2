@@ -33,7 +33,7 @@ ELSE()
   SET(HOSTNAME "hostname")
 ENDIF()
 
-ADD_SUBDIRECTORY(policy)
+#ADD_SUBDIRECTORY(policy)
 
 # XXX: shouldn't we just have variables for all this stuff and centralise
 # XXX: their configuration in install_layout.cmake?
