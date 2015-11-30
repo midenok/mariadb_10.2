@@ -25,7 +25,6 @@
 #include "sql_priv.h"                /* STRING_BUFFER_USUAL_SIZE */
 #include "unireg.h"
 #include "sql_const.h"                 /* RAND_TABLE_BIT, MAX_FIELD_NAME */
-#include "unireg.h"                    // REQUIRED: for other includes
 #include "thr_malloc.h"                         /* sql_calloc */
 #include "field.h"                              /* Derivation */
 #include "sql_type.h"
@@ -2224,7 +2223,12 @@ public:
   ~Item_result_field() {}			/* Required with gcc 2.95 */
   Field *get_tmp_table_field() { return result_field; }
   Field *tmp_table_field(TABLE *t_arg) { return result_field; }
-  table_map used_tables() const { return true; }
+  /*
+    This implementation of used_tables() used by Item_avg_field and
+    Item_variance_field which work when only temporary table left, so theu
+    return table map of the temporary table.
+  */
+  table_map used_tables() const { return 1; }
   void set_result_field(Field *field) { result_field= field; }
   bool is_result_field() { return true; }
   void save_in_result_field(bool no_conversions)
@@ -4259,6 +4263,8 @@ public:
   bool eq(const Item *item, bool binary_cmp) const;
   Item *get_tmp_table_item(THD *thd)
   {
+    if (const_item())
+      return copy_or_same(thd);
     Item *item= Item_ref::get_tmp_table_item(thd);
     item->name= name;
     return item;

@@ -56,6 +56,15 @@ ENDIF()
 SET(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING
    "Choose the type of build, options are: None(CMAKE_CXX_FLAGS or CMAKE_C_FLAGS used) Debug Release RelWithDebInfo MinSizeRel")
 
+# MAX_INDEXES - Set the maximum number of indexes per table, default 64U
+IF (NOT MAX_INDEXES)
+  SET(MAX_INDEXES 64U)
+ENDIF(NOT MAX_INDEXES)
+
+IF (${MAX_INDEXES} GREATER 128)
+  MESSAGE(FATAL_ERROR "MAX_INDEXES values greater than 128 is not supported!")
+ENDIF()
+
 IF(UNIX AND NOT APPLE)
   # Note, that generally one should not change settings depending
   # on CMAKE_BUILD_TYPE, because VS and Xcode configure once (with
@@ -136,11 +145,11 @@ INCLUDE(sky-tweaks)
 INCLUDE(mysql_version)
 INCLUDE(cpack_source_ignore_files)
 INCLUDE(install_layout)
+INCLUDE(wsrep)
 INCLUDE(cpack_rpm)
 INCLUDE(cpack_deb)
 
 # Add macros
-INCLUDE(wsrep)
 INCLUDE(character_sets)
 INCLUDE(cpu_info)
 INCLUDE(zlib)

@@ -60,6 +60,19 @@
 #include <hash.h>
 #include <ft_global.h>
 
+/*
+  A key part number that means we're using a fulltext scan.
+
+  In order not to confuse it with regular equalities, we need to pick
+  a number that's greater than MAX_REF_PARTS.
+
+  Hash Join code stores field->field_index in KEYUSE::keypart, so the 
+  number needs to be bigger than MAX_FIELDS, also.
+
+  CAUTION: sql_test.cc has its own definition of FT_KEYPART.
+*/
+#define FT_KEYPART   (MAX_FIELDS+10)
+
 const char *join_type_str[]={ "UNKNOWN","system","const","eq_ref","ref",
 			      "MAYBE_REF","ALL","range","index","fulltext",
 			      "ref_or_null","unique_subquery","index_subquery",
@@ -479,6 +492,7 @@ fix_inner_refs(THD *thd, List<Item> &all_fields, SELECT_LEX *select,
     if (ref_pointer_array && !ref->found_in_select_list)
     {
       int el= all_fields.elements;
+      DBUG_ASSERT(all_fields.elements <= select->ref_pointer_array_size);
       ref_pointer_array[el]= item;
       /* Add the field item to the select list of the current select. */
       all_fields.push_front(item, thd->mem_root);
@@ -894,6 +908,7 @@ JOIN::prepare(Item ***rref_pointer_array,
       {
         Item_field *field= new (thd->mem_root) Item_field(thd, *(Item_field**)ord->item);
         int el= all_fields.elements;
+        DBUG_ASSERT(all_fields.elements <= select_lex->ref_pointer_array_size);
         ref_pointer_array[el]= field;
         all_fields.push_front(field, thd->mem_root);
         ord->item= ref_pointer_array + el;
@@ -2067,7 +2082,7 @@ int JOIN::init_execution()
   if (need_tmp && !exec_tmp_table1)
   {
     DBUG_PRINT("info",("Creating tmp table"));
-    THD_STAGE_INFO(thd, stage_copying_to_tmp_table);
+    THD_STAGE_INFO(thd, stage_creating_tmp_table);
 
     init_items_ref_array();
 
@@ -3877,7 +3892,9 @@ make_join_statistics(JOIN *join, List<TABLE_LIST> &tables_list,
           has_expensive_keyparts= false;
 	  do
 	  {
-	    if (keyuse->val->type() != Item::NULL_ITEM && !keyuse->optimize)
+            if (keyuse->val->type() != Item::NULL_ITEM &&
+                !keyuse->optimize &&
+                keyuse->keypart != FT_KEYPART)
 	    {
 	      if (!((~found_const_table_map) & keyuse->used_tables))
               {
@@ -4530,8 +4547,9 @@ add_key_field(JOIN *join,
     bool optimizable=0;
     for (uint i=0; i<num_values; i++)
     {
-      used_tables|=(value[i])->used_tables();
-      if (!((value[i])->used_tables() & (field->table->map | RAND_TABLE_BIT)))
+      table_map value_used_tables= (value[i])->used_tables();
+      used_tables|= value_used_tables;
+      if (!(value_used_tables & (field->table->map | RAND_TABLE_BIT)))
         optimizable=1;
     }
     if (!optimizable)
@@ -5111,19 +5129,6 @@ add_key_part(DYNAMIC_ARRAY *keyuse_array, KEY_FIELD *key_field)
   return FALSE;
 }
 
-
-/*
-  A key part number that means we're using a fulltext scan.
-  
-  In order not to confuse it with regular equalities, we need to pick
-  a number that's greater than MAX_REF_PARTS.
-
-  Hash Join code stores field->field_index in KEYUSE::keypart, so the 
-  number needs to be bigger than MAX_FIELDS, also.
-
-  CAUTION: sql_test.cc has its own definition of FT_KEYPART.
-*/
-#define FT_KEYPART   (MAX_FIELDS+10)
 
 static bool
 add_ft_keys(DYNAMIC_ARRAY *keyuse_array,
@@ -9704,7 +9709,8 @@ make_join_select(JOIN *join,SQL_SELECT *select,COND *cond)
       if (tab->type == JT_REF && tab->quick &&
 	  (((uint) tab->ref.key == tab->quick->index &&
 	    tab->ref.key_length < tab->quick->max_used_key_length) ||
-	    tab->table->intersect_keys.is_set(tab->ref.key)))
+           (!is_hash_join_key_no(tab->ref.key) &&
+            tab->table->intersect_keys.is_set(tab->ref.key))))
       {
 	/* Range uses longer key;  Use this instead of ref on key */
 	tab->type=JT_ALL;
@@ -14440,7 +14446,8 @@ simplify_joins(JOIN *join, List<TABLE_LIST> *join_list, COND *conds, bool top,
     */ 
     if (table->on_expr)
     {
-      table->dep_tables|= table->on_expr->used_tables(); 
+      table_map table_on_expr_used_tables= table->on_expr->used_tables();
+      table->dep_tables|= table_on_expr_used_tables;
       if (table->embedding)
       {
         table->dep_tables&= ~table->embedding->nested_join->used_tables;   
@@ -14448,7 +14455,7 @@ simplify_joins(JOIN *join, List<TABLE_LIST> *join_list, COND *conds, bool top,
            Embedding table depends on tables used
            in embedded on expressions. 
         */
-        table->embedding->on_expr_dep_tables|= table->on_expr->used_tables();
+        table->embedding->on_expr_dep_tables|= table_on_expr_used_tables;
       }
       else
         table->dep_tables&= ~table->get_map();
@@ -16136,20 +16143,21 @@ Field *create_tmp_field(THD *thd, TABLE *table,Item *item, Item::Type type,
 void setup_tmp_table_column_bitmaps(TABLE *table, uchar *bitmaps)
 {
   uint field_count= table->s->fields;
+  uint bitmap_size= bitmap_buffer_size(field_count);
+
+  DBUG_ASSERT(table->s->vfields == 0 && table->def_vcol_set == 0);
+
   my_bitmap_init(&table->def_read_set, (my_bitmap_map*) bitmaps, field_count,
               FALSE);
-  my_bitmap_init(&table->def_vcol_set,
-              (my_bitmap_map*) (bitmaps+ bitmap_buffer_size(field_count)),
-              field_count, FALSE);
+  bitmaps+= bitmap_size;
   my_bitmap_init(&table->tmp_set,
-              (my_bitmap_map*) (bitmaps+ 2*bitmap_buffer_size(field_count)),
-              field_count, FALSE);
+                 (my_bitmap_map*) bitmaps, field_count, FALSE);
+  bitmaps+= bitmap_size;
   my_bitmap_init(&table->eq_join_set,
-              (my_bitmap_map*) (bitmaps+ 3*bitmap_buffer_size(field_count)),
-              field_count, FALSE);
+                 (my_bitmap_map*) bitmaps, field_count, FALSE);
+  bitmaps+= bitmap_size;
   my_bitmap_init(&table->cond_set,
-              (my_bitmap_map*) (bitmaps+ 4*bitmap_buffer_size(field_count)),
-              field_count, FALSE);
+                 (my_bitmap_map*) bitmaps, field_count, FALSE);
   /* write_set and all_set are copies of read_set */
   table->def_write_set= table->def_read_set;
   table->s->all_set= table->def_read_set;
@@ -20160,10 +20168,13 @@ make_cond_after_sjm(THD *thd, Item *root_cond, Item *cond, table_map tables,
     We assume that conditions that refer to only join prefix tables or 
     sjm_tables have already been checked.
   */
-  if (!inside_or_clause && 
-      (!(cond->used_tables() & ~tables) || 
-       !(cond->used_tables() & ~sjm_tables)))
-    return (COND*) 0;				// Already checked
+  if (!inside_or_clause)
+  {
+    table_map cond_used_tables= cond->used_tables();
+    if((!(cond_used_tables & ~tables) ||
+       !(cond_used_tables & ~sjm_tables)))
+      return (COND*) 0;				// Already checked
+  }
 
   /* AND/OR recursive descent */
   if (cond->type() == Item::COND_ITEM)
@@ -20765,7 +20776,7 @@ test_if_skip_sort_order(JOIN_TAB *tab,ORDER *order,ha_rows select_limit,
         quick_type == QUICK_SELECT_I::QS_TYPE_INDEX_INTERSECT ||
         quick_type == QUICK_SELECT_I::QS_TYPE_ROR_UNION || 
         quick_type == QUICK_SELECT_I::QS_TYPE_ROR_INTERSECT)
-      ref_key= MAX_KEY;
+      ref_key= -1;
     else
     {
       ref_key= select->quick->index;
@@ -21971,6 +21982,8 @@ find_order_in_list(THD *thd, Item **ref_pointer_array, TABLE_LIST *tables,
     return TRUE; /* Wrong field. */
 
   uint el= all_fields.elements;
+  DBUG_ASSERT(all_fields.elements <=
+              thd->lex->current_select->ref_pointer_array_size);
  /* Add new field to field list. */
   all_fields.push_front(order_item, thd->mem_root);
   ref_pointer_array[el]= order_item;
@@ -22231,6 +22244,8 @@ create_distinct_group(THD *thd, Item **ref_pointer_array,
         */
         Item_field *new_item= new (thd->mem_root) Item_field(thd, (Item_field*)item);
         int el= all_fields.elements;
+        DBUG_ASSERT(all_fields.elements <=
+                    thd->lex->current_select->ref_pointer_array_size);
         orig_ref_pointer_array[el]= new_item;
         all_fields.push_front(new_item, thd->mem_root);
         ord->item= orig_ref_pointer_array + el;
@@ -25051,8 +25066,7 @@ bool JOIN::change_result(select_result *new_result, select_result *old_result)
       DBUG_RETURN(true); /* purecov: inspected */
     DBUG_RETURN(false);
   }
-  else
-    DBUG_RETURN(result->change_result(new_result));
+  DBUG_RETURN(result->change_result(new_result));
 }
 
 
@@ -25380,7 +25394,7 @@ static bool get_range_limit_read_cost(const JOIN_TAB *tab,
         if (kp == table->quick_key_parts[keynr])
           ref_rows= table->quick_rows[keynr];
         else
-          ref_rows= table->key_info[keynr].actual_rec_per_key(kp-1);
+          ref_rows= (ha_rows) table->key_info[keynr].actual_rec_per_key(kp-1);
 
         if (ref_rows > 0)
         {
@@ -25457,6 +25471,7 @@ test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER *order, TABLE *table,
                          uint *saved_best_key_parts)
 {
   DBUG_ENTER("test_if_cheaper_ordering");
+  DBUG_ASSERT(ref_key < int(MAX_KEY));
   /*
     Check whether there is an index compatible with the given order
     usage of which is cheaper than usage of the ref_key index (ref_key>=0)
@@ -25521,7 +25536,7 @@ test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER *order, TABLE *table,
     Calculate the selectivity of the ref_key for REF_ACCESS. For
     RANGE_ACCESS we use table->quick_condition_rows.
   */
-  if (ref_key >= 0 && tab->type == JT_REF)
+  if (ref_key >= 0 && !is_hash_join_key_no(ref_key) && tab->type == JT_REF)
   {
     if (table->quick_keys.is_set(ref_key))
       refkey_rows_estimate= table->quick_rows[ref_key];
@@ -25688,6 +25703,7 @@ test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER *order, TABLE *table,
         {
           ha_rows quick_records= table_records;
           ha_rows refkey_select_limit= (ref_key >= 0 &&
+                                        !is_hash_join_key_no(ref_key) &&
                                         table->covering_keys.is_set(ref_key)) ?
                                         refkey_rows_estimate :
                                         HA_POS_ERROR;
