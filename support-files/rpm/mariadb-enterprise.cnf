@@ -1,3 +1,15 @@
+# This file provides a set of sensible default settings. If you need to override these,
+# you should add a new .cnf file in the appropriate directory for your system. Make sure
+# the name of your file starts with a filename that sorts "later" than the name of this
+# file. For example, if you want to override the settings in mariadb-enterprise.cnf, put
+# your own options in a file that starts with a name like "zebra" rather than a name like
+# "apple".
+#
+# If you have questions about the contents of this file, how to tune your server, or anything
+# else related to covered products or services, please contact MariaDB Technical Support at
+#
+#                                  https://support.mariadb.com
+
 [mariadb]
 plugin-maturity=gamma
 
@@ -116,7 +128,7 @@ innodb-stats-on-metadata                 = 0
 innodb-stats-sample-pages                = 32
 table-definition-cache                   = 2048
 table-open-cache                         = 2048
-transaction-isolation                    = READ-COMMITTED
+# transaction-isolation                    = READ-COMMITTED
 # To be set to 0 if not multi transactional storage engine
 innodb-support-xa                        = ON
 
@@ -125,7 +137,7 @@ query-cache-size                         = 0
 query-cache-type                         = 0
 innodb-buffer-pool-instances             = 8
 # -- Set the following to maximum 60/70% of physical RAM.
-innodb-buffer-pool-size                  = 2G
+# innodb-buffer-pool-size                  = 2G
 # innodb_max_dirty_pages_pct should be compute with redo log size in mind: It’s recommended to set the dirty pages smaller than redo log space. The more you have dirty page, the less io will be produced on disk.
 innodb-max-dirty-pages-pct               = 50
 innodb-file-per-table                    = 1
