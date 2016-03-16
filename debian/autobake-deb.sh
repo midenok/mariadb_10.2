@@ -38,10 +38,12 @@ then
   # Anything in MARIADB_OPTIONAL_DEBS is omitted from the resulting
   # packages by snipped in rules file
   MARIADB_OPTIONAL_DEBS="${MARIADB_OPTIONAL_DEBS} cracklib-password-check-10.1"
-  sed -i -e "/\\\${MAYBE_LIBCRACK}/d" debian/control
+  sed -i -e "/\\\${MAYBE_LIBCRACK}/d" -e "/\\\${MAYBE_LIBCRACK_DEV}/d" debian/control
 else
-  MAYBE_LIBCRACK='libcrack2-dev (>= 2.9.0),'
-  sed -i -e "s/\\\${MAYBE_LIBCRACK}/${MAYBE_LIBCRACK}/g" debian/control
+  MAYBE_LIBCRACK_DEV='libcrack2-dev (>= 2.9.0),'
+  MAYBE_LIBCRACK='libcrack2 (>= 2.9.0),'
+  sed -i -e "s/\\\${MAYBE_LIBCRACK_DEV}/${MAYBE_LIBCRACK_DEV}/g" \
+         -e "s/\\\${MAYBE_LIBCRACK}/${MAYBE_LIBCRACK}/g" debian/control
 fi
 
 # Adjust changelog, add new version.

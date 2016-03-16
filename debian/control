@@ -21,7 +21,7 @@ Build-Depends: bison,
                po-debconf,
                psmisc,
                zlib1g-dev (>= 1:1.1.3-5~),
-               ${MAYBE_LIBCRACK}
+               ${MAYBE_LIBCRACK_DEV}
                libjemalloc-dev (>= 3.0.0~) [linux-any]
 Standards-Version: 3.8.2
 Homepage: http://mariadb.org/
