@@ -6,14 +6,19 @@
 # - C++11 compiler : VS2013+, gcc 4.7+, clang 3.3+
 # - libcurl development package needs to be present on Unixes
 #
-# If we build SDK outselves, we'll need require GIT to be present on the build machine
+# If we build SDK ourselves, we'll need require GIT to be present on the
+# build machine.
 
+# Set VERBOSE if its not defined.
+IF(NOT DEFINED VERBOSE)
+  SET(VERBOSE 1)
+ENDIF()
 
-# Give message why the building this plugin is skipped (only if -DVERBOSE is defined)
-# or if plugin is explicitely requested to build. Then bail out.
+# Give message why the building this plugin is skipped only if -DVERBOSE is
+# set or plugin is explicitly requested to build. Then bail out.
 MACRO(SKIP_AWS_PLUGIN msg)
   IF(VERBOSE OR "${PLUGIN_AWS_KEY_MANAGEMENT}" MATCHES "^(STATIC|DYNAMIC)$")
-    MESSAGE(STATUS "Skip aws_key_management - ${msg}")
+    MESSAGE(STATUS "Skipping aws_key_management.. Reason: ${msg}")
   ENDIF()
   RETURN()
 ENDMACRO()
