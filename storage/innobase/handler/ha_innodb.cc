@@ -8303,7 +8303,7 @@ report_error:
 	    wsrep_thd_exec_mode(user_thd) == LOCAL_STATE &&
 	    wsrep_on(user_thd)                           &&
 	    !wsrep_consistency_check(user_thd)           &&
-	    !wsrep_thd_skip_append_keys(user_thd))
+	    !wsrep_thd_ignore_table(user_thd))
 	{
 		if (wsrep_append_keys(user_thd, false, record, NULL))
 		{
@@ -8825,7 +8825,7 @@ func_exit:
 	if (error == DB_SUCCESS                          &&
 	    wsrep_thd_exec_mode(user_thd) == LOCAL_STATE &&
 	    wsrep_on(user_thd)                           &&
-	    !wsrep_thd_skip_append_keys(user_thd))
+	    !wsrep_thd_ignore_table(user_thd))
         {
 		DBUG_PRINT("wsrep", ("update row key"));
 
@@ -8891,7 +8891,7 @@ ha_innobase::delete_row(
 	if (error == DB_SUCCESS                          &&
             wsrep_thd_exec_mode(user_thd) == LOCAL_STATE &&
             wsrep_on(user_thd)                           &&
-            !wsrep_thd_skip_append_keys(user_thd))
+            !wsrep_thd_ignore_table(user_thd))
         {
 		if (wsrep_append_keys(user_thd, false, record, NULL)) {
 			DBUG_PRINT("wsrep", ("delete fail"));
@@ -19937,7 +19937,7 @@ maria_declare_plugin(innobase)
   innodb_status_variables_export,/* status variables             */
   innobase_system_variables, /* system variables */
   INNODB_VERSION_STR,         /* string version */
-  MariaDB_PLUGIN_MATURITY_BETA /* maturity */
+  MariaDB_PLUGIN_MATURITY_GAMMA /* maturity */
 },
 i_s_innodb_trx,
 i_s_innodb_locks,

@@ -325,7 +325,7 @@ int ha_init_errors(void)
   /* Set the dedicated error messages. */
   SETMSG(HA_ERR_KEY_NOT_FOUND,          ER_DEFAULT(ER_KEY_NOT_FOUND));
   SETMSG(HA_ERR_FOUND_DUPP_KEY,         ER_DEFAULT(ER_DUP_KEY));
-  SETMSG(HA_ERR_RECORD_CHANGED,         "Update wich is recoverable");
+  SETMSG(HA_ERR_RECORD_CHANGED,         "Update which is recoverable");
   SETMSG(HA_ERR_WRONG_INDEX,            "Wrong index given to function");
   SETMSG(HA_ERR_CRASHED,                ER_DEFAULT(ER_NOT_KEYFILE));
   SETMSG(HA_ERR_WRONG_IN_RECORD,        ER_DEFAULT(ER_CRASHED_ON_USAGE));
@@ -5723,10 +5723,16 @@ static int binlog_log_row(TABLE* table,
   bool error= 0;
   THD *const thd= table->in_use;
 
-  /* only InnoDB tables will be replicated through binlog emulation */
-  if (WSREP_EMULATE_BINLOG(thd) &&
-      table->file->partition_ht()->db_type != DB_TYPE_INNODB)
+#ifdef WITH_WSREP
+  /*
+    Only InnoDB tables will be replicated through binlog emulation. Also
+    updates in mysql.gtid_slave_state table should not be binlogged.
+  */
+  if ((WSREP_EMULATE_BINLOG(thd) &&
+       table->file->partition_ht()->db_type != DB_TYPE_INNODB) ||
+      (thd->wsrep_ignore_table == true))
     return 0;
+#endif /* WITH_WSREP */
 
   if (check_table_binlog_row_based(thd, table))
   {
