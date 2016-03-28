@@ -3202,6 +3202,10 @@ sub mysql_install_db {
     # mysql.gtid_slave_pos was created in InnoDB, but many tests
     # run without InnoDB. Alter it to MyISAM now
     mtr_tofile($bootstrap_sql_file, "ALTER TABLE gtid_slave_pos ENGINE=MyISAM;\n");
+
+    # mysql_install_db.sh no longer creates test schema.
+    mtr_tofile($bootstrap_sql_file, "INSERT INTO mysql.db VALUES ('%','test','','Y','Y','Y','Y','Y','Y','N','Y','Y','Y','Y','Y','Y','Y','Y','N','N','Y','Y');\n");
+    mtr_tofile($bootstrap_sql_file, "INSERT INTO mysql.db VALUES ('%','test\\_%','','Y','Y','Y','Y','Y','Y','N','Y','Y','Y','Y','Y','Y','Y','Y','N','N','Y','Y');\n");
   }
   else
   {

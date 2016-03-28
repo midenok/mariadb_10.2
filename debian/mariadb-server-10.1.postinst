@@ -50,6 +50,75 @@ EOF
        return $retval
 }
 
+
+## On every reconfiguration the maintenance user is recreated.
+#
+# - It is easier to regenerate the password every time but as people
+#   use fancy rsync scripts and file alteration monitors, the existing
+#   password is used and existing files not touched.
+# - The mysqld statement is like that in mysql_install_db because the
+#   server is not already running. This has some implications:
+# 	- The amount of newlines and semicolons in the query is important!
+#   - GRANT is not possible with --skip-grant-tables and "INSERT
+#     (user,host..) VALUES" is not --ansi compliant
+# - The echo is just for readability. ash's buildin has no "-e" so use /bin/echo.
+# - The Super_priv, Show_db_priv, Create_tmp_table_priv and Lock_tables_priv
+#   may not be present as old Woody 3.23 databases did not have it and the
+#   administrator might not already have run mysql_upgrade which adds them.
+#   As the binlog cron scripts to need at least the Super_priv, I do first
+#   the old query which always succeeds and then the new which may or may not.
+
+create_maint_user() {
+  # Recreate the credentials file if not present or without mysql_upgrade stanza
+  dc=$mysql_cfgdir/debian.cnf;
+  if [ -e "$dc" -a -n "`fgrep mysql_upgrade $dc 2>/dev/null`" ]; then
+      pass="`sed -n 's/^[     ]*password *= *// p' $dc | head -n 1`"
+  else
+      pass=`perl -e 'print map{("a".."z","A".."Z",0..9)[int(rand(62))]}(1..16)'`;
+      if [ ! -d "$mysql_cfgdir" ]; then install -o 0 -g 0 -m 0755 -d $mysql_cfgdir; fi
+      umask 066
+      cat /dev/null > $dc
+      umask 022
+      echo "# Automatically generated for Debian scripts. DO NOT TOUCH!" >>$dc
+      echo "[client]"                                                    >>$dc
+      echo "host     = localhost"                                        >>$dc
+      echo "user     = debian-sys-maint"                                 >>$dc
+      echo "password = $pass"                                            >>$dc
+      echo "socket   = $mysql_rundir/mysqld.sock"                        >>$dc
+      echo "[mysql_upgrade]"                                             >>$dc
+      echo "basedir  = /usr"                                             >>$dc
+  fi
+  # If this dir chmod go+w then the admin did it. But this file should not.
+  chown 0:0 $dc
+  chmod 0600 $dc
+
+  replace_query=`/bin/echo -e \
+      "USE mysql;\n" \
+      "SET sql_mode='';\n" \
+      "REPLACE INTO user SET " \
+      "  host='localhost', user='debian-sys-maint', password=password('$pass'), " \
+      "  Select_priv='Y', Insert_priv='Y', Update_priv='Y', Delete_priv='Y', " \
+      "  Create_priv='Y', Drop_priv='Y', Reload_priv='Y', Shutdown_priv='Y', " \
+      "  Process_priv='Y',  File_priv='Y', Grant_priv='Y', References_priv='Y', " \
+      "  Index_priv='Y', Alter_priv='Y', Super_priv='Y', Show_db_priv='Y', "\
+      "  Create_tmp_table_priv='Y', Lock_tables_priv='Y', Execute_priv='Y', "\
+      "  Repl_slave_priv='Y', Repl_client_priv='Y', Create_view_priv='Y', "\
+      "  Show_view_priv='Y', Create_routine_priv='Y', Alter_routine_priv='Y', "\
+      "  Create_user_priv='Y', Event_priv='Y', Trigger_priv='Y',"\
+      "  ssl_cipher='', x509_issuer='', x509_subject='';"`;
+
+  db_get mysql-server/root_password && rootpw="$RET"
+  if ! set_mysql_rootpw; then
+    db_input high mysql-server/error_setting_password || true
+    db_go
+  fi
+
+  set +e
+  echo "$replace_query" | $MYSQL_BOOTSTRAP 2>&1 | $ERR_LOGGER
+  set -e
+}
+
+
 # Check for usage of unsupported plugins
 PLUGINS_DIR="/usr/lib/mysql/plugin"
 UNSUPPORTED_PLUGINS_DIR="/usr/share/mysql/unsupported-plugins/"
@@ -152,29 +221,21 @@ EOF
     # To avoid downgrades.
     touch $mysql_statedir/debian-10.1.flag
     
-    ## On every reconfiguration the maintenance user is recreated.
-    #
-    # - It is easier to regenerate the password every time but as people
-    #   use fancy rsync scripts and file alteration monitors, the existing
-    #   password is used and existing files not touched.
-    # - The mysqld statement is like that in mysql_install_db because the
-    #   server is not already running. This has some implications:
-    # 	- The amount of newlines and semicolons in the query is important!
-    #   - GRANT is not possible with --skip-grant-tables and "INSERT
-    #     (user,host..) VALUES" is not --ansi compliant
-    # - The echo is just for readability. ash's buildin has no "-e" so use /bin/echo.
-    # - The Super_priv, Show_db_priv, Create_tmp_table_priv and Lock_tables_priv
-    #   may not be present as old Woody 3.23 databases did not have it and the
-    #   admin might not already have run mysql_upgrade which adds them.
-    #   As the binlog cron scripts to need at least the Super_priv, I do first
-    #   the old query which always succeeds and then the new which may or may not.
+    # Check whether there is 'root'@'localhost' authenticated via unix_socket
+    # plugin. If so, we skip the creation of debian-sys-maint user.
+    unix_sock_check="/tmp/debian_unix_sock_check"
+    unix_sock_check_query="SELECT COUNT(*)=1 INTO OUTFILE '${unix_sock_check}' FROM mysql.user WHERE User='root' AND Host='localhost' AND Plugin='unix_socket';"
+    rm -rf ${unix_sock_check}
+    set +e
+    echo "${unix_sock_check_query}" | $MYSQL_BOOTSTRAP 2>&1 | $ERR_LOGGER
+    set -e
 
-    # recreate the credentials file if not present or without mysql_upgrade stanza
-    dc=$mysql_cfgdir/debian.cnf; 
-    if [ -e "$dc" -a -n "`fgrep mysql_upgrade $dc 2>/dev/null`" ]; then
-        pass="`sed -n 's/^[     ]*password *= *// p' $dc | head -n 1`"
-    else
-	pass=`perl -e 'print map{("a".."z","A".."Z",0..9)[int(rand(62))]}(1..16)'`;
+    # Recreate the credentials file if not present only if unix_socket is
+    # not used. Otherwise, create debian.cnf to be used in init script without
+    # password.
+    if grep '1' ${unix_sock_check} > /dev/null 2>&1; then
+      dc=$mysql_cfgdir/debian.cnf;
+      if [ ! -e "$dc" ]; then
         if [ ! -d "$mysql_cfgdir" ]; then install -o 0 -g 0 -m 0755 -d $mysql_cfgdir; fi
         umask 066
         cat /dev/null > $dc
@@ -182,44 +243,17 @@ EOF
         echo "# Automatically generated for Debian scripts. DO NOT TOUCH!" >>$dc
         echo "[client]"                                                    >>$dc
         echo "host     = localhost"                                        >>$dc
-        echo "user     = debian-sys-maint"                                 >>$dc
-        echo "password = $pass"                                            >>$dc
+        echo "user     = root"                                             >>$dc
         echo "socket   = $mysql_rundir/mysqld.sock"                        >>$dc
         echo "[mysql_upgrade]"                                             >>$dc
-        echo "host     = localhost"                                        >>$dc
-        echo "user     = debian-sys-maint"                                 >>$dc
-        echo "password = $pass"                                            >>$dc
-        echo "socket   = $mysql_rundir/mysqld.sock"                        >>$dc
         echo "basedir  = /usr"                                             >>$dc
+        chown 0:0 $dc
+        chmod 0600 $dc
+      fi
+    else
+      create_maint_user
     fi
-    # If this dir chmod go+w then the admin did it. But this file should not.
-    chown 0:0 $dc
-    chmod 0600 $dc
-
-    replace_query=`/bin/echo -e \
-        "USE mysql;\n" \
-        "SET sql_mode='';\n" \
-        "REPLACE INTO user SET " \
-        "  host='localhost', user='debian-sys-maint', password=password('$pass'), " \
-        "  Select_priv='Y', Insert_priv='Y', Update_priv='Y', Delete_priv='Y', " \
-        "  Create_priv='Y', Drop_priv='Y', Reload_priv='Y', Shutdown_priv='Y', " \
-        "  Process_priv='Y',  File_priv='Y', Grant_priv='Y', References_priv='Y', " \
-        "  Index_priv='Y', Alter_priv='Y', Super_priv='Y', Show_db_priv='Y', "\
-        "  Create_tmp_table_priv='Y', Lock_tables_priv='Y', Execute_priv='Y', "\
-        "  Repl_slave_priv='Y', Repl_client_priv='Y', Create_view_priv='Y', "\
-        "  Show_view_priv='Y', Create_routine_priv='Y', Alter_routine_priv='Y', "\
-        "  Create_user_priv='Y', Event_priv='Y', Trigger_priv='Y',"\
-        "  ssl_cipher='', x509_issuer='', x509_subject='';"`;
-
-    db_get mysql-server/root_password && rootpw="$RET"
-    if ! set_mysql_rootpw; then
-      db_input high mysql-server/error_setting_password || true
-      db_go
-    fi
-
-    set +e
-    echo "$replace_query"                                    | $MYSQL_BOOTSTRAP 2>&1 | $ERR_LOGGER
-    set -e
+    rm -rf ${unix_sock_check}
 
     # If there is a real AppArmor profile, we reload it.
     # If the default empty profile is installed, then we remove any old

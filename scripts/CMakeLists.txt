@@ -191,6 +191,13 @@ ELSE()
   SET(libexecdir ${INSTALL_SBINDIRABS})
   SET(pkgdatadir ${INSTALL_MYSQLSHAREDIRABS})
   SET(localstatedir ${MYSQL_DATADIR})
+
+  # This is to ensure that mysql_install_db script packaged in
+  # deb/rpm packages authenticates root user(s) via unix_socket
+  # plugin by default.
+  # However, one bundled in bintar (standalone), will have this
+  # feature disabled by default.
+  SET(root_via_unix_sock "1")
 ENDIF()
 
 IF(UNIX)

@@ -1,6 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright (c) 2000, 2013, Oracle and/or its affiliates.
 # Copyright (c) 2009, 2013, Monty Program Ab
+# Copyright (c) 2016, MariaDB Corporation
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -34,6 +35,8 @@ force=0
 in_rpm=0
 ip_only=0
 cross_bootstrap=0
+opt_root_via_unix_sock=@root_via_unix_sock@
+extra_cmds=""
 
 usage()
 {
@@ -71,6 +74,10 @@ Usage: $0 [OPTIONS]
                        user.  You must be root to use this option.  By default
                        mysqld runs using your current login name and files and
                        directories that it creates will be owned by you.
+  --root-via-unix-sock=(0|1)
+                       Enable root@localhost to authenticate via unix_socket plugin
+                       instead of empty password and drop all other non-localhost
+                       root users with no password. (Default: @root_via_unix_sock@)
 
 All other options are passed to the mysqld program
 
@@ -141,6 +148,10 @@ parse_arguments()
         #
         # --windows is a deprecated alias
         cross_bootstrap=1 ;;
+
+      # Set root users to be identified via unix_socket plugin (used by
+      # packaging scripts).
+      --root-via-unix-sock=*) opt_root_via_unix_sock=`parse_arg "$arg"` ;;
 
       *)
         if test -n "$pick_args"
@@ -375,7 +386,7 @@ then
 fi
 
 # Create database directories
-for dir in "$ldata" "$ldata/mysql" "$ldata/test"
+for dir in "$ldata" "$ldata/mysql"
 do
   if test ! -d "$dir"
   then
@@ -424,10 +435,16 @@ mysqld_install_cmd_line()
   --net_buffer_length=16K
 }
 
+if test "$opt_root_via_unix_sock" -eq 1
+then
+  extra_cmds="${extra_cmds} UPDATE user SET plugin='unix_socket' WHERE user='root' AND host='localhost';\n"
+  extra_cmds="${extra_cmds} DELETE FROM user WHERE user='root' AND host!='localhost' AND password='';\n"
+fi
 
 # Create the system and help tables by passing them to "mysqld --bootstrap"
+# Note: echo -e - is required for the interpretation of '\n'.
 s_echo "Installing MariaDB/MySQL system tables in '$ldata' ..."
-if { echo "use mysql;"; cat "$create_system_tables" "$create_system_tables2" "$fill_system_tables"; } | eval "$filter_cmd_line" | mysqld_install_cmd_line > /dev/null
+if { echo "use mysql;"; cat "${create_system_tables}" "${create_system_tables2}" "${fill_system_tables}"; echo -e "${extra_cmds}"; } | eval "${filter_cmd_line}" | mysqld_install_cmd_line > /dev/null
 then
   s_echo "OK"
 else
@@ -473,7 +490,7 @@ else
 fi
 
 s_echo "Creating OpenGIS required SP-s..."
-if { echo "use test;"; cat "$maria_add_gis_sp"; } | mysqld_install_cmd_line > /dev/null
+if { echo "use mysql;"; cat "$maria_add_gis_sp"; } | mysqld_install_cmd_line > /dev/null
 then
   s_echo "OK"
 else
