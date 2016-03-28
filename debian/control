@@ -402,13 +402,15 @@ Description: MariaDB database regression test suite (metapackage for the latest 
  mariadb-test (currently mariadb-test-10.1), as determined by the MariaDB
  maintainers.
 
-Package: mariadb-cracklib-password-check-10.1
-Section: database
-Architecture: any
-Depends: libcrack2 (>= 2.9.0), mariadb-server-10.1
-Description: CrackLib Password Validation Plugin for MariaDB
- This password validation plugin uses cracklib to allow only
- sufficiently secure (as defined by cracklib) user passwords in MariaDB.
+#The mariadb-cracklib-password-check package is disabled for MariaDB Enterprise,
+#since it is statically linked to mysqld in the mariadb-server-core-10.1 package.
+#Package: mariadb-cracklib-password-check-10.1
+#Section: database
+#Architecture: any
+#Depends: libcrack2 (>= 2.9.0), mariadb-server-10.1
+#Description: CrackLib Password Validation Plugin for MariaDB
+# This password validation plugin uses cracklib to allow only
+# sufficiently secure (as defined by cracklib) user passwords in MariaDB.
 
 Package: mariadb-gssapi-server-10.1
 Section: database

@@ -9,26 +9,13 @@
 # If we build SDK ourselves, we'll need require GIT to be present on the
 # build machine.
 
-# Set VERBOSE if its not defined.
-IF(NOT DEFINED VERBOSE)
-  SET(VERBOSE 1)
-ENDIF()
-
 # Give message why the building this plugin is skipped only if -DVERBOSE is
 # set or plugin is explicitly requested to build. Then bail out.
 MACRO(SKIP_AWS_PLUGIN msg)
-  IF(VERBOSE OR "${PLUGIN_AWS_KEY_MANAGEMENT}" MATCHES "^(STATIC|DYNAMIC)$")
-    MESSAGE(STATUS "Skipping aws_key_management.. Reason: ${msg}")
-  ENDIF()
+  MESSAGE(STATUS "Skipping aws_key_management: ${msg}")
   RETURN()
 ENDMACRO()
 
-MYSQL_ADD_PLUGIN(aws_key_management aws_key_management_plugin.cc
-                 COMPONENT aws-key-management)
-
-IF(NOT TARGET aws_key_management)
-  RETURN()
-ENDIF()
 
 # This plugin needs recent C++ compilers (AWS C++ SDK header files are using C++11 features)
 SET(CXX11_FLAGS)
@@ -58,6 +45,12 @@ IF (NOT(WIN32 OR APPLE  OR (CMAKE_SYSTEM_NAME MATCHES "Linux")))
   SKIP_AWS_PLUGIN("OS unsupported by AWS SDK")
 ENDIF()
 
+MYSQL_ADD_PLUGIN(aws_key_management aws_key_management_plugin.cc
+                 COMPONENT aws-key-management)
+
+IF(NOT TARGET aws_key_management)
+  RETURN()
+ENDIF()
 
 # Figure out where AWS installs SDK libraries 
 # The below is defined in AWS SDK's CMakeLists.txt 
