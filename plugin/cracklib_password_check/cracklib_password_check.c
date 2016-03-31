@@ -33,7 +33,8 @@ static int crackme(MYSQL_LEX_STRING *username, MYSQL_LEX_STRING *password)
   if ((host= strchr(user, '@')))
     *host++= 0;
 
-  if ((res= FascistCheckUser(password->str, dictionary, user, host)))
+  if ((password->str == NULL) ||                // No password
+      (res= FascistCheckUser(password->str, dictionary, user, host)))
   {
     my_printf_error(ER_NOT_VALID_PASSWORD, "cracklib: %s",
                     MYF(ME_JUST_WARNING), res);
