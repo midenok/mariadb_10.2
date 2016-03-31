@@ -10,5 +10,5 @@ IF (HAVE_ALLOCA_H AND HAVE_CRACK_H AND HAVE_LIBCRACK AND HAVE_MEMCPY)
   MYSQL_ADD_PLUGIN(cracklib_password_check cracklib_password_check.c
                    LINK_LIBRARIES crack
                    COMPONENT cracklib-password-check
-                   DISABLED)
+                   DEFAULT)
 ENDIF()
