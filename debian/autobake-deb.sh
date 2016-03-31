@@ -33,7 +33,9 @@ CODENAME="$(lsb_release -sc)"
 
 # add libcrack2 (>= 2.9.0) as a build dependency
 # but only where the distribution can possibly satisfy it
-if apt-cache madison cracklib2|grep 'cracklib2 *| *2\.[0-8]\.' >/dev/null 2>&1
+#if apt-cache madison cracklib2|grep 'cracklib2 *| *2\.[0-8]\.' >/dev/null 2>&1
+# temporary disable cracklib plugin for 10.1.13 until MDEV-9851 is fixed
+if true
 then
   # Anything in MARIADB_OPTIONAL_DEBS is omitted from the resulting
   # packages by snipped in rules file
