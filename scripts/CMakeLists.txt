@@ -184,6 +184,7 @@ IF(INSTALL_LAYOUT MATCHES "STANDALONE")
   SET(libexecdir ${prefix}/${INSTALL_SBINDIR})
   SET(pkgdatadir ${prefix}/${INSTALL_MYSQLSHAREDIR})
   SET(localstatedir ${prefix}/data)
+  SET(root_via_unix_sock "0") # See below
 ELSE()
   SET(prefix "${CMAKE_INSTALL_PREFIX}")
   SET(bindir ${INSTALL_BINDIRABS})
