@@ -12,15 +12,12 @@
 # Give message why the building this plugin is skipped only if -DVERBOSE is
 # set or plugin is explicitly requested to build. Then bail out.
 MACRO(SKIP_AWS_PLUGIN msg)
-  IF(VERBOSE OR "${PLUGIN_AWS_KEY_MANAGEMENT}" MATCHES "^(STATIC|DYNAMIC)$")
-    MESSAGE(STATUS "Can't build aws_key_management - ${msg}")
-  ENDIF()
+  MESSAGE(STATUS "Can't build aws_key_management - ${msg}")
   IF(TARGET aws_key_management)
     MESSAGE(FATAL_ERROR "Error configuring aws_key_management - aborting")
   ENDIF()
   RETURN()
 ENDMACRO()
-
 
 # This plugin needs recent C++ compilers (AWS C++ SDK header files are using C++11 features)
 SET(CXX11_FLAGS)
@@ -50,12 +47,6 @@ IF (NOT(WIN32 OR APPLE  OR (CMAKE_SYSTEM_NAME MATCHES "Linux")))
   SKIP_AWS_PLUGIN("OS unsupported by AWS SDK")
 ENDIF()
 
-MYSQL_ADD_PLUGIN(aws_key_management aws_key_management_plugin.cc
-                 COMPONENT aws-key-management)
-
-IF(NOT TARGET aws_key_management)
-  RETURN()
-ENDIF()
 
 
 FIND_LIBRARY(AWS_CPP_SDK_CORE NAMES aws-cpp-sdk-core PATH_SUFFIXES  "${SDK_INSTALL_BINARY_PREFIX}")
@@ -144,4 +135,12 @@ ENDIF()
 
 ADD_DEFINITIONS(${SSL_DEFINES}) # Need to know whether openssl should be initialized
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  ${CXX11_FLAGS}")
+
+MYSQL_ADD_PLUGIN(aws_key_management aws_key_management_plugin.cc
+                 COMPONENT aws-key-management)
+
+IF(NOT TARGET aws_key_management)
+  RETURN()
+ENDIF()
+
 TARGET_LINK_LIBRARIES(aws_key_management ${AWS_SDK_LIBS})
