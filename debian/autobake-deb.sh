@@ -46,6 +46,9 @@ else
          -e "s/\\\${MAYBE_LIBCRACK}/${MAYBE_LIBCRACK}/g" debian/control
 fi
 
+MARIADB_OPTIONAL_DEBS="${MARIADB_OPTIONAL_DEBS} aws-key-management-10.1"
+
+
 # Adjust changelog, add new version.
 #
 echo "Incrementing changelog and starting build scripts"

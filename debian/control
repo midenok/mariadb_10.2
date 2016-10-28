@@ -410,6 +410,15 @@ Description: CrackLib Password Validation Plugin for MariaDB
  This password validation plugin uses cracklib to allow only
  sufficiently secure (as defined by cracklib) user passwords in MariaDB.
 
+Package: mariadb-aws-key-management-10.1
+Section: database
+Architecture: any
+Depends: mariadb-server-10.1, libcurl3
+Description: Amazon Web Service Key Management Service Plugin for MariaDB
+ This encryption key management plugin gives an interface to the Amazon Web
+ Services Key Management Service for managing encryption keys used for MariaDB
+ data-at-rest encryption.
+
 Package: mariadb-gssapi-server-10.1
 Section: database
 Architecture: any
