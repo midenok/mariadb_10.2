@@ -35,13 +35,27 @@ force=0
 in_rpm=0
 ip_only=0
 cross_bootstrap=0
-opt_root_via_unix_sock=@root_via_unix_sock@
-extra_cmds=""
+install_params=""
+auth_root_authentication_method=@auth_root_auth_method@
+auth_root_socket_user='root'
+skip_auth_anon_user=@skip_auth_anon_user@
 
 usage()
 {
   cat <<EOF
 Usage: $0 [OPTIONS]
+  --auth-root-authentication-method=normal|socket
+                       Chooses the authentication method for the created initial
+                       root user. It can be set to 'normal' to create a root user
+                       that can login without password, which can be insecure.
+                       The alternative 'socket' allows only the system root user
+                       to login as MariaDB root; this requires the unix socket
+                       authentication plugin. (Default: @auth_root_auth_method@)
+  --auth-root-socket-user=user
+                       Used with --auth-root-authentication-method=socket. It
+                       specifies the name of the MariaDB root account, as well
+                       as of the system account allowed to access it. Defaults
+                       to 'root'.
   --basedir=path       The path to the MariaDB installation directory.
   --builddir=path      If using --srcdir with out-of-directory builds, you
                        will need to set this to the location of the build
@@ -62,6 +76,9 @@ Usage: $0 [OPTIONS]
   --defaults-file=path Read only this configuration file.
   --rpm                For internal use.  This option is used by RPM files
                        during the MariaDB installation process.
+  --skip-auth-anonymous-user
+                       Do not install an unprivileged anonymous user.
+                       (Default: @skip_auth_anon_user@)
   --skip-name-resolve  Use IP addresses rather than hostnames when creating
                        grant table entries.  This option can be useful if
                        your DNS does not work.
@@ -74,10 +91,6 @@ Usage: $0 [OPTIONS]
                        user.  You must be root to use this option.  By default
                        mysqld runs using your current login name and files and
                        directories that it creates will be owned by you.
-  --root-via-unix-sock=(0|1)
-                       Enable root@localhost to authenticate via unix_socket plugin
-                       instead of empty password and drop all other non-localhost
-                       root users with no password. (Default: @root_via_unix_sock@)
 
 All other options are passed to the mysqld program
 
@@ -148,10 +161,16 @@ parse_arguments()
         #
         # --windows is a deprecated alias
         cross_bootstrap=1 ;;
-
-      # Set root users to be identified via unix_socket plugin (used by
-      # packaging scripts).
-      --root-via-unix-sock=*) opt_root_via_unix_sock=`parse_arg "$arg"` ;;
+      --skip-auth-anonymous-user)
+        skip_auth_anon_user=1 ;;
+      --auth-root-authentication-method=normal)
+	auth_root_authentication_method=normal ;;
+      --auth-root-authentication-method=socket)
+	auth_root_authentication_method=socket ;;
+      --auth-root-authentication-method=*)
+        usage ;;
+      --auth-root-socket-user=*)
+        auth_root_socket_user="$(parse_arg "$arg")" ;;
 
       *)
         if test -n "$pick_args"
@@ -438,16 +457,27 @@ mysqld_install_cmd_line()
   --net_buffer_length=16K
 }
 
-if test "$opt_root_via_unix_sock" -eq 1
-then
-  extra_cmds="${extra_cmds} UPDATE user SET plugin='unix_socket' WHERE user='root' AND host='localhost';\n"
-  extra_cmds="${extra_cmds} DELETE FROM user WHERE user='root' AND host!='localhost' AND password='';\n"
-fi
 
 # Create the system and help tables by passing them to "mysqld --bootstrap"
-# Note: echo -e - is required for the interpretation of '\n'.
 s_echo "Installing MariaDB/MySQL system tables in '$ldata' ..."
-if { echo "use mysql;"; cat "${create_system_tables}" "${create_system_tables2}" "${fill_system_tables}"; echo -e "${extra_cmds}"; } | eval "${filter_cmd_line}" | mysqld_install_cmd_line > /dev/null
+
+if test "$skip_auth_anon_user" -eq 1
+then
+	install_params="$install_params
+SET @skip_auth_anonymous=1;"
+fi
+
+case "$auth_root_authentication_method" in
+  normal)
+    install_params="$install_params
+SET @skip_auth_root_nopasswd=NULL;
+SET @auth_root_socket=NULL;" ;;
+  socket)
+    install_params="$install_params
+SET @skip_auth_root_nopasswd=1;
+SET @auth_root_socket='$auth_root_socket_user';" ;;
+esac
+if { echo "use mysql;$install_params"; cat "$create_system_tables" "$create_system_tables2" "$fill_system_tables"; } | eval "$filter_cmd_line" | mysqld_install_cmd_line > /dev/null
 then
   s_echo "OK"
 else

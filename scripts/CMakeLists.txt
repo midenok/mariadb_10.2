@@ -184,7 +184,8 @@ IF(INSTALL_LAYOUT MATCHES "STANDALONE")
   SET(libexecdir ${prefix}/${INSTALL_SBINDIR})
   SET(pkgdatadir ${prefix}/${INSTALL_MYSQLSHAREDIR})
   SET(localstatedir ${prefix}/data)
-  SET(root_via_unix_sock "0") # See below
+  SET(auth_root_auth_method "normal")
+  SET(skip_auth_anon_user "0")
 ELSE()
   SET(prefix "${CMAKE_INSTALL_PREFIX}")
   SET(bindir ${INSTALL_BINDIRABS})
@@ -199,7 +200,8 @@ ELSE()
   # plugin by default.
   # However, one bundled in bintar (standalone), will have this
   # feature disabled by default.
-  SET(root_via_unix_sock "1")
+  SET(auth_root_auth_method "socket")
+  SET(skip_auth_anon_user "1")
 ENDIF()
 
 IF(UNIX)
