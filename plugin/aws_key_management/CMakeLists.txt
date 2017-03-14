@@ -9,8 +9,8 @@
 # If we build SDK ourselves, we'll need require GIT to be present on the
 # build machine.
 
-# Give message why the building this plugin is skipped only if -DVERBOSE is
-# set or plugin is explicitly requested to build. Then bail out.
+# Give message why the building this plugin is skipped (only if -DVERBOSE is defined)
+# or if plugin is explicitly requested to build. Then bail out.
 MACRO(SKIP_AWS_PLUGIN msg)
   MESSAGE(STATUS "Can't build aws_key_management - ${msg}")
   IF(TARGET aws_key_management)
@@ -50,7 +50,7 @@ ENDIF()
 
 
 FIND_LIBRARY(AWS_CPP_SDK_CORE NAMES aws-cpp-sdk-core PATH_SUFFIXES  "${SDK_INSTALL_BINARY_PREFIX}")
-FIND_LIBRARY(AWS_CPP_SDK_KMS NAMES aws-cpp-sdk-core PATH_SUFFIXES  "${SDK_INSTALL_BINARY_PREFIX}")
+FIND_LIBRARY(AWS_CPP_SDK_KMS NAMES aws-cpp-sdk-kms PATH_SUFFIXES  "${SDK_INSTALL_BINARY_PREFIX}")
 SET(CMAKE_REQUIRED_FLAGS ${CXX11_FLAGS})
 CHECK_INCLUDE_FILE_CXX(aws/kms/KMSClient.h HAVE_AWS_HEADERS)
 
