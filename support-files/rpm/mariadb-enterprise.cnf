@@ -174,7 +174,7 @@ myisam-sort-buffer-size                  = 64M
 userstat                                 = ON
 loose-archive                            = OFF
 loose-blackhole                          = OFF
-#loose-federated                         = OFF
+#federated                               = OFF
 #innodb                                  = FORCE
 
 [mysql]
