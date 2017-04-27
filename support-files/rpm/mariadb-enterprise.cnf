@@ -24,6 +24,10 @@ enable-secure-auth
 # -- Auditing - pre-load Plugin
 #plugin-load=server_audit
 
+# This is to accommodate upgrades to MariaDB 10.2, which does not include
+# the Unix socket plugin built into the server.
+loose-plugin-load=auth_socket
+
 ###########################################
 [mysqld]
 
