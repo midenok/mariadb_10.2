@@ -9,6 +9,10 @@
 # If we build SDK ourselves, we'll need require GIT to be present on the
 # build machine.
 
+# Temporarily DISABLE the AWS key management plugin completely in 
+# MariaDB Enterprise Server due to build problems :-(
+RETURN()
+
 # Give message why the building this plugin is skipped (only if -DVERBOSE is defined)
 # or if plugin is explicitly requested to build. Then bail out.
 MACRO(SKIP_AWS_PLUGIN msg)
