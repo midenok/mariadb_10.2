@@ -19,14 +19,6 @@ MACRO(SKIP_AWS_PLUGIN msg)
   RETURN()
 ENDMACRO()
 
-MYSQL_ADD_PLUGIN(aws_key_management aws_key_management_plugin.cc
-                 COMPONENT aws-key-management)
-
-IF(NOT TARGET aws_key_management)
-  RETURN()
-ENDIF()
-
-
 # This plugin needs recent C++ compilers (AWS C++ SDK header files are using C++11 features)
 SET(CXX11_FLAGS)
 SET(OLD_COMPILER_MSG "AWS SDK requires c++11 -capable compiler (minimal supported versions are g++ 4.8, clang 3.3, VS2103)")
@@ -149,6 +141,13 @@ IF(WIN32)
  SET(AWS_CPP_SDK_DEPENDENCIES bcrypt winhttp wininet userenv version)
 ELSE()
  SET(AWS_CPP_SDK_DEPENDENCIES ${SSL_LIBRARIES} ${CURL_LIBRARIES} ${UUID_LIBRARIES})
+ENDIF()
+
+MYSQL_ADD_PLUGIN(aws_key_management aws_key_management_plugin.cc
+                 COMPONENT aws-key-management)
+
+IF(NOT TARGET aws_key_management)
+  RETURN()
 ENDIF()
 
 TARGET_LINK_LIBRARIES(aws_key_management ${AWS_SDK_LIBS} ${AWS_CPP_SDK_DEPENDENCIES})
