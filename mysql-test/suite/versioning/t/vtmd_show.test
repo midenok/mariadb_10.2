@@ -1,5 +1,3 @@
--- source suite/versioning/common.inc
-
 delimiter ~~;
 create or replace procedure drop_archives (in vtmd_name varchar(64))
 begin
@@ -38,24 +36,23 @@ begin
   set @tmp = concat('create table t (a int) with system versioning engine ', engine);
   prepare stmt from @tmp; execute stmt; drop prepare stmt;
 
-  set @tm1 = moment();
+  set @tm1 = now(6);
   alter table t add column b int;
 
-  set @tm2 = moment();
+  set @tm2 = now(6);
   alter table t add column c int;
 
   show create table t for system_time as of timestamp @tm1;
   show create table t for system_time as of timestamp @tm2;
   show create table t for system_time as of now;
-  set @tm2= moment();
-  show create table t for system_time as of timestamp @tm2;
+  show create table t for system_time as of timestamp now(6);
   show create table t;
 
-  set @tm3 = moment();
+  set @tm3 = now(6);
   rename table t to tt;
   show create table tt for system_time as of timestamp @tm3;
 
-  set @tm4 = moment();
+  set @tm4 = now(6);
   alter table tt add column d int;
   show create table tt for system_time as of timestamp @tm3;
   show create table tt for system_time as of timestamp @tm4;
@@ -89,5 +86,5 @@ drop table t_vtmd;
 call test_01('myisam');
 call test_01('innodb');
 
-drop database test;
-create database test;
+drop procedure test_01;
+drop procedure drop_archives;
