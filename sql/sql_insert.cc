@@ -682,23 +682,14 @@ Field **TABLE::field_to_fill()
 }
 
 
+inline
 Field **TABLE::user_fields()
 {
-  Field **to_fill= field_to_fill();
   if (versioned())
   {
-    Field **user= (Field **)alloc_root(&mem_root, (s->fields - VERSIONING_FIELDS + 1) * sizeof(Field*));
-    Field **dst= user;
-    for (Field **src= to_fill; *src; src++)
-    {
-      if ((*src)->vers_sys_field())
-        continue;
-      *dst++= *src;
-    }
-    *dst= NULL;
-    return user;
+    return triggers && triggers->vers_user_fields() ? triggers->vers_user_fields() : vers_user_field;
   }
-  return to_fill;
+  return field_to_fill();
 }
 
 

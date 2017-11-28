@@ -1130,6 +1130,7 @@ public:
   Field **default_field;                /* Fields with non-constant DEFAULT */
   Field *next_number_field;		/* Set if next_number is activated */
   Field *found_next_number_field;	/* Set on open */
+  Field **vers_user_field;              /* Non-system fields */
   Virtual_column_info **check_constraints;
 
   /* Table's triggers, 0 if there are no of them */

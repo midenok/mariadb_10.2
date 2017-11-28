@@ -3195,7 +3195,29 @@ enum open_frm_error open_table_from_share(THD *thd, TABLE_SHARE *share,
   }
   (*field_ptr)= 0;                              // End marker
 
-  outparam->vers_write= share->versioned;
+  if (share->versioned)
+  {
+    Field **dst= (Field **) alloc_root(&outparam->mem_root,
+                                      (share->fields - VERSIONING_FIELDS + 1) *
+                                      sizeof(Field*));
+    if (!dst)
+      goto err;
+
+    outparam->vers_user_field= dst;
+    for (Field **src= outparam->field; *src; src++)
+    {
+      if ((*src)->vers_sys_field())
+        continue;
+      *dst++= *src;
+    }
+    (*dst)= NULL;
+    outparam->vers_write= true;
+  }
+  else
+  {
+    outparam->vers_user_field= NULL;
+    outparam->vers_write= false;
+  }
 
   if (share->found_next_number_field)
     outparam->found_next_number_field=
