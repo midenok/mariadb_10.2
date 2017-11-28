@@ -3195,29 +3195,7 @@ enum open_frm_error open_table_from_share(THD *thd, TABLE_SHARE *share,
   }
   (*field_ptr)= 0;                              // End marker
 
-  if (share->versioned)
-  {
-    Field **fptr = NULL;
-    if (!(fptr = (Field **) alloc_root(&outparam->mem_root,
-                                            (uint) ((share->fields+1)*
-                                                    sizeof(Field*)))))
-      goto err;
-
-    outparam->non_generated_field = fptr;
-    for (i=0 ; i < share->fields; i++)
-    {
-      if (outparam->field[i]->vers_sys_field())
-        continue;
-      *fptr++ = outparam->field[i];
-    }
-    (*fptr)= 0;                                 // End marker
-    outparam->vers_write= true;
-  }
-  else
-  {
-    outparam->non_generated_field= NULL;
-    outparam->vers_write= false;
-  }
+  outparam->vers_write= share->versioned;
 
   if (share->found_next_number_field)
     outparam->found_next_number_field=
@@ -7697,6 +7675,7 @@ int TABLE::update_default_fields(bool update_command, bool ignore_errors)
   in_use->restore_active_arena(expr_arena, &backup_arena);
   DBUG_RETURN(res);
 }
+
 
 void TABLE::vers_update_fields()
 {

@@ -676,6 +676,32 @@ static void save_insert_query_plan(THD* thd, TABLE_LIST *table_list)
 }
 
 
+Field **TABLE::field_to_fill()
+{
+  return triggers && triggers->nullable_fields() ? triggers->nullable_fields() : field;
+}
+
+
+Field **TABLE::user_fields()
+{
+  Field **to_fill= field_to_fill();
+  if (versioned())
+  {
+    Field **user= (Field **)alloc_root(&mem_root, (s->fields - VERSIONING_FIELDS + 1) * sizeof(Field*));
+    Field **dst= user;
+    for (Field **src= to_fill; *src; src++)
+    {
+      if ((*src)->vers_sys_field())
+        continue;
+      *dst++= *src;
+    }
+    *dst= NULL;
+    return user;
+  }
+  return to_fill;
+}
+
+
 /**
   INSERT statement implementation
 
@@ -1002,7 +1028,7 @@ bool mysql_insert(THD *thd,TABLE_LIST *table_list,
         }
         table->reset_default_fields();
         if (fill_record_n_invoke_before_triggers(thd, table,
-                                                 table->field_to_fill(),
+                                                 table->user_fields(),
                                                  *values, 0, TRG_EVENT_INSERT))
         {
           if (values_list.elements != 1 && ! thd->is_error())
@@ -3875,7 +3901,7 @@ void select_insert::store_values(List<Item> &values)
     fill_record_n_invoke_before_triggers(thd, table, *fields, values, 1,
                                          TRG_EVENT_INSERT);
   else
-    fill_record_n_invoke_before_triggers(thd, table, table->field_to_fill(),
+    fill_record_n_invoke_before_triggers(thd, table, table->user_fields(),
                                          values, 1, TRG_EVENT_INSERT);
 
   DBUG_VOID_RETURN;
