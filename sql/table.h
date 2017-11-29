@@ -1075,6 +1075,9 @@ typedef Bitmap<MAX_FIELDS> Field_map;
 
 struct TABLE
 {
+private:
+  TABLE& operator= (const TABLE& t) { return *this; }
+public:
   TABLE() {}                               /* Remove gcc warning */
 
   TABLE_SHARE	*s;

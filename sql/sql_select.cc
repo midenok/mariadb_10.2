@@ -18563,7 +18563,7 @@ create_internal_tmp_table_from_heap(THD *thd, TABLE *table,
     table->file->print_error(error, MYF(ME_FATALERROR));
     DBUG_RETURN(1);
   }
-  new_table= *table;
+  //new_table= *table;
   share= *table->s;
   new_table.s= &share;
   new_table.s->db_plugin= ha_lock_engine(thd, TMP_ENGINE_HTON);
@@ -18645,7 +18645,7 @@ create_internal_tmp_table_from_heap(THD *thd, TABLE *table,
   plugin_unlock(0, table->s->db_plugin);
   share.db_plugin= my_plugin_lock(0, share.db_plugin);
   new_table.s= table->s;                       // Keep old share
-  *table= new_table;
+  //*table= new_table;
   *table->s= share;
   
   table->file->change_table_ptr(table, table->s);

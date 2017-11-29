@@ -2543,7 +2543,7 @@ TABLE *Delayed_insert::get_local_table(THD* client_thd)
 
   /* Copy the TABLE object. */
   copy= new (copy_tmp) TABLE;
-  *copy= *table;
+  //*copy= *table;
 
   /* We don't need to change the file handler here */
   /* Assign the pointers for the field pointers array and the record. */
