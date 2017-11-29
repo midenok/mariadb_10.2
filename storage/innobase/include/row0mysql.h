@@ -860,6 +860,7 @@ struct row_prebuilt_t {
 	/** The MySQL table object */
 	TABLE*		m_mysql_table;
 
+	/** Get template by column number */
 	const mysql_row_templ_t* get_template_by_col(ulint col) const
 	{
 		ut_a(col < n_template);
@@ -867,7 +868,7 @@ struct row_prebuilt_t {
 		for (int i = col; i < n_template; ++i)
 		{
 			const mysql_row_templ_t* templ = mysql_template + i;
-			if (templ->col_no == col)
+			if (!templ->is_virtual && templ->col_no == col)
 				return templ;
 		}
 		return NULL;
