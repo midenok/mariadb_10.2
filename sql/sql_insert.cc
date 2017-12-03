@@ -1050,7 +1050,7 @@ bool mysql_insert(THD *thd,TABLE_LIST *table_list,
         }
       }
 
-      if (table->versioned_by_sql())
+      if (table->versioned())
         table->vers_update_fields();
 
       if ((res= table_list->view_check_option(thd,
@@ -1937,8 +1937,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
         */
         if (last_uniq_key(table,key_nr) &&
             !table->file->referenced_by_foreign_key() &&
-            (!table->triggers || !table->triggers->has_delete_triggers()) &&
-            !table->versioned_by_sql())
+            (!table->triggers || !table->triggers->has_delete_triggers()))
         {
           if ((error=table->file->ha_update_row(table->record[1],
                                                 table->record[0])) &&
@@ -3832,7 +3831,7 @@ int select_insert::send_data(List<Item> &values)
     DBUG_RETURN(0);
 
   thd->count_cuted_fields= CHECK_FIELD_WARN;	// Calculate cuted fields
-  if (table->versioned_by_sql())
+  if (table->versioned())
     table->vers_update_fields();
   store_values(values);
   if (table->default_field && table->update_default_fields(0, info.ignore))
