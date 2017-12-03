@@ -1939,6 +1939,12 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
             !table->file->referenced_by_foreign_key() &&
             (!table->triggers || !table->triggers->has_delete_triggers()))
         {
+          if (table->versioned_by_engine())
+          {
+            bitmap_set_bit(table->write_set, table->vers_start_field()->field_index);
+            table->vers_start_field()->set_notnull();
+            table->vers_start_field()->store(0, false);
+          }
           if ((error=table->file->ha_update_row(table->record[1],
                                                 table->record[0])) &&
               error != HA_ERR_RECORD_IS_THE_SAME)
