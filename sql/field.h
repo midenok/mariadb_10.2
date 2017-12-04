@@ -4645,12 +4645,14 @@ bool check_expression(Virtual_column_info *vcol, LEX_CSTRING *name,
 inline
 ulonglong TABLE::vers_end_id() const
 {
+  DBUG_ASSERT(versioned_by_engine());
   return static_cast<ulonglong>(vers_end_field()->val_int());
 }
 
 inline
 ulonglong TABLE::vers_start_id() const
 {
+  DBUG_ASSERT(versioned_by_engine());
   return static_cast<ulonglong>(vers_start_field()->val_int());
 }
 
