@@ -1950,7 +1950,20 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
               error != HA_ERR_RECORD_IS_THE_SAME)
             goto err;
           if (error != HA_ERR_RECORD_IS_THE_SAME)
+          {
             info->deleted++;
+            if (table->versioned_by_sql())
+            {
+              store_record(table, record[2]);
+              if (vers_insert_history_row(table))
+              {
+                restore_record(table, record[2]);
+                error= 1;
+                break;
+              }
+              restore_record(table, record[2]);
+            }
+          }
           else
             error= 0;
           thd->record_first_successful_insert_id_in_cur_stmt(table->file->insert_id_for_cur_row);
