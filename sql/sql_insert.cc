@@ -4206,8 +4206,8 @@ static TABLE *create_table_from_items(THD *thd,
     alter_info->create_list.push_back(cr_field, thd->mem_root);
   }
 
-  if (create_info->vers_info.check_and_fix_implicit(
-        thd, alter_info, create_info, create_table->table_name))
+  if (create_info->vers_info.check_and_fix_implicit(thd, alter_info,
+                                                    create_info, *create_table))
   {
     DBUG_RETURN(NULL);
   }

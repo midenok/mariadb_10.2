@@ -6781,9 +6781,10 @@ bool Vers_parse_info::check_and_fix_implicit(
   THD *thd,
   Alter_info *alter_info,
   HA_CREATE_INFO *create_info,
-  const char* table_name)
+  const TABLE_LIST& create_table)
 {
   DBUG_ASSERT(!without_system_versioning);
+  const char* table_name= create_table.table_name;
 
   SELECT_LEX &slex= thd->lex->select_lex;
   int vers_tables= 0;
@@ -6823,6 +6824,19 @@ bool Vers_parse_info::check_and_fix_implicit(
 
   if (!need_check())
     return false;
+
+#ifdef WITH_PARTITION_STORAGE_ENGINE
+  {
+    partition_info *wpi= thd->work_part_info;
+    if (wpi && wpi->default_engine_type &&
+      (create_info->db_type->flags & HTON_NATIVE_SYS_VERSIONING) !=
+      (wpi->default_engine_type->flags & HTON_NATIVE_SYS_VERSIONING))
+    {
+      my_error(ER_VERS_ALTER_ENGINE_PROHIBITED, MYF(0), create_table.db, table_name);
+      return true;
+    }
+  }
+#endif
 
   if (!versioned_fields && unversioned_fields && !with_system_versioning)
   {

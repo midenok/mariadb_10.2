@@ -231,4 +231,12 @@ select * from t1 partition (p1sp1) for system_time all;
 
 drop table t1;
 
+--echo # Prohibit mixup of native/non-native versionining
+--error ER_VERS_ALTER_ENGINE_PROHIBITED
+create or replace table t (a bigint)
+with system versioning
+partition by range (a)
+(partition p0 values less than (20) engine innodb,
+ partition p1 values less than maxvalue engine innodb);
+
 -- source suite/versioning/common_finish.inc

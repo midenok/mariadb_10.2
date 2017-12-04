@@ -288,3 +288,10 @@ select * from t1 partition (p1sp1) for system_time all;
 x
 2
 drop table t1;
+# Prohibit mixup of native/non-native versionining
+create or replace table t (a bigint)
+with system versioning
+partition by range (a)
+(partition p0 values less than (20) engine innodb,
+partition p1 values less than maxvalue engine innodb);
+ERROR HY000: Not allowed for versioned `test.t`. Change to/from native versioning engine is prohibited.
