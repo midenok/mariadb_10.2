@@ -1,5 +1,4 @@
---source suite/versioning/engines.inc
---source suite/versioning/common.inc
+-- source suite/versioning/common.inc
 
 delimiter ~~;
 create procedure test_01()

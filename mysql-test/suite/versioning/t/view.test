@@ -1,4 +1,3 @@
---source suite/versioning/engines.inc
 --source suite/versioning/common.inc
 
 create or replace table t1 (x int) with system versioning;
