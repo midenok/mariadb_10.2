@@ -2777,7 +2777,7 @@ void Item_ident_for_show::make_field(THD *thd, Send_field *tmp_field)
 Item_field::Item_field(THD *thd, Field *f)
   :Item_ident(thd, 0, NullS, *f->table_name, &f->field_name),
    item_equal(0),
-   have_privileges(0), any_privileges(0)
+   have_privileges(0), any_privileges(0), vers_warn_optimized(true)
 {
   set_field(f);
   /*
@@ -2802,7 +2802,7 @@ Item_field::Item_field(THD *thd, Name_resolution_context *context_arg,
   :Item_ident(thd, context_arg, f->table->s->db.str, *f->table_name,
               &f->field_name),
    item_equal(0),
-   have_privileges(0), any_privileges(0)
+   have_privileges(0), any_privileges(0), vers_warn_optimized(true)
 {
   /*
     We always need to provide Item_field with a fully qualified field
@@ -2846,7 +2846,7 @@ Item_field::Item_field(THD *thd, Name_resolution_context *context_arg,
                        const LEX_CSTRING *field_name_arg)
   :Item_ident(thd, context_arg, db_arg, table_name_arg, field_name_arg),
    field(0), item_equal(0),
-   have_privileges(0), any_privileges(0)
+   have_privileges(0), any_privileges(0), vers_warn_optimized(true)
 {
   SELECT_LEX *select= thd->lex->current_select;
   collation.set(DERIVATION_IMPLICIT);
@@ -2864,7 +2864,8 @@ Item_field::Item_field(THD *thd, Item_field *item)
    field(item->field),
    item_equal(item->item_equal),
    have_privileges(item->have_privileges),
-   any_privileges(item->any_privileges)
+   any_privileges(item->any_privileges),
+   vers_warn_optimized(item->vers_warn_optimized)
 {
   collation.set(DERIVATION_IMPLICIT);
   with_field= 1;
@@ -10379,9 +10380,9 @@ Item_field::excl_dep_on_grouping_fields(st_select_lex *sel)
   return find_matching_grouping_field(this, sel) != NULL;
 }
 
-Item *Item_field::vers_optimized_fields_transformer(THD *thd, uchar *)
+Item *Item_field::vers_transformer(THD *thd, uchar *)
 {
-  if (!field)
+  if (!field || !vers_warn_optimized)
     return this;
 
   if (field->vers_update_unversioned() && context &&
@@ -10393,12 +10394,9 @@ Item *Item_field::vers_optimized_fields_transformer(THD *thd, uchar *)
         ER_NON_VERSIONED_FIELD_IN_VERSIONED_QUERY,
         ER_THD(current_thd, ER_NON_VERSIONED_FIELD_IN_VERSIONED_QUERY),
         field_name.str);
-
-    Item *null_item= new (thd->mem_root) Item_null(thd);
-    if (null_item)
-      return null_item;
   }
 
+  vers_warn_optimized= false;
   return this;
 }
 
