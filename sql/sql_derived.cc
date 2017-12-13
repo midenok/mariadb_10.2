@@ -841,10 +841,14 @@ expli_table_err:
       if (impli_table)
       {
         Query_arena_stmt on_stmt_arena(thd);
-        if (!expli_start && (res= sl->vers_push_field(thd, impli_table, impli_start)))
-          goto exit;
-        if (!expli_end && (res= sl->vers_push_field(thd, impli_table, impli_end)))
-          goto exit;
+        SELECT_LEX *outer= sl->outer_select();
+        if (outer && outer->table_list.first->vers_conditions)
+        {
+          if (!expli_start && (res= sl->vers_push_field(thd, impli_table, impli_start)))
+            goto exit;
+          if (!expli_end && (res= sl->vers_push_field(thd, impli_table, impli_end)))
+            goto exit;
+        }
 
         if (impli_table->vers_conditions)
         {
