@@ -676,7 +676,7 @@ bool vers_select_conds_t::init_from_sysvar(THD *thd)
   st_vers_asof_timestamp &in= thd->variables.vers_asof_timestamp;
   type= (vers_range_type_t) in.type;
   unit_start= UNIT_TIMESTAMP;
-  import_outer= from_inner= from_query= false;
+  from_query= false;
   if (type != FOR_SYSTEM_TIME_UNSPECIFIED && type != FOR_SYSTEM_TIME_ALL)
   {
     DBUG_ASSERT(type == FOR_SYSTEM_TIME_AS_OF);
@@ -805,7 +805,7 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
     {
       if (table->vers_conditions)
       {
-        if (!is_linkage_set() && !table->vers_conditions.from_inner)
+        if (!is_linkage_set())
         {
           my_error(ER_VERS_SYSTEM_TIME_CLASH, MYF(0), table->alias);
           DBUG_RETURN(-1);
@@ -841,12 +841,12 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
       {
         // inner SELECT may not be a derived table (derived == NULL)
         while (derived && outer_slex &&
-          (!derived->vers_conditions || derived->vers_conditions.from_inner))
+          (!derived->vers_conditions))
         {
           derived= outer_slex->master_unit()->derived;
           outer_slex= outer_slex->next_select_in_list();
         }
-        if (derived && outer_slex && !derived->vers_conditions.from_inner)
+        if (derived && outer_slex)
         {
           DBUG_ASSERT(derived->vers_conditions);
           vers_conditions= derived->vers_conditions;

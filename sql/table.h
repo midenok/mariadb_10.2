@@ -1861,8 +1861,6 @@ struct vers_select_conds_t
 {
   vers_range_type_t type;
   vers_range_unit_t unit_start, unit_end;
-  bool import_outer:1;
-  bool from_inner:1;
   bool from_query:1;
   Item *start, *end;
 
@@ -1870,7 +1868,7 @@ struct vers_select_conds_t
   {
     type= FOR_SYSTEM_TIME_UNSPECIFIED;
     unit_start= unit_end= UNIT_AUTO;
-    import_outer= from_inner= from_query= false;
+    from_query= false;
     start= end= NULL;
   }
 
