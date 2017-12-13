@@ -101,5 +101,11 @@ create or replace view vt1 as select * from t1 union select * from t1;
 select * from vt1;
 a
 1
+# VIEW over UNION with non-versioned [#393]
+create or replace table t2 (a int);
+create or replace view vt1 as select * from t1 union select * from t2;
+select * from vt1;
+a
+1
 drop database test;
 create database test;
