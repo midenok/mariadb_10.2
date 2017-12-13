@@ -850,10 +850,7 @@ expli_table_err:
             goto exit;
         }
 
-        if (impli_table->vers_conditions)
-        {
-          sl->vers_export_outer= impli_table->vers_conditions;
-        }
+        sl->vers_check_clash= impli_table->vers_conditions;
       }
     } // if (sl->table_list.elements > 0)
     // System Versioning end

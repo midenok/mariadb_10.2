@@ -799,7 +799,7 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
 
   SELECT_LEX *outer_slex= next_select_in_list();
   // propagate derived conditions to outer SELECT_LEX
-  if (outer_slex && vers_export_outer)
+  if (outer_slex && vers_check_clash)
   {
     for (table= outer_slex->table_list.first; table; table= table->next_local)
     {
@@ -810,11 +810,6 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
           my_error(ER_VERS_SYSTEM_TIME_CLASH, MYF(0), table->alias);
           DBUG_RETURN(-1);
         }
-      }
-      else
-      {
-//         table->vers_conditions= vers_export_outer;
-//         table->vers_conditions.from_inner= true;
       }
     }
   }
@@ -833,24 +828,17 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
     if (!vers_conditions && outer_slex)
     {
       TABLE_LIST* derived= master_unit()->derived;
-//       if (derived == table && vers_export_outer) // recursive CTE
-//       {
-//         vers_conditions= vers_export_outer;
-//       }
-//       else
+      // inner SELECT may not be a derived table (derived == NULL)
+      while (derived && outer_slex &&
+        (!derived->vers_conditions))
       {
-        // inner SELECT may not be a derived table (derived == NULL)
-        while (derived && outer_slex &&
-          (!derived->vers_conditions))
-        {
-          derived= outer_slex->master_unit()->derived;
-          outer_slex= outer_slex->next_select_in_list();
-        }
-        if (derived && outer_slex)
-        {
-          DBUG_ASSERT(derived->vers_conditions);
-          vers_conditions= derived->vers_conditions;
-        }
+        derived= outer_slex->master_unit()->derived;
+        outer_slex= outer_slex->next_select_in_list();
+      }
+      if (derived && outer_slex)
+      {
+        DBUG_ASSERT(derived->vers_conditions);
+        vers_conditions= derived->vers_conditions;
       }
     }
 
