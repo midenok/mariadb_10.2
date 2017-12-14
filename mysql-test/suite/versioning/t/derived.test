@@ -153,6 +153,36 @@ create or replace table t2 (x int, y int) with system versioning;
 insert into t1 values (1, 1), (1, 2), (1, 3), (4, 4), (5, 5);
 insert into t2 values (1, 2), (2, 1), (3, 1);
 
+--echo ## Outer or inner SYSTEM_TIME produces same expression
+
+--disable_warnings
+--disable_query_log
+explain extended
+select * from (
+  select t1.x, t1.y as y1, t2.x as x2, t2.y as y2
+  from t1 join t2 on t1.x = t2.x) for system_time as of now() as t;
+
+let $a=`show warnings`;
+--echo Query A:
+echo $a;
+
+explain extended
+select * from (
+  select t1.x, t1.y as y1, t2.x as x2, t2.y as y2
+  from t1 for system_time as of now()
+  join t2 for system_time as of now() on t1.x = t2.x) as t;
+
+let $b=`show warnings`;
+--echo Query B:
+echo $b;
+
+if ($a == $b)
+{
+  --echo Fine result: queries A and B are equal.
+}
+--enable_query_log
+--enable_warnings
+
 --echo ## LEFT JOIN: t1, t2 versioned
 select * from (
   select t1.x as LJ1_x1, t1.y as y1, t2.x as x2, t2.y as y2

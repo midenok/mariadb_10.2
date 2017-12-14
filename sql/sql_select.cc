@@ -1027,7 +1027,7 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
     }
 
     if (outer_table)
-      outer_table->vers_conditions.empty();
+      outer_table->vers_conditions.type= FOR_SYSTEM_TIME_ALL;
   }
 
   DBUG_RETURN(0);
