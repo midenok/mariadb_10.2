@@ -914,37 +914,44 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
     {
       if (vers_conditions)
       {
-        switch (vers_conditions.unit_start)
+        if (vers_conditions.start)
         {
-        case UNIT_TIMESTAMP:
-        {
-          if (vers_conditions.start)
+          switch (vers_conditions.unit_start)
           {
-            vers_conditions.start= newx Item_datetime_typecast(
+          case UNIT_TIMESTAMP:
+          {
+            vers_conditions.start= newx Item_datetime_from_unixtime_typecast(
               thd, vers_conditions.start, 6);
+            break;
           }
-          if (vers_conditions.end)
-          {
-            vers_conditions.end= newx Item_datetime_typecast(
-              thd, vers_conditions.end, 6);
-          }
-          break;
-        }
-        case UNIT_TRX_ID:
-        {
-          if (vers_conditions.start)
+          case UNIT_TRX_ID:
           {
             vers_conditions.start= newx Item_longlong_typecast(
               thd, vers_conditions.start);
+            break;
           }
-          if (vers_conditions.end)
+          default:;
+          }
+        }
+
+        if (vers_conditions.end)
+        {
+          switch (vers_conditions.unit_end)
+          {
+          case UNIT_TIMESTAMP:
+          {
+            vers_conditions.end= newx Item_datetime_from_unixtime_typecast(
+              thd, vers_conditions.end, 6);
+            break;
+          }
+          case UNIT_TRX_ID:
           {
             vers_conditions.end= newx Item_longlong_typecast(
               thd, vers_conditions.end);
+            break;
           }
-          break;
-        }
-        default:;
+          default:;
+          }
         }
       }
       switch (vers_conditions.type)
