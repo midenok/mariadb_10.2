@@ -96,9 +96,10 @@ where name = 'bill'
   for system_time as of timestamp @ts
 union
 select ee.emp_id, ee.name, ee.mgr
-from emp as ee, ancestors as a
+from emp
+for system_time as of timestamp @ts as ee,
+ancestors as a
 where ee.mgr = a.emp_id
-for system_time as of timestamp @ts
 )
 select * from ancestors;
 emp_id	name	mgr
@@ -116,9 +117,9 @@ as
   for system_time as of timestamp @ts
   union
   select ee.emp_id, ee.name, ee.mgr
-  from emp as ee, ancestors as a
+  from emp for system_time as of timestamp @ts as ee,
+  ancestors as a
   where ee.mgr = a.emp_id
-  for system_time as of timestamp @ts
 )
 select * from ancestors";
 prepare stmt from @tmp;
@@ -152,16 +153,6 @@ select * from (select *, t1.sys_trx_end from t2, t1 for system_time as of timest
 y	x
 10	1
 with s3 as (select *, t1.sys_trx_end from t2, t1 for system_time as of timestamp @t0) select * from s3;
-y	x
-10	1
-# SYSTEM_TIME propagation from outer to inner
-select * from (select *, t1.sys_trx_start from t2 for system_time as of current_timestamp, t1) as s4 for system_time as of timestamp @t0;
-y	x
-10	1
-with s5 as (select *, t1.sys_trx_start from t2 for system_time as of current_timestamp, t1) select * from s5 for system_time as of timestamp @t0;
-y	x
-10	1
-with s6 as (select *, t1.sys_trx_start from t2 for system_time as of current_timestamp, t1) select * from s6 for system_time as of timestamp @t0;
 y	x
 10	1
 ### VIEW instead of t1

@@ -817,19 +817,6 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
     }
   }
 
-  // check clash with outer conditions
-  if (outer_slex && vers_check_clash)
-  {
-    for (table= outer_slex->table_list.first; table; table= table->next_local)
-    {
-      if (table->vers_conditions)
-      {
-        my_error(ER_VERS_SYSTEM_TIME_CLASH, MYF(0), table->alias);
-        DBUG_RETURN(-1);
-      }
-    }
-  }
-
   COND** dst_cond= where_expr;
   COND* vers_cond= NULL;
 
@@ -840,10 +827,18 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
 
     vers_select_conds_t &vers_conditions= table->vers_conditions;
 
-    // propagate system_time from nearest outer SELECT_LEX
-    if (!vers_conditions && outer_table)
+    if (outer_table && table != outer_table) // inner table may be outer in recursive CTE
     {
-      vers_conditions= outer_table->vers_conditions;
+      if (vers_conditions)
+      {
+        my_error(ER_VERS_SYSTEM_TIME_CLASH, MYF(0), outer_table->alias);
+        DBUG_RETURN(-1);
+      }
+      else
+      {
+        // propagate system_time from nearest outer SELECT_LEX
+        vers_conditions= outer_table->vers_conditions;
+      }
     }
 
     // propagate system_time from sysvar
