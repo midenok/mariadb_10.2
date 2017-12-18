@@ -7255,7 +7255,7 @@ bool Vers_parse_info::fix_alter_info(THD *thd, Alter_info *alter_info,
         }
         else
           continue;
-        if (f->flags & VERS_HIDDEN_FLAG)
+        if (f->invisible)
         {
           my_error(ER_CANT_DROP_FIELD_OR_KEY, MYF(0), d->type_name(), name);
           return true;

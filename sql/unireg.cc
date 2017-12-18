@@ -98,7 +98,7 @@ static uchar *extra2_write_field_properties(uchar *pos,
   pos= extra2_write_len(pos, create_fields.elements);
   while (Create_field *cf= it++)
   {
-    uchar flags= cf->field_visibility;
+    uchar flags= cf->invisible;
     if (cf->flags & VERS_UPDATE_UNVERSIONED_FLAG)
       flags|= VERS_OPTIMIZED_UPDATE;
     if (cf->flags & VERS_HIDDEN_FLAG)
@@ -143,7 +143,7 @@ bool has_extra2_field_flags(List<Create_field> &create_fields)
   List_iterator<Create_field> it(create_fields);
   while (Create_field *f= it++)
   {
-    if (f->field_visibility != NOT_INVISIBLE)
+    if (f->invisible)
       return true;
     if (f->flags & (VERS_UPDATE_UNVERSIONED_FLAG | VERS_HIDDEN_FLAG))
       return true;

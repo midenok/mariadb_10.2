@@ -16865,7 +16865,6 @@ Field *create_tmp_field_from_field(THD *thd, Field *org_field,
       new_field->field_name= *name;
     new_field->flags|= (org_field->flags & (
       NO_DEFAULT_VALUE_FLAG |
-      VERS_HIDDEN_FLAG |
       VERS_SYS_START_FLAG |
       VERS_SYS_END_FLAG |
       VERS_UPDATE_UNVERSIONED_FLAG));
@@ -17715,8 +17714,10 @@ create_tmp_table(THD *thd, TMP_TABLE_PARAM *param, List<Item> &fields,
   if (sys_trx_start && sys_trx_end)
   {
     DBUG_ASSERT(versioned);
-    sys_trx_start->flags|= VERS_SYS_START_FLAG | VERS_HIDDEN_FLAG;
-    sys_trx_end->flags|= VERS_SYS_END_FLAG | VERS_HIDDEN_FLAG;
+    sys_trx_start->flags|= VERS_SYS_START_FLAG;
+    sys_trx_end->flags|= VERS_SYS_END_FLAG;
+    sys_trx_start->invisible= INVISIBLE_SYSTEM;
+    sys_trx_end->invisible= INVISIBLE_SYSTEM;
     share->versioned= versioned;
     share->field= table->field;
     share->row_start_field= sys_trx_start->field_index;
