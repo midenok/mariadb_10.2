@@ -343,9 +343,11 @@ enum field_visibility_t {
   /* automatically added by the server. Can be queried explicitly
   in SELECT, otherwise invisible from anything" */
   INVISIBLE_SYSTEM,
-  INVISIBLE_FULL,
-  INVISIBLE_MAX_BITS= 3
+  INVISIBLE_FULL
 };
+
+#define INVISIBLE_MAX_BITS 3
+
 
 /**
   Category of table found in the table share.

@@ -3316,7 +3316,7 @@ bool Column_definition::prepare_stage1_check_typelib_default()
       field_list               list of all table fields
       field_name               name/prefix of invisible field
                                ( Prefix in the case when it is
-                                *COMPLETELY_INVISIBLE*
+                                *INVISIBLE_FULL*
                                and given name is duplicate)
       type_handler             field data type
       invisible
@@ -3862,8 +3862,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                             &sql_field->field_name))
 	field++;
       /*
-         Either field is not present or field visibility is >
-         USER_DEFINED_INVISIBLE
+         Either field is not present or field visibility is > INVISIBLE_USER
       */
       if (!sql_field)
       {
@@ -5343,11 +5342,11 @@ static void make_unique_constraint_name(THD *thd, LEX_CSTRING *name,
 }
 
 /**
-  COMPLETELY_INVISIBLE are internally created. They are completely invisible
+  INVISIBLE_FULL are internally created. They are completely invisible
   to Alter command (Opposite of SYSTEM_INVISIBLE which throws an
   error when same name column is added by Alter). So in the case of when
-  user added a same column name as of COMPLETELY_INVISIBLE , we change
-  COMPLETELY_INVISIBLE column name.
+  user added a same column name as of INVISIBLE_FULL , we change
+  INVISIBLE_FULL column name.
 */
 static const
 char * make_unique_invisible_field_name(THD *thd, const char *field_name,
