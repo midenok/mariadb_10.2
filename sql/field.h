@@ -1468,6 +1468,8 @@ public:
     return flags & VERS_UPDATE_UNVERSIONED_FLAG;
   }
 
+  bool vers_sys_invisible(THD *thd) const;
+
   virtual bool vers_trx_id() const
   {
     return false;

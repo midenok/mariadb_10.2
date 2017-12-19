@@ -7492,6 +7492,29 @@ bool get_key_map_from_key_list(key_map *map, TABLE *table,
 }
 
 
+inline
+bool Field::vers_sys_invisible(THD *thd) const
+{
+  DBUG_ASSERT(vers_sys_field());
+  enum_sql_command sql_command= thd->lex->sql_command;
+  SELECT_LEX *slex= thd->lex->current_select;
+  ulong vers_hide= thd->variables.vers_hide;
+  DBUG_ASSERT(table);
+  DBUG_ASSERT(table->pos_in_table_list);
+  TABLE_LIST *tl= table->pos_in_table_list;
+  vers_system_time_t vers_type= tl->vers_conditions.type;
+
+  return (sql_command == SQLCOM_CREATE_VIEW ||
+            slex->nest_level > 0 ||
+            vers_hide == VERS_HIDE_FULL ||
+            (invisible && (
+              vers_hide == VERS_HIDE_IMPLICIT ||
+                (vers_hide == VERS_HIDE_AUTO && (
+                  vers_type == SYSTEM_TIME_UNSPECIFIED ||
+                  vers_type == SYSTEM_TIME_AS_OF)))));
+}
+
+
 /*
   Drops in all fields instead of current '*' field
 
@@ -7621,39 +7644,34 @@ insert_fields(THD *thd, Name_resolution_context *context, const char *db_name,
         Field_iterator_natural_join).
         But view fields can never be invisible.
       */
-      if ((field= field_iterator.field()))
+      if ((field= field_iterator.field()) &&
+          (field->vers_sys_field() ?
+            field->vers_sys_invisible(thd) :
+            field->invisible))
       {
-        enum_sql_command sql_command= thd->lex->sql_command;
-        unsigned int create_options= thd->lex->create_info.options;
-        SELECT_LEX *slex= thd->lex->current_select;
-        ulong vers_hide= thd->variables.vers_hide;
-        TABLE *table= field->table;
-        DBUG_ASSERT(table);
-        DBUG_ASSERT(table->pos_in_table_list);
-        TABLE_LIST *tl= table->pos_in_table_list;
-        vers_system_time_t vers_type= tl->vers_conditions.type;
-
-        if (field->vers_sys_field() ?
-              (sql_command == SQLCOM_CREATE_VIEW ||
-              slex->nest_level > 0 ||
-              vers_hide == VERS_HIDE_FULL ||
-              (field->invisible && (
-                vers_hide == VERS_HIDE_IMPLICIT ||
-                  (vers_hide == VERS_HIDE_AUTO && (
-                    vers_type == SYSTEM_TIME_UNSPECIFIED ||
-                    vers_type == SYSTEM_TIME_AS_OF))))) :
-            field->invisible)
-        {
-          if (sql_command != SQLCOM_CREATE_TABLE ||
-            !(create_options & HA_VERSIONED_TABLE))
-          continue;
-        }
+        if (thd->lex->sql_command != SQLCOM_CREATE_TABLE ||
+          !(thd->lex->create_info.options & HA_VERSIONED_TABLE))
+        continue;
       }
 
       Item *item;
 
       if (!(item= field_iterator.create_item(thd)))
         DBUG_RETURN(TRUE);
+
+      if (item->type() == Item::REF_ITEM)
+      {
+        Item *i= item;
+        while (i->type() == Item::REF_ITEM)
+          i= *((Item_ref *)i)->ref;
+        if (i->type() == Item::FIELD_ITEM)
+        {
+          Item_field *f= (Item_field *)i;
+          DBUG_ASSERT(f->field);
+          if (f->field->vers_sys_field() && f->field->vers_sys_invisible(thd))
+            continue;
+        }
+      }
 
       /* cache the table for the Item_fields inserted by expanding stars */
       if (item->type() == Item::FIELD_ITEM && tables->cacheable_table)
