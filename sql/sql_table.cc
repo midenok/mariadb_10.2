@@ -7902,7 +7902,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           !my_strcasecmp(system_charset_info,field->field_name.str, drop->name))
         break;
     }
-    if (drop && field->invisible < INVISIBLE_SYSTEM)
+    if (drop && (field->invisible < INVISIBLE_SYSTEM || field->vers_sys_field()))
     {
       /* Reset auto_increment value if it was dropped */
       if (MTYP_TYPENR(field->unireg_check) == Field::NEXT_NUMBER &&
@@ -7927,7 +7927,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
                           &def->change))
 	break;
     }
-    if (def && field->invisible < INVISIBLE_SYSTEM)
+    if (def && (field->invisible < INVISIBLE_SYSTEM || field->vers_sys_field()))
     {						// Field is changed
       def->field=field;
       /*

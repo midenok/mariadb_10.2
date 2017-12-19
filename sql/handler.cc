@@ -7121,13 +7121,13 @@ bool Vers_parse_info::fix_alter_info(THD *thd, Alter_info *alter_info,
       return true;
     }
 
-    if (!(share->vers_start_field()->invisible))
+    if (share->vers_start_field()->invisible < INVISIBLE_SYSTEM)
     {
       my_error(ER_VERS_SYS_FIELD_NOT_HIDDEN, MYF(0),
                share->vers_start_field()->field_name.str);
       return true;
     }
-    if (!(share->vers_end_field()->invisible))
+    if (share->vers_end_field()->invisible < INVISIBLE_SYSTEM)
     {
       my_error(ER_VERS_SYS_FIELD_NOT_HIDDEN, MYF(0),
                share->vers_end_field()->field_name.str);
@@ -7256,7 +7256,7 @@ bool Vers_parse_info::fix_alter_info(THD *thd, Alter_info *alter_info,
         }
         else
           continue;
-        if (f->invisible)
+        if (f->invisible > INVISIBLE_USER)
         {
           my_error(ER_CANT_DROP_FIELD_OR_KEY, MYF(0), d->type_name(), name);
           return true;
