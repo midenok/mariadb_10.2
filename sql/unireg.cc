@@ -101,8 +101,6 @@ static uchar *extra2_write_field_properties(uchar *pos,
     uchar flags= cf->invisible;
     if (cf->flags & VERS_UPDATE_UNVERSIONED_FLAG)
       flags|= VERS_OPTIMIZED_UPDATE;
-    if (cf->flags & VERS_HIDDEN_FLAG)
-      flags|= VERS_HIDDEN;
     *pos++= flags;
   }
   return pos;
@@ -145,7 +143,7 @@ bool has_extra2_field_flags(List<Create_field> &create_fields)
   {
     if (f->invisible)
       return true;
-    if (f->flags & (VERS_UPDATE_UNVERSIONED_FLAG | VERS_HIDDEN_FLAG))
+    if (f->flags & VERS_UPDATE_UNVERSIONED_FLAG)
       return true;
   }
   return false;

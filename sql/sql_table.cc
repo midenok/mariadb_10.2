@@ -3870,6 +3870,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	DBUG_RETURN(TRUE);
       }
       if (sql_field->invisible > INVISIBLE_USER &&
+          !(sql_field->flags & VERS_SYSTEM_FIELD) &&
           !key->invisible && DBUG_EVALUATE_IF("test_invisible_index", 0, 1))
       {
         my_error(ER_KEY_COLUMN_DOES_NOT_EXITS, MYF(0), column->field_name.str);

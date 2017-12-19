@@ -2076,8 +2076,6 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
       uchar flags= *extra2_field_flags++;
       if (flags & VERS_OPTIMIZED_UPDATE)
         reg_field->flags|= VERS_UPDATE_UNVERSIONED_FLAG;
-      if (flags & VERS_HIDDEN)
-        reg_field->flags|= VERS_HIDDEN_FLAG;
 
       reg_field->invisible= f_visibility(flags);
     }
@@ -2336,7 +2334,7 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
 
         field= key_part->field= share->field[key_part->fieldnr-1];
         key_part->type= field->key_type();
-        if (field->invisible > INVISIBLE_USER)
+        if (field->invisible > INVISIBLE_USER && !field->vers_sys_field())
           keyinfo->flags |= HA_INVISIBLE_KEY;
         if (field->null_ptr)
         {

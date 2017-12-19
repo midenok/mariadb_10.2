@@ -1563,13 +1563,6 @@ public:
 
 /** Number of additional fields used in versioned tables */
 #define VERSIONING_FIELDS 2
-
-  uint vers_user_fields() const
-  {
-    return s->versioned ?
-      s->visible_fields - VERSIONING_FIELDS :
-      s->visible_fields;
-  }
 };
 
 
