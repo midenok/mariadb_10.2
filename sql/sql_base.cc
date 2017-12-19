@@ -8313,8 +8313,7 @@ fill_record(THD *thd, TABLE *table, Field **ptr, List<Item> &values,
       goto err;
     }
 
-    if (field->invisible &&
-      !(vers_sys_field && thd->lex->sql_command == SQLCOM_CREATE_TABLE))
+    if (field->invisible && !vers_sys_field)
     {
       continue;
     }
