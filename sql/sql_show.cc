@@ -2388,7 +2388,7 @@ int show_create_table(THD *thd, TABLE_LIST *table_list, String *packet,
     DBUG_ASSERT(fs);
     DBUG_ASSERT(fe);
     DBUG_ASSERT(!fs->invisible || fe->invisible);
-    if (!fe->invisible || vers_hide == VERS_HIDE_NEVER)
+    if (fe->invisible < INVISIBLE_SYSTEM || vers_hide == VERS_HIDE_NEVER)
     {
       packet->append(STRING_WITH_LEN(",\n  PERIOD FOR SYSTEM_TIME ("));
       append_identifier(thd,packet,fs->field_name.str, fs->field_name.length);

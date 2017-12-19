@@ -8287,14 +8287,19 @@ fill_record(THD *thd, TABLE *table, Field **ptr, List<Item> &values,
     /* Ensure that all fields are from the same table */
     DBUG_ASSERT(field->table == table);
 
-    if (table->versioned() && field->vers_sys_field() && !ignore_errors)
+    bool vers_sys_field= table->versioned() && field->vers_sys_field();
+
+    if (vers_sys_field && !ignore_errors)
     {
       my_error(ER_NONUPDATEABLE_COLUMN, MYF(0), field->field_name.str);
       goto err;
     }
 
-    if (field->invisible)
+    if (field->invisible &&
+      !(vers_sys_field && thd->lex->sql_command == SQLCOM_CREATE_TABLE))
+    {
       continue;
+    }
     else
       value=v++;
     if (field->field_index == autoinc_index)
