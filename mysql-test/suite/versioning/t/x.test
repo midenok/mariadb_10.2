@@ -1,0 +1,42 @@
+--source include/have_partition.inc
+
+create or replace table t1 (f int, key(f)) engine=myisam with system versioning
+partition by system_time interval 7 day (
+  partition p1 history,
+  partition pn current
+);
+
+--delimiter |
+create or replace procedure pr()
+begin
+  declare i int default 0;
+  while i < 100
+  do
+    alter table t1 partition by system_time interval 7 day (
+    partition p1 history,
+    partition pn current);
+    set i= i+1;
+  end while;
+end |
+--delimiter ;
+
+--connect (con1,localhost,root,,test)
+set system_versioning_alter_history=keep;
+--send call pr()
+
+--connection default
+--let $run= 100
+while ($run)
+{
+  select f from t1 union select f from t1;
+  --dec $run
+}
+
+# cleanup
+
+--connection con1
+--reap
+--disconnect con1
+--connection default
+drop table t1;
+drop procedure pr;
