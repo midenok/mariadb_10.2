@@ -1279,40 +1279,6 @@ void drop_open_table(THD *thd, TABLE *table, const char *db_name,
 }
 
 
-/**
-  An error handler which converts, if possible, ER_LOCK_DEADLOCK error
-  that can occur when we are trying to acquire a metadata lock to
-  a request for back-off and re-start of open_tables() process.
-*/
-
-class MDL_deadlock_handler : public Internal_error_handler
-{
-public:
-  MDL_deadlock_handler(Open_table_context *ot_ctx_arg)
-    : m_ot_ctx(ot_ctx_arg), m_is_active(FALSE)
-  {}
-
-  virtual ~MDL_deadlock_handler() {}
-
-  virtual bool handle_condition(THD *thd,
-                                uint sql_errno,
-                                const char* sqlstate,
-                                Sql_condition::enum_warning_level *level,
-                                const char* msg,
-                                Sql_condition ** cond_hdl);
-
-private:
-  /** Open table context to be used for back-off request. */
-  Open_table_context *m_ot_ctx;
-  /**
-    Indicates that we are already in the process of handling
-    ER_LOCK_DEADLOCK error. Allows to re-emit the error from
-    the error handler without falling into infinite recursion.
-  */
-  bool m_is_active;
-};
-
-
 bool MDL_deadlock_handler::handle_condition(THD *,
                                             uint sql_errno,
                                             const char*,
@@ -1321,7 +1287,7 @@ bool MDL_deadlock_handler::handle_condition(THD *,
                                             Sql_condition ** cond_hdl)
 {
   *cond_hdl= NULL;
-  if (! m_is_active && sql_errno == ER_LOCK_DEADLOCK)
+  if (m_ot_ctx && !m_is_active && sql_errno == ER_LOCK_DEADLOCK)
   {
     /* Disable the handler to avoid infinite recursion. */
     m_is_active= TRUE;
@@ -1904,7 +1870,7 @@ retry_share:
     error= open_table_from_share(thd, share, alias,
                                  HA_OPEN_KEYFILE | HA_TRY_READ_ONLY,
                                  EXTRA_RECORD,
-                                 thd->open_options, table, FALSE);
+                                 thd->open_options, table, FALSE, ot_ctx);
 
     if (error)
     {

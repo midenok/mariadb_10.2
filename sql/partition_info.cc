@@ -33,6 +33,7 @@
 #include "sql_acl.h"                          // *_ACL
 #include "sql_base.h"                         // fill_record
 #include "sql_statistics.h"                   // vers_stat_end
+#include "vers_utils.h"
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
 #include "ha_partition.h"
@@ -1160,13 +1161,25 @@ void partition_info::vers_update_col_vals(THD *thd, partition_element *el0, part
 
 
 // setup at open() phase (TABLE_SHARE is initialized)
-bool partition_info::vers_setup_stats(THD * thd, bool is_create_table_ind)
+bool partition_info::vers_setup_stats(THD * thd, bool is_create_table_ind,
+                                      Open_table_context *ot_ctx)
 {
   DBUG_ASSERT(part_type == VERSIONING_PARTITION);
   DBUG_ASSERT(vers_info && vers_info->initialized(false));
   DBUG_ASSERT(table && table->s);
 
   bool error= false;
+
+  TABLE_LIST tl;
+  tl.init_one_table(
+    LEX_STRING_WITH_LEN(table->s->db),
+    LEX_STRING_WITH_LEN(table->s->table_name),
+    table->s->table_name.str,
+    TL_WRITE);
+
+  MDL_auto_lock mdl_lock(thd, tl, ot_ctx);
+  if (mdl_lock.acquire_error())
+    return true;
 
   mysql_mutex_lock(&table->s->LOCK_rotation);
   if (table->s->busy_rotation)

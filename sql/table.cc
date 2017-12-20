@@ -3108,7 +3108,7 @@ static bool check_vcol_forward_refs(Field *field, Virtual_column_info *vcol)
 enum open_frm_error open_table_from_share(THD *thd, TABLE_SHARE *share,
                        const char *alias, uint db_stat, uint prgflag,
                        uint ha_open_flags, TABLE *outparam,
-                       bool is_create_table)
+                       bool is_create_table, Open_table_context *ot_ctx)
 {
   enum open_frm_error error;
   uint records, i, bitmap_size, bitmap_count;
@@ -3522,7 +3522,7 @@ partititon_err:
       thd->stmt_arena= &part_func_arena;
     }
 
-    bool err= outparam->part_info->vers_setup_stats(thd, is_create_table);
+    bool err= outparam->part_info->vers_setup_stats(thd, is_create_table, ot_ctx);
 
     if (!work_part_info_used)
     {

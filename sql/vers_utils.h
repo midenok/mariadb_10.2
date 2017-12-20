@@ -3,6 +3,7 @@
 
 #include "table.h"
 #include "sql_class.h"
+#include "sql_base.h"
 #include "vers_string.h"
 
 class MDL_auto_lock
@@ -12,12 +13,30 @@ class MDL_auto_lock
   bool error;
 
 public:
-  MDL_auto_lock(THD *_thd, TABLE_LIST &_table) :
+  MDL_auto_lock(THD *_thd, TABLE_LIST &_table, Open_table_context *ot_ctx= NULL) :
     thd(_thd), table(_table)
   {
     DBUG_ASSERT(thd);
+    MDL_request protection_request;
+    MDL_deadlock_handler mdl_deadlock_handler(ot_ctx);
+    if (thd->global_read_lock.can_acquire_protection())
+    {
+      error= true;
+      return;
+    }
+    protection_request.init(MDL_key::GLOBAL, "", "", MDL_INTENTION_EXCLUSIVE,
+                            MDL_EXPLICIT);
+    if (ot_ctx)
+      thd->push_internal_handler(&mdl_deadlock_handler);
+    error= thd->mdl_context.acquire_lock(&protection_request, thd->variables.lock_wait_timeout);
+    if (ot_ctx)
+      thd->pop_internal_handler();
+    if (error)
+      return;
+
     table.mdl_request.init(MDL_key::TABLE, table.db, table.table_name, MDL_EXCLUSIVE, MDL_EXPLICIT);
     error= thd->mdl_context.acquire_lock(&table.mdl_request, thd->variables.lock_wait_timeout);
+    thd->mdl_context.release_lock(protection_request.ticket);
   }
   ~MDL_auto_lock()
   {
