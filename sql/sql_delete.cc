@@ -223,14 +223,14 @@ bool Update_plan::save_explain_data_intern(MEM_ROOT *mem_root,
 
 
 static bool record_should_be_deleted(THD *thd, TABLE *table, SQL_SELECT *sel,
-                                     Explain_delete *explain)
+                                     Explain_delete *explain, bool truncate_history)
 {
   bool check_delete= true;
 
   if (table->versioned())
   {
     bool historical= !table->vers_end_field()->is_max();
-    check_delete= table->pos_in_table_list->vers_conditions ? historical : !historical;
+    check_delete= truncate_history ? historical : !historical;
   }
 
   explain->tracker.on_record_read();
@@ -310,7 +310,7 @@ bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *conds,
   {
     if (table_list->is_view_or_derived())
     {
-      my_error(ER_VERS_TRUNCATE_TO_VIEW, MYF(0));
+      my_error(ER_VERS_TRUNCATE_VIEW, MYF(0));
       DBUG_RETURN(true);
     }
 
@@ -704,7 +704,7 @@ bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *conds,
     while (!(error=info.read_record()) && !thd->killed &&
           ! thd->is_error())
     {
-      if (record_should_be_deleted(thd, table, select, explain))
+      if (record_should_be_deleted(thd, table, select, explain, truncate_history))
       {
         table->file->position(table->record[0]);
         if ((error= deltempfile->unique_add((char*) table->file->ref)))
@@ -731,7 +731,8 @@ bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *conds,
         ! thd->is_error())
   {
     if (delete_while_scanning)
-      delete_record= record_should_be_deleted(thd, table, select, explain);
+      delete_record= record_should_be_deleted(thd, table, select, explain,
+                                              truncate_history);
     if (delete_record)
     {
       if (!truncate_history && table->triggers &&
