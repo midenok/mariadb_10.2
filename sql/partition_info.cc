@@ -1161,8 +1161,7 @@ void partition_info::vers_update_col_vals(THD *thd, partition_element *el0, part
 
 
 // setup at open() phase (TABLE_SHARE is initialized)
-bool partition_info::vers_setup_stats(THD * thd, bool is_create_table_ind,
-                                      Open_table_context *ot_ctx)
+bool partition_info::vers_setup_stats(THD * thd, bool is_create_table_ind)
 {
   DBUG_ASSERT(part_type == VERSIONING_PARTITION);
   DBUG_ASSERT(vers_info && vers_info->initialized(false));
@@ -1177,7 +1176,7 @@ bool partition_info::vers_setup_stats(THD * thd, bool is_create_table_ind,
     table->s->table_name.str,
     TL_WRITE);
 
-  MDL_auto_lock mdl_lock(thd, tl, ot_ctx);
+  MDL_auto_lock mdl_lock(thd, tl);
   if (mdl_lock.acquire_error())
     return true;
 

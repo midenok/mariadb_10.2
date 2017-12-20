@@ -419,7 +419,7 @@ public:
   partition_element* vers_part_rotate(THD *thd);
   bool vers_set_expression(THD *thd, partition_element *el, MYSQL_TIME &t);
   bool vers_setup_expression(THD *thd, uint32 alter_add= 0); /* Stage 1. */
-  bool vers_setup_stats(THD *thd, bool is_create_table_ind, Open_table_context *ot_ctx); /* Stage 2. */
+  bool vers_setup_stats(THD *thd, bool is_create_table_ind); /* Stage 2. */
   bool vers_scan_min_max(THD *thd, partition_element *part);
   void vers_update_col_vals(THD *thd, partition_element *el0, partition_element *el1);
 
