@@ -225,11 +225,19 @@ bool Update_plan::save_explain_data_intern(MEM_ROOT *mem_root,
 static bool record_should_be_deleted(THD *thd, TABLE *table, SQL_SELECT *sel,
                                      Explain_delete *explain)
 {
+  bool check_delete= true;
+
+  if (table->versioned())
+  {
+    bool historical= !table->vers_end_field()->is_max();
+    check_delete= table->pos_in_table_list->vers_conditions ? historical : !historical;
+  }
+
   explain->tracker.on_record_read();
   thd->inc_examined_row_count(1);
   if (table->vfield)
     (void) table->update_virtual_fields(table->file, VCOL_UPDATE_FOR_DELETE);
-  if (!sel || sel->skip_record(thd) > 0)
+  if (check_delete && (!sel || sel->skip_record(thd) > 0))
   {
     explain->tracker.on_record_after_where();
     return true;
