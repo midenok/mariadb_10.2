@@ -1,5 +1,7 @@
 -- source suite/versioning/common.inc
 
+abc;
+
 delimiter ~~;
 create procedure test_01(
   sys_type varchar(255),
