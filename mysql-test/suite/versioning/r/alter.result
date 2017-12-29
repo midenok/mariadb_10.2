@@ -421,5 +421,22 @@ t	CREATE TABLE `t` (
 alter table t add fulltext key (c);
 Warnings:
 Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+# MDEV-14798 Add, drop system versioning semantic and syntax
+create or replace table t (a int) with system versioning;
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 WITH SYSTEM VERSIONING
+alter table t
+drop column sys_trx_start,
+drop column sys_trx_end,
+drop period for system_time,
+drop system versioning;
+show create table t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `a` int(11) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1
 drop database test;
 create database test;
