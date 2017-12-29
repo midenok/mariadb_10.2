@@ -383,30 +383,6 @@ ERROR HY000: Can not change system versioning field `sys_trx_start`
 insert into t values (1);
 alter table t modify column sys_trx_start bigint unsigned;
 ERROR HY000: Can not change system versioning field `sys_trx_start`
-create or replace table t (
-a int,
-sys_trx_start timestamp(6) as row start invisible,
-sys_trx_end timestamp(6) as row end invisible,
-period for system_time(sys_trx_start, sys_trx_end)
-) with system versioning;
-select * from t;
-a
-alter table t drop system versioning;
-ERROR HY000: System versioning field `sys_trx_start` is not hidden
-alter table t drop column sys_trx_start;
-select * from t;
-a
-alter table t drop system versioning;
-ERROR HY000: System versioning field `sys_trx_end` is not hidden
-alter table t drop column sys_trx_end;
-select * from t;
-a
-alter table t drop system versioning;
-show create table t;
-Table	Create Table
-t	CREATE TABLE `t` (
-  `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
 set system_versioning_alter_history= SURVIVE;
 ERROR 42000: Variable 'system_versioning_alter_history' can't be set to the value of 'SURVIVE'
 set system_versioning_alter_history= DROP;
