@@ -7091,11 +7091,12 @@ bool Table_scope_and_contents_source_st::vers_fix_system_fields(
   if (vers_tables)
   {
     DBUG_ASSERT(items);
+//     Query_arena_stmt on_stmt_arena(thd);
     while (added--)
     {
-      items->push_back(
-        new (thd->mem_root) Item_default_value(thd, thd->lex->current_context()),
-        thd->mem_root);
+      Item_default_value *item= new (thd->mem_root)
+        Item_default_value(thd, thd->lex->current_context());
+      items->push_back(item, thd->mem_root);
     }
   }
 
