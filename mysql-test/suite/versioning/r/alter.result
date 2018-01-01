@@ -125,7 +125,10 @@ with system versioning;
 select * from t for system_time all;
 a
 alter table t drop column sys_trx_start;
+ERROR HY000: Wrong parameters for `t`: missing 'DROP COLUMN sys_trx_end'
 alter table t drop column sys_trx_end;
+ERROR HY000: Wrong parameters for `t`: missing 'DROP COLUMN sys_trx_start'
+alter table t drop column sys_trx_start, drop column sys_trx_end;
 select * from t for system_time all;
 a
 alter table t drop column sys_trx_start;
