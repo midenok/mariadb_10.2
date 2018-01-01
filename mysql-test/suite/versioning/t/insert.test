@@ -219,6 +219,17 @@ set sql_mode= @saved_mode;
 insert into t1 (sys_trx_start, sys_trx_end) values (DEFAULT, DEFAULT);
 select * from t1;
 
+--echo # MDEV-14792 INSERT without column list into table with explicit versioning columns produces bad data
+create or replace table t1 (
+  i int,
+  s timestamp(6) as row start,
+  e timestamp(6) as row end,
+  c varchar(8),
+  period for system_time(s, e))
+with system versioning;
+insert into t1 values (1, null, null, 'foo');
+select i, c, current_row(e) from t1;
+
 drop table t1;
 drop table t2;
 
