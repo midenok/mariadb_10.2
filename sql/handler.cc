@@ -7091,7 +7091,6 @@ bool Table_scope_and_contents_source_st::vers_fix_system_fields(
   if (vers_tables)
   {
     DBUG_ASSERT(items);
-//     Query_arena_stmt on_stmt_arena(thd);
     while (added--)
     {
       Item_default_value *item= new (thd->mem_root)
