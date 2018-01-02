@@ -4587,6 +4587,7 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
     part_elem_value *tab_max_elem_val= NULL;
     part_elem_value *alt_max_elem_val= NULL;
     longlong tab_max_range= 0, alt_max_range= 0;
+    bool locked= thd->locked_tables_list.is_locked(table);
     alt_part_info= thd->work_part_info;
 
     if (!table->part_info)
@@ -4635,7 +4636,7 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
           without any changes at all.
         */
         flags= table->file->alter_table_flags(alter_info->flags);
-        if (flags & (HA_FAST_CHANGE_PARTITION | HA_PARTITION_ONE_PHASE))
+        if (!locked && (flags & (HA_FAST_CHANGE_PARTITION | HA_PARTITION_ONE_PHASE)))
         {
           *fast_alter_table= true;
           /* Force table re-open for consistency with the main case. */
@@ -4678,7 +4679,7 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
       my_error(ER_PARTITION_FUNCTION_FAILURE, MYF(0));
       goto err;
     }
-    if ((flags & (HA_FAST_CHANGE_PARTITION | HA_PARTITION_ONE_PHASE)) != 0)
+    if (!locked && (flags & (HA_FAST_CHANGE_PARTITION | HA_PARTITION_ONE_PHASE)) != 0)
     {
       /*
         "Fast" change of partitioning is supported in this case.

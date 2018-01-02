@@ -1838,6 +1838,16 @@ public:
   bool restore_lock(THD *thd, TABLE_LIST *dst_table_list, TABLE *table,
                     MYSQL_LOCK *lock);
   void add_back_last_deleted_lock(TABLE_LIST *dst_table_list);
+  bool is_locked(TABLE *table)
+  {
+    if (m_locked_tables_count == 0)
+      return false;
+    DBUG_ASSERT(m_locked_tables);
+    for (TABLE_LIST *tl= m_locked_tables; tl; tl= tl->next_global)
+      if (tl->table == table)
+        return true;
+    return false;
+  }
 };
 
 
