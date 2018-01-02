@@ -4587,7 +4587,8 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
     part_elem_value *tab_max_elem_val= NULL;
     part_elem_value *alt_max_elem_val= NULL;
     longlong tab_max_range= 0, alt_max_range= 0;
-    bool locked= thd->locked_tables_list.is_locked(table);
+    // table lock is guaranteed by find_table_for_mdl_upgrade()
+    bool locked= thd->locked_tables_mode >= LTM_LOCK_TABLES;
     alt_part_info= thd->work_part_info;
 
     if (!table->part_info)
