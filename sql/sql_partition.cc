@@ -4589,8 +4589,8 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
     longlong tab_max_range= 0, alt_max_range= 0;
     /* Current table lock for LTM_LOCK_TABLES is guaranteed by
        find_table_for_mdl_upgrade(). */
-    bool enabled_fast= thd->locked_tables_mode < LTM_LOCK_TABLES ||
-      (alter_info->flags & Alter_info::ALTER_ADD_PARTITION) == 0;
+    bool need_clone= thd->locked_tables_mode >= LTM_LOCK_TABLES &&
+      (alter_info->flags & Alter_info::ALTER_ADD_PARTITION);
     alt_part_info= thd->work_part_info;
 
     if (!table->part_info)
@@ -4639,13 +4639,15 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
           without any changes at all.
         */
         flags= table->file->alter_table_flags(alter_info->flags);
-        if (enabled_fast && (flags & (HA_FAST_CHANGE_PARTITION | HA_PARTITION_ONE_PHASE)))
+        if ((flags & (HA_FAST_CHANGE_PARTITION | HA_PARTITION_ONE_PHASE)))
         {
           *fast_alter_table= true;
           /* Force table re-open for consistency with the main case. */
           table->m_needs_reopen= true;
         }
         else
+          need_clone= true;
+        if (need_clone)
         {
           /*
             Create copy of partition_info to avoid modifying original
@@ -4682,7 +4684,7 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
       my_error(ER_PARTITION_FUNCTION_FAILURE, MYF(0));
       goto err;
     }
-    if (enabled_fast && (flags & (HA_FAST_CHANGE_PARTITION | HA_PARTITION_ONE_PHASE)) != 0)
+    if ((flags & (HA_FAST_CHANGE_PARTITION | HA_PARTITION_ONE_PHASE)) != 0)
     {
       /*
         "Fast" change of partitioning is supported in this case.
@@ -4694,6 +4696,8 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
       table->m_needs_reopen= true;
     }
     else
+      need_clone= true;
+    if (need_clone)
     {
       /*
         "Fast" changing of partitioning is not supported. Create
