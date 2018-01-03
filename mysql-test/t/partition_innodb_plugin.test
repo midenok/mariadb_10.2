@@ -65,8 +65,7 @@ LOCK TABLE t1 WRITE;
 --echo # ALTER fails because COMPRESSED/KEY_BLOCK_SIZE
 --echo # are incompatible with innodb_file_per_table = OFF;
 
---replace_regex / - .*//
---error ER_GET_ERRNO
+--error ER_CANT_CREATE_TABLE, ER_CANT_CREATE_TABLE
 ALTER TABLE t1 ADD PARTITION PARTITIONS 1;
 
 --replace_result #p# #P#
