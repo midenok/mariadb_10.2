@@ -1196,8 +1196,8 @@ void partition_info::vers_update_col_vals(THD *thd, partition_element *el0, part
       if (*val_item > t)
       {
         val_item->set_time(&t);
-        col_val->fixed= 0;
       }
+      col_val->fixed= 0;
     }
     col_val= &el1->get_col_val(i);
     if (!col_val->max_value)
@@ -1209,8 +1209,8 @@ void partition_info::vers_update_col_vals(THD *thd, partition_element *el0, part
       if (*val_item < t)
       {
         val_item->set_time(&t);
-        col_val->fixed= 0;
       }
+      col_val->fixed= 0;
     }
   }
 }
