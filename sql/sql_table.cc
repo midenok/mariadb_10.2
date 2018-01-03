@@ -9380,7 +9380,6 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     }
 
     // In-place execution of ALTER TABLE for partitioning.
-    table->part_info= thd->work_part_info;
     DBUG_RETURN(fast_alter_partition_table(thd, table, alter_info,
                                            create_info, table_list,
                                            alter_ctx.db,

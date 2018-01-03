@@ -4573,6 +4573,8 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
   /* ALTER_ADMIN_PARTITION is handled in mysql_admin_table */
   DBUG_ASSERT(!(alter_info->flags & Alter_info::ALTER_ADMIN_PARTITION));
 
+  partition_info *saved_part_info= NULL;
+
   if (alter_info->flags &
       (Alter_info::ALTER_ADD_PARTITION |
        Alter_info::ALTER_DROP_PARTITION |
@@ -4589,8 +4591,6 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
     longlong tab_max_range= 0, alt_max_range= 0;
     /* Current table lock for LTM_LOCK_TABLES is guaranteed by
        find_table_for_mdl_upgrade(). */
-    bool need_clone= thd->locked_tables_mode >= LTM_LOCK_TABLES &&
-      (alter_info->flags & Alter_info::ALTER_ADD_PARTITION);
     alt_part_info= thd->work_part_info;
 
     if (!table->part_info)
@@ -4646,8 +4646,6 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
           table->m_needs_reopen= true;
         }
         else
-          need_clone= true;
-        if (need_clone)
         {
           /*
             Create copy of partition_info to avoid modifying original
@@ -4696,8 +4694,6 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
       table->m_needs_reopen= true;
     }
     else
-      need_clone= true;
-    if (need_clone)
     {
       /*
         "Fast" changing of partitioning is not supported. Create
@@ -4786,6 +4782,16 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
     }
     if (alter_info->flags & Alter_info::ALTER_ADD_PARTITION)
     {
+      if (*fast_alter_table && thd->locked_tables_mode)
+      {
+        MEM_ROOT *old_root= thd->mem_root;
+        thd->mem_root= &thd->locked_tables_list.m_locked_tables_root;
+        saved_part_info= tab_part_info->get_clone(thd);
+        thd->mem_root= old_root;
+        saved_part_info->read_partitions= tab_part_info->read_partitions;
+        saved_part_info->lock_partitions= tab_part_info->lock_partitions;
+        saved_part_info->bitmaps_are_initialized= tab_part_info->bitmaps_are_initialized;
+      }
       /*
         We start by moving the new partitions to the list of temporary
         partitions. We will then check that the new partitions fit in the
@@ -5480,7 +5486,7 @@ the generated partition syntax in a correct manner.
         goto err;
       }
     }
-  }
+  } // ADD, DROP, COALESCE, REORGANIZE, TABLE_REORG, REBUILD
   else
   {
     /*
@@ -5645,7 +5651,8 @@ the generated partition syntax in a correct manner.
   }
   DBUG_RETURN(FALSE);
 err:
-  *fast_alter_table= false;
+  if (saved_part_info)
+    table->part_info= saved_part_info;
   DBUG_RETURN(TRUE);
 }
 
