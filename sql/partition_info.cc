@@ -1179,6 +1179,7 @@ bool partition_info::vers_scan_min_max(THD *thd, partition_element *part)
   return false;
 }
 
+// Synchronize Item_datetime_literal in part_column_list_val::item_expression with Vers_min_max_stats
 void partition_info::vers_update_col_vals(THD *thd, partition_element *el0, partition_element *el1)
 {
   MYSQL_TIME t;
