@@ -483,6 +483,14 @@ public:
     return vers_interval_exceed(vers_hist_part());
   }
   bool vers_trx_id_to_ts(THD *thd, Field *in_trx_id, Field_timestamp &out_ts);
+  /**
+     System versioning pruning
+
+     1. push row end system timestamp to Vers_min_max_stats;
+     2. update Item_datetime_literal stored in col_val->item_expression
+        (vers_update_col_vals());
+
+     Used in ha_partition when row is written or updated. */
   void vers_update_stats(THD *thd, partition_element *el)
   {
     DBUG_ASSERT(vers_info && vers_info->initialized());
@@ -524,6 +532,11 @@ public:
     if (lpart_id < vers_info->now_part->id)
       vers_update_stats(thd, get_partition(lpart_id));
   }
+  /* System versioning pruning: expand col_val->item_expression values to
+     col_val->column_value (fix_column_value_functions()). Usually it is done
+     once per open, but for SYSTEM_TIME pruning it is required per each prune,
+     because Vers_min_max_stats changes per each table update.
+     Called in prune_partitions(). */
   bool vers_update_range_constants(THD *thd)
   {
     DBUG_ASSERT(vers_info && vers_info->initialized());

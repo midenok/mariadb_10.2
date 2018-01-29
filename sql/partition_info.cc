@@ -953,6 +953,8 @@ bool partition_info::vers_set_expression(THD *thd, partition_element *el, MYSQL_
   return false;
 }
 
+/* System versioning pruning: create Item_datetime_listeral for col_val->item_expression */
+
 bool partition_info::vers_setup_expression(THD * thd, uint32 alter_add)
 {
   DBUG_ASSERT(part_type == VERSIONING_PARTITION);
@@ -1179,7 +1181,9 @@ bool partition_info::vers_scan_min_max(THD *thd, partition_element *part)
   return false;
 }
 
-// Synchronize Item_datetime_literal in part_column_list_val::item_expression with Vers_min_max_stats
+/* System versioning pruning:
+   Updte Item_datetime_literal stored in part_column_list_val::item_expression
+   with Vers_min_max_stats. */
 void partition_info::vers_update_col_vals(THD *thd, partition_element *el0, partition_element *el1)
 {
   MYSQL_TIME t;

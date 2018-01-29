@@ -90,8 +90,12 @@ typedef struct p_elem_val
 
 struct st_ddl_log_memory_entry;
 
-/* Used for collecting MIN/MAX stats on row_end for doing pruning
-   in SYSTEM_TIME partitiong. */
+/* System Versioning pruning:
+
+   Per-partition MIN/MAX stats on row_end collector for pruning in SYSTEM_TIME
+   partitiong. The stats are collected process-wide in TABLE_SHARE and then are
+   copied to thread-local range constants. */
+
 class Vers_min_max_stats : public Sql_alloc
 {
   static const uint buf_size= 4 + (TIME_SECOND_PART_DIGITS + 1) / 2;
