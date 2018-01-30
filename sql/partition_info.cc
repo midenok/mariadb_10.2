@@ -1099,7 +1099,7 @@ public:
 
 // scan table for min/max row_end
 inline
-bool partition_info::vers_scan_min_max(THD *thd, partition_element *part)
+bool partition_info::vers_scan_stats(THD *thd, partition_element *part)
 {
   uint32 sub_factor= num_subparts ? num_subparts : 1;
   uint32 part_id= part->id * sub_factor;
@@ -1204,7 +1204,7 @@ void partition_info::vers_update_col_vals(THD *thd, partition_element *el1)
       thd->variables.time_zone->gmt_sec_to_TIME(&t, ts);
       val_item= static_cast<Item_datetime_literal*>(col_val->item_expression);
       DBUG_ASSERT(val_item);
-      if (*val_item < t)
+      if (*val_item != t)
       {
         val_item->set_time(&t);
         col_val->fixed= 0;
@@ -1267,23 +1267,26 @@ bool partition_info::vers_setup_stats(THD * thd, bool is_create_table_ind)
         continue;
       }
 
+      Vers_pruning_stat *pruning_stat= new (&table->s->mem_root)
+        Vers_pruning_stat(&table->s->vers_end_field()->field_name, table->s);
+
+      if (!pruning_stat)
       {
-        Vers_pruning_stat *stat_trx_end= new (&table->s->mem_root)
-          Vers_pruning_stat(&table->s->vers_end_field()->field_name, table->s);
-        table->s->vers_pruning_stats[el->id * num_columns + Vers_pruning_stat::ROW_END]= stat_trx_end;
+        error= true;
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        break;
       }
+
+      table->s->vers_pruning_stats[el->id * num_columns + Vers_pruning_stat::ROW_END]= pruning_stat;
 
       if (!is_create_table_ind)
       {
         if (el->type() == partition_element::CURRENT)
         {
-          uchar buf[8];
-          Field_timestampf fld(buf, NULL, 0, Field::NONE, &table->vers_end_field()->field_name, NULL, 6);
-          fld.set_max();
-          vers_pruning_stat(Vers_pruning_stat::ROW_END, el).update_unguarded(&fld);
+          pruning_stat->turn_off();
           el->empty= false;
         }
-        else if (vers_scan_min_max(thd, el))
+        else if (vers_scan_stats(thd, el))
         {
           table->s->vers_pruning_stats= NULL; // may be a leak on endless table open
           error= true;

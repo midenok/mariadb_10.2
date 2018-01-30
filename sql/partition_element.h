@@ -123,6 +123,11 @@ public:
   {
     mysql_rwlock_destroy(&lock);
   }
+  void turn_off()
+  {
+    max_value.set_max();
+    memset(min_buf, 0, buf_size);
+  }
   bool update_unguarded(Field *from)
   {
     return

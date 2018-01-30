@@ -4207,6 +4207,10 @@ public:
   bool operator>(const MYSQL_TIME &ltime) const;
   bool operator<(const MYSQL_TIME &ltime) const;
   bool operator==(const MYSQL_TIME &ltime) const;
+  bool operator!=(const MYSQL_TIME &ltime) const
+  {
+    return !(*this == ltime);
+  }
 };
 
 
