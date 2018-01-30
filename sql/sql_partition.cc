@@ -3161,7 +3161,7 @@ int vers_get_partition_id(partition_info *part_info,
 {
   DBUG_ENTER("vers_get_partition_id");
   DBUG_ASSERT(part_info);
-  Field *row_end= part_info->part_field_array[STAT_TRX_END];
+  Field *row_end= part_info->part_field_array[Vers_pruning_stat::ROW_END];
   DBUG_ASSERT(row_end);
   TABLE *table= part_info->table;
   DBUG_ASSERT(table);

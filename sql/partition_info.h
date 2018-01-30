@@ -400,7 +400,7 @@ public:
   bool vers_setup_expression(THD *thd, uint32 alter_add= 0); /* Stage 1. */
   bool vers_setup_stats(THD *thd, bool is_create_table_ind); /* Stage 2. */
   bool vers_scan_min_max(THD *thd, partition_element *part);
-  void vers_update_col_vals(THD *thd, partition_element *el0, partition_element *el1);
+  void vers_update_col_vals(THD *thd, partition_element *el1);
 
   partition_element *vers_hist_part()
   {
@@ -449,17 +449,17 @@ public:
     // TODO: cache thread-shared part_recs and increment on INSERT
     return table->file->part_records(part) >= vers_info->limit;
   }
-  Vers_min_max_stats& vers_stat_trx(stat_trx_field fld, uint32 part_element_id)
+  Vers_pruning_stat& vers_pruning_stat(Vers_pruning_stat::field_t fld, uint32 part_element_id)
   {
-    DBUG_ASSERT(table && table->s && table->s->stat_trx);
-    Vers_min_max_stats* res= table->s->stat_trx[part_element_id * num_columns + fld];
+    DBUG_ASSERT(table && table->s && table->s->vers_pruning_stats);
+    Vers_pruning_stat* res= table->s->vers_pruning_stats[part_element_id * num_columns + fld];
     DBUG_ASSERT(res);
     return *res;
   }
-  Vers_min_max_stats& vers_stat_trx(stat_trx_field fld, partition_element *part)
+  Vers_pruning_stat& vers_pruning_stat(Vers_pruning_stat::field_t fld, partition_element *part)
   {
     DBUG_ASSERT(part);
-    return vers_stat_trx(fld, part->id);
+    return vers_pruning_stat(fld, part->id);
   }
   bool vers_interval_exceed(my_time_t max_time, partition_element *part= NULL)
   {
@@ -471,12 +471,12 @@ public:
       DBUG_ASSERT(vers_info->initialized());
       part= vers_hist_part();
     }
-    my_time_t min_time= vers_stat_trx(STAT_TRX_END, part).min_time();
+    my_time_t min_time= vers_pruning_stat(Vers_pruning_stat::ROW_END, part).min_time();
     return max_time - min_time > vers_info->interval;
   }
   bool vers_interval_exceed(partition_element *part)
   {
-    return vers_interval_exceed(vers_stat_trx(STAT_TRX_END, part).max_time(), part);
+    return vers_interval_exceed(vers_pruning_stat(Vers_pruning_stat::ROW_END, part).max_time(), part);
   }
   bool vers_interval_exceed()
   {
@@ -508,21 +508,19 @@ public:
       Field_timestampf fld(buf, NULL, 0, Field::NONE, &table->vers_end_field()->field_name, NULL, 6);
       fld.store_TIME(end_ts, 0);
       updated=
-        vers_stat_trx(STAT_TRX_END, el->id).update(&fld);
+        vers_pruning_stat(Vers_pruning_stat::ROW_END, el->id).update(&fld);
     }
     else
     {
       updated=
-        vers_stat_trx(STAT_TRX_END, el->id).update(table->vers_end_field());
+        vers_pruning_stat(Vers_pruning_stat::ROW_END, el->id).update(table->vers_end_field());
     }
     if (updated)
       table->s->stat_serial++;
     mysql_rwlock_unlock(&table->s->LOCK_stat_serial);
     if (updated)
     {
-      vers_update_col_vals(thd,
-        el->id > 0 ? get_partition(el->id - 1) : NULL,
-        el);
+      vers_update_col_vals(thd, el);
     }
   }
   void vers_update_stats(THD *thd, uint part_id)
@@ -535,7 +533,7 @@ public:
   /* System versioning pruning: expand col_val->item_expression values to
      col_val->column_value (fix_column_value_functions()). Usually it is done
      once per open, but for SYSTEM_TIME pruning it is required per each prune,
-     because Vers_min_max_stats changes per each table update.
+     because Vers_pruning_stat changes per each update of partition.
      Called in prune_partitions(). */
   bool vers_update_range_constants(THD *thd)
   {
