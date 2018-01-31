@@ -149,11 +149,10 @@ public:
     mysql_rwlock_unlock(&lock);
     return res;
   }
-  my_time_t max_time()
+  my_time_t max_time(ulong *sec_part= NULL)
   {
     mysql_rwlock_rdlock(&lock);
-    ulong sec_part;
-    my_time_t res= max_value.get_timestamp(&sec_part);
+    my_time_t res= max_value.get_timestamp(sec_part);
     mysql_rwlock_unlock(&lock);
     return res;
   }

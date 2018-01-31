@@ -911,6 +911,10 @@ partition_info::vers_part_rotate(THD * thd)
   const char* old_part_name= vers_info->hist_part->partition_name;
   vers_hist_part();
 
+  // Pruning: ROW_END in next partition must be greater than in previous
+  thd->set_start_time();
+  table->vers_update_end();
+
   push_warning_printf(thd,
     Sql_condition::WARN_LEVEL_NOTE,
     WARN_VERS_PART_ROTATION,
@@ -1190,19 +1194,22 @@ void partition_info::vers_update_col_vals(THD *thd, partition_element *el1)
   memset(&t, 0, sizeof(t));
   DBUG_ASSERT(table && table->s && table->s->vers_pruning_stats);
   const uint idx= el1->id * num_columns;
-  my_time_t ts;
-  part_column_list_val *col_val;
-  Item_datetime_literal *val_item;
-  Vers_pruning_stat *stat_trx_x;
+
   for (uint i= 0; i < num_columns; ++i)
   {
-    stat_trx_x= table->s->vers_pruning_stats[idx + i];
-    col_val= &el1->get_col_val(i);
+    Vers_pruning_stat *stat= table->s->vers_pruning_stats[idx + i];
+    part_column_list_val *col_val= &el1->get_col_val(i);
     if (!col_val->max_value)
     {
-      ts= stat_trx_x->max_time() + 1;
+      ulong sec_part;
+      my_time_t ts= stat->max_time(&sec_part);
+      if (++sec_part == HRTIME_RESOLUTION)
+      {
+        ++ts; sec_part= 0;
+      }
       thd->variables.time_zone->gmt_sec_to_TIME(&t, ts);
-      val_item= static_cast<Item_datetime_literal*>(col_val->item_expression);
+      t.second_part= sec_part;
+      Item_datetime_literal *val_item= static_cast<Item_datetime_literal*>(col_val->item_expression);
       DBUG_ASSERT(val_item);
       if (*val_item != t)
       {

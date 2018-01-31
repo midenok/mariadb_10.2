@@ -499,10 +499,12 @@ public:
     bool updated;
     mysql_rwlock_wrlock(&table->s->LOCK_stat_serial);
     el->empty= false;
+    DBUG_ASSERT(table->versioned(VERS_TIMESTAMP));
+#if 0
     if (table->versioned(VERS_TRX_ID))
     {
       // transaction is not yet pushed to VTQ, so we use now-time
-      my_time_t end_ts= my_time_t(0);
+      my_time_t end_ts= my_time_t(0); // FIXME: get from THD::start_time
 
       uchar buf[8];
       Field_timestampf fld(buf, NULL, 0, Field::NONE, &table->vers_end_field()->field_name, NULL, 6);
@@ -510,11 +512,9 @@ public:
       updated=
         vers_pruning_stat(Vers_pruning_stat::ROW_END, el->id).update(&fld);
     }
-    else
-    {
-      updated=
-        vers_pruning_stat(Vers_pruning_stat::ROW_END, el->id).update(table->vers_end_field());
-    }
+#endif
+    updated= vers_pruning_stat(Vers_pruning_stat::ROW_END, el->id).
+      update(table->vers_end_field());
     if (updated)
       table->s->stat_serial++;
     mysql_rwlock_unlock(&table->s->LOCK_stat_serial);
