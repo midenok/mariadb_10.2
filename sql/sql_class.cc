@@ -7722,3 +7722,18 @@ Query_arena_stmt::~Query_arena_stmt()
   if (arena)
     thd->restore_active_arena(arena, &backup);
 }
+
+Query_arena_root::Query_arena_root(THD *_thd, MEM_ROOT *mem_root,
+                                   Query_arena::enum_state state) :
+  thd(_thd), new_arena(mem_root, state), old_arena(thd->stmt_arena)
+{
+  thd->set_n_backup_active_arena(&new_arena, &backup);
+  thd->stmt_arena= &new_arena;
+}
+
+Query_arena_root::~Query_arena_root()
+{
+    thd->stmt_arena= old_arena;
+    thd->restore_active_arena(&new_arena, &backup);
+}
+
