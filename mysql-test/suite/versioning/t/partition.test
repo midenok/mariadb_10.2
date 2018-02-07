@@ -350,6 +350,7 @@ select * from t1 for system_time as of timestamp @ts2;
 
 explain partitions select * from t1 for system_time as of timestamp @ts1;
 explain partitions select * from t1 for system_time as of timestamp @ts2;
+--replace_regex /\d/N/ /ALL/system/ /Using where//
 explain partitions select * from t1;
 
 --echo # MDEV-14722 Assertion in ha_commit_trans for sub-statement
