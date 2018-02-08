@@ -417,9 +417,82 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
 explain partitions select * from t1 for system_time as of timestamp @ts2;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	p1,pn	ALL	NULL	NULL	NULL	NULL	2	Using where
-explain partitions select * from tN;
+explain partitions select * from t1;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
-N	SIMPLE	tN	pn	system	NULL	NULL	NULL	NULL	N	
+1	SIMPLE	t1	pn	x	NULL	NULL	NULL	NULL	x	x
+### Pruning corner cases
+create procedure pruning_corner_case(
+ts0 timestamp(6),
+ts1 timestamp(6),
+ts_asof timestamp(6),
+ts2 timestamp(6))
+begin
+create or replace table t1 (x int)
+with system versioning
+partition by system_time limit 1 (
+partition p0 history,
+partition p1 history,
+partition pn current);
+set timestamp= unix_timestamp(ts0);
+insert into t1 values (1), (2);
+set timestamp= unix_timestamp(ts1);
+delete from t1 where x = 1;
+set timestamp= unix_timestamp(ts2);
+delete from t1;
+set timestamp= 0;
+select *,row_end from t1 partition (p0);
+select *,row_end from t1 partition (p1);
+select ts0;
+explain partitions select * from t1 for system_time as of timestamp ts0;
+select ts1;
+explain partitions select * from t1 for system_time as of timestamp ts1;
+select ts_asof;
+explain partitions select * from t1 for system_time as of timestamp ts_asof;
+end~~
+#### 1. Rotation is done on row_end == T.N, next record is row_end == (T+1).0
+call pruning_corner_case(
+'2018-01-01 00:00:00.999997',
+'2018-01-01 00:00:00.999998',
+'2018-01-01 00:00:00.999999',
+'2018-01-01 00:00:01');
+x	row_end
+1	2018-01-01 00:00:00.999998
+x	row_end
+2	2018-01-01 00:00:01.000000
+ts0
+2018-01-01 00:00:00.999997
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p0,p1,pn	x	NULL	NULL	NULL	NULL	x	x
+ts1
+2018-01-01 00:00:00.999998
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p0,p1,pn	x	NULL	NULL	NULL	NULL	x	x
+ts_asof
+2018-01-01 00:00:00.999999
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p1,pn	x	NULL	NULL	NULL	NULL	x	x
+#### 2. Rotation is done on row_end == T.0, next record is row_end == T.N
+call pruning_corner_case(
+'2018-01-01 00:00:00.999999',
+'2018-01-01 00:00:01',
+'2018-01-01 00:00:01.000001',
+'2018-01-01 00:00:01.000002');
+x	row_end
+1	2018-01-01 00:00:01.000000
+x	row_end
+2	2018-01-01 00:00:01.000002
+ts0
+2018-01-01 00:00:00.999999
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p0,p1,pn	x	NULL	NULL	NULL	NULL	x	x
+ts1
+2018-01-01 00:00:01.000000
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p0,p1,pn	x	NULL	NULL	NULL	NULL	x	x
+ts_asof
+2018-01-01 00:00:01.000001
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p1,pn	x	NULL	NULL	NULL	NULL	x	x
 # MDEV-14722 Assertion in ha_commit_trans for sub-statement
 create or replace table t1 (i int) with system versioning
 partition by system_time interval 1 day (

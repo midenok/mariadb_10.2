@@ -351,8 +351,59 @@ select * from t1 for system_time as of timestamp @ts2;
 
 explain partitions select * from t1 for system_time as of timestamp @ts1;
 explain partitions select * from t1 for system_time as of timestamp @ts2;
---replace_regex /\d/N/ /ALL/system/ /Using where//
+--replace_column 5 'x' 10 'x' 11 'x'
 explain partitions select * from t1;
+
+--echo ### Pruning corner cases
+delimiter ~~;
+create procedure pruning_corner_case(
+  ts0 timestamp(6),
+  ts1 timestamp(6),
+  ts_asof timestamp(6),
+  ts2 timestamp(6))
+begin
+    create or replace table t1 (x int)
+    with system versioning
+    partition by system_time limit 1 (
+        partition p0 history,
+        partition p1 history,
+        partition pn current);
+
+    set timestamp= unix_timestamp(ts0);
+    insert into t1 values (1), (2);
+    set timestamp= unix_timestamp(ts1);
+    delete from t1 where x = 1;
+    set timestamp= unix_timestamp(ts2);
+    delete from t1;
+    set timestamp= 0;
+
+    select *,row_end from t1 partition (p0);
+    select *,row_end from t1 partition (p1);
+
+    select ts0;
+    explain partitions select * from t1 for system_time as of timestamp ts0;
+    select ts1;
+    explain partitions select * from t1 for system_time as of timestamp ts1;
+    select ts_asof;
+    explain partitions select * from t1 for system_time as of timestamp ts_asof;
+end~~
+delimiter ;~~
+
+--echo #### 1. Rotation is done on row_end == T.N, next record is row_end == (T+1).0
+--replace_column 5 'x' 10 'x' 11 'x'
+call pruning_corner_case(
+  '2018-01-01 00:00:00.999997',
+  '2018-01-01 00:00:00.999998',
+  '2018-01-01 00:00:00.999999',
+  '2018-01-01 00:00:01');
+
+--echo #### 2. Rotation is done on row_end == T.0, next record is row_end == T.N
+--replace_column 5 'x' 10 'x' 11 'x'
+call pruning_corner_case(
+  '2018-01-01 00:00:00.999999',
+  '2018-01-01 00:00:01',
+  '2018-01-01 00:00:01.000001',
+  '2018-01-01 00:00:01.000002');
 
 --echo # MDEV-14722 Assertion in ha_commit_trans for sub-statement
 create or replace table t1 (i int) with system versioning
