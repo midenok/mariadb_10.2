@@ -3518,15 +3518,23 @@ partititon_err:
   if (outparam->part_info &&
       outparam->part_info->part_type == VERSIONING_PARTITION)
   {
-    bool err;
-    if (!work_part_info_used && thd->lex->sql_command != SQLCOM_SHOW_FIELDS)
+    Query_arena *backup_stmt_arena_ptr= thd->stmt_arena;
+    Query_arena backup_arena;
+    Query_arena part_func_arena(&outparam->mem_root,
+                                Query_arena::STMT_INITIALIZED);
+    if (!work_part_info_used)
     {
-      Query_arena_root part_func_arena(thd, &outparam->mem_root,
-                                       Query_arena::STMT_INITIALIZED);
-      err= outparam->part_info->vers_setup_stats(thd, is_create_table);
+      thd->set_n_backup_active_arena(&part_func_arena, &backup_arena);
+      thd->stmt_arena= &part_func_arena;
     }
-    else
-      err= outparam->part_info->vers_setup_stats(thd, is_create_table);
+
+    bool err= outparam->part_info->vers_setup_stats(thd, is_create_table);
+
+    if (!work_part_info_used)
+    {
+      thd->stmt_arena= backup_stmt_arena_ptr;
+      thd->restore_active_arena(&part_func_arena, &backup_arena);
+    }
 
     if (err)
     {

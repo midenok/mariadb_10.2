@@ -1047,19 +1047,6 @@ public:
 };
 
 
-class Query_arena_root
-{
-  THD *thd;
-  Query_arena backup;
-  Query_arena new_arena;
-  Query_arena *old_arena;
-
-public:
-  Query_arena_root(THD *thd, MEM_ROOT *mem_root_arg, Query_arena::enum_state state_arg);
-  ~Query_arena_root();
-};
-
-
 class Server_side_cursor;
 
 /**
