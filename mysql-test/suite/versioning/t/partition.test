@@ -217,6 +217,7 @@ select * from t1 partition (p1);
 
 insert into t1 values (4), (5);
 --echo ### warn about full partition
+update t1 set x= x + 1;
 delete from t1;
 select * from t1 partition (p1) order by x;
 

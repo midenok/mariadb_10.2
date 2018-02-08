@@ -897,9 +897,7 @@ partition_info::vers_part_rotate(THD * thd)
   {
     DBUG_ASSERT(table->s->hist_part_id == vers_info->now_part->id - 1);
     push_warning_printf(thd,
-      thd->lex->sql_command == SQLCOM_ALTER_TABLE ?
-        Sql_condition::WARN_LEVEL_NOTE :
-        Sql_condition::WARN_LEVEL_WARN,
+      Sql_condition::WARN_LEVEL_NOTE,
       WARN_VERS_PART_FULL,
       ER_THD(thd, WARN_VERS_PART_FULL),
       table->s->db.str, table->s->error_table_name(),
