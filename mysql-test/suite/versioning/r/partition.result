@@ -411,6 +411,7 @@ x
 select * from t1 for system_time as of timestamp @ts2;
 x
 3
+### Pruning main case
 explain partitions select * from t1 for system_time as of timestamp @ts1;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	p0,p1,pn	ALL	NULL	NULL	NULL	NULL	3	Using where
@@ -420,35 +421,39 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
 explain partitions select * from t1;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
 1	SIMPLE	t1	pn	x	NULL	NULL	NULL	NULL	x	x
-### Pruning corner cases
-create procedure pruning_corner_case(
-ts0 timestamp(6),
-ts1 timestamp(6),
-ts_asof timestamp(6),
-ts2 timestamp(6))
-begin
-create or replace table t1 (x int)
-with system versioning
-partition by system_time limit 1 (
-partition p0 history,
-partition p1 history,
-partition pn current);
-set timestamp= unix_timestamp(ts0);
-insert into t1 values (1), (2);
-set timestamp= unix_timestamp(ts1);
-delete from t1 where x = 1;
-set timestamp= unix_timestamp(ts2);
-delete from t1;
+### Pruning after stats update
+set @ts3= unix_timestamp(@ts2) + 1;
+explain partitions select * from t1 for system_time as of timestamp @ts3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	pn	x	NULL	NULL	NULL	NULL	x	x
+set timestamp= @ts3;
+update t1 set x= 4;
 set timestamp= 0;
-select *,row_end from t1 partition (p0);
-select *,row_end from t1 partition (p1);
-select ts0;
-explain partitions select * from t1 for system_time as of timestamp ts0;
-select ts1;
-explain partitions select * from t1 for system_time as of timestamp ts1;
-select ts_asof;
-explain partitions select * from t1 for system_time as of timestamp ts_asof;
-end~~
+explain partitions select * from t1 for system_time as of timestamp @ts3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p1,pn	ALL	NULL	NULL	NULL	NULL	3	Using where
+### Stats updated in another thread
+set @ts4= @ts3 + 1;
+explain partitions select * from t1 for system_time as of timestamp @ts4;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	pn	x	NULL	NULL	NULL	NULL	x	x
+connect  con1,localhost,root,,test;
+explain partitions select * from t1 for system_time as of timestamp @ts4;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	pn	x	NULL	NULL	NULL	NULL	x	x
+set timestamp= @ts4;
+update t1 set x= 4;
+Warnings:
+Note	4112	Versioned table `test`.`t1`: partition `p1` is full, add more HISTORY partitions
+explain partitions select * from t1 for system_time as of timestamp @ts4;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p1,pn	ALL	NULL	NULL	NULL	NULL	4	Using where
+connection default;
+explain partitions select * from t1 for system_time as of timestamp @ts4;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	Extra
+1	SIMPLE	t1	p1,pn	ALL	NULL	NULL	NULL	NULL	4	Using where
+disconnect con1;
+### Pruning corner cases
 #### 1. Rotation is done on row_end == T.N, next record is row_end == (T+1).0
 call pruning_corner_case(
 '2018-01-01 00:00:00.999997',

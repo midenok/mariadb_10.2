@@ -349,12 +349,46 @@ select row_end from t1 partition (p1) where x = 2 into @ts2;
 select * from t1 for system_time as of timestamp @ts1;
 select * from t1 for system_time as of timestamp @ts2;
 
+--echo ### Pruning main case
 explain partitions select * from t1 for system_time as of timestamp @ts1;
 explain partitions select * from t1 for system_time as of timestamp @ts2;
 --replace_column 5 'x' 10 'x' 11 'x'
 explain partitions select * from t1;
 
+--echo ### Pruning after stats update
+set @ts3= unix_timestamp(@ts2) + 1;
+--replace_column 5 'x' 10 'x' 11 'x'
+explain partitions select * from t1 for system_time as of timestamp @ts3;
+
+set timestamp= @ts3;
+update t1 set x= 4;
+set timestamp= 0;
+
+explain partitions select * from t1 for system_time as of timestamp @ts3;
+
+--echo ### Stats updated in another thread
+set @ts4= @ts3 + 1;
+let $ts4= `select @ts4`;
+
+--replace_column 5 'x' 10 'x' 11 'x'
+explain partitions select * from t1 for system_time as of timestamp @ts4;
+
+--connect (con1,localhost,root,,test)
+--disable_query_log
+eval set @ts4= $ts4;
+--enable_query_log
+--replace_column 5 'x' 10 'x' 11 'x'
+explain partitions select * from t1 for system_time as of timestamp @ts4;
+set timestamp= @ts4;
+update t1 set x= 4;
+explain partitions select * from t1 for system_time as of timestamp @ts4;
+--connection default
+explain partitions select * from t1 for system_time as of timestamp @ts4;
+
+--disconnect con1
+
 --echo ### Pruning corner cases
+--disable_query_log
 delimiter ~~;
 create procedure pruning_corner_case(
   ts0 timestamp(6),
@@ -388,6 +422,7 @@ begin
     explain partitions select * from t1 for system_time as of timestamp ts_asof;
 end~~
 delimiter ;~~
+--enable_query_log
 
 --echo #### 1. Rotation is done on row_end == T.N, next record is row_end == (T+1).0
 --replace_column 5 'x' 10 'x' 11 'x'
@@ -404,6 +439,7 @@ call pruning_corner_case(
   '2018-01-01 00:00:01',
   '2018-01-01 00:00:01.000001',
   '2018-01-01 00:00:01.000002');
+
 
 --echo # MDEV-14722 Assertion in ha_commit_trans for sub-statement
 create or replace table t1 (i int) with system versioning
