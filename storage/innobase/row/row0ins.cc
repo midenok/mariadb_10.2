@@ -1590,53 +1590,6 @@ row_ins_check_foreign_constraint(
 	}
 
 #if 0 // MERGE: put this code (from row_update_for_mysql()) to the right place
-	ut_ad(!prebuilt->versioned_write || node->table->versioned());
-
-	bool vers_set_fields = prebuilt->versioned_write
-		&& (node->is_delete ? node->is_delete == VERSIONED_DELETE
-		    : node->update->affects_versioned());
-run_again:
-	if (vers_set_fields) {
-		/* System Versioning: modify update vector to set
-		   row_start (or row_end in case of DELETE)
-		   to current trx_id. */
-		dict_table_t* table = node->table;
-		dict_index_t* clust_index = dict_table_get_first_index(table);
-		upd_t* uvect = node->update;
-		upd_field_t* ufield;
-		dict_col_t* col;
-		unsigned col_idx;
-		if (node->is_delete) {
-			ufield = &uvect->fields[0];
-			uvect->n_fields = 0;
-			node->is_delete = VERSIONED_DELETE;
-			col_idx = table->vers_end;
-		} else {
-			ut_ad(uvect->n_fields < table->n_cols);
-			ufield = &uvect->fields[uvect->n_fields];
-			col_idx = table->vers_start;
-		}
-		col = &table->cols[col_idx];
-		UNIV_MEM_INVALID(ufield, sizeof *ufield);
-		{
-			ulint field_no = dict_col_get_clust_pos(col, clust_index);
-			ut_ad(field_no != ULINT_UNDEFINED);
-			ufield->field_no = field_no;
-		}
-		ufield->orig_len = 0;
-		ufield->exp = NULL;
-
-		mach_write_to_8(node->update->vers_sys_value, trx->id);
-		dfield_t* dfield = &ufield->new_val;
-		dfield_set_data(dfield, node->update->vers_sys_value, 8);
-		dict_col_copy_type(col, &dfield->type);
-
-		uvect->n_fields++;
-		ut_ad(node->in_mysql_interface); // otherwise needs to recalculate node->cmpl_info
-	}
-#endif
-
-#if 0 // MERGE: put this code (from row_update_for_mysql()) to the right place
 			vers_set_fields = node->table->versioned()
 				  && (node->is_delete == PLAIN_DELETE
 				      || node->update->affects_versioned());
