@@ -31,6 +31,7 @@
 #include "uniques.h"
 #include "my_atomic.h"
 #include "sql_show.h"
+#include "partition_info.h"
 
 /*
   The system variable 'use_stat_tables' can take one of the
@@ -164,6 +165,11 @@ TABLE_FIELD_TYPE column_stat_fields[COLUMN_STAT_N_FIELDS] =
     { STRING_WITH_LEN("utf8") }
   },
   {
+    { STRING_WITH_LEN("partition_id") },
+    { STRING_WITH_LEN("int(10) unsigned") },
+    { NULL, 0 }
+  },
+  {
     { STRING_WITH_LEN("column_name") },
     { STRING_WITH_LEN("varchar(64)") },
     { STRING_WITH_LEN("utf8") }
@@ -209,9 +215,9 @@ TABLE_FIELD_TYPE column_stat_fields[COLUMN_STAT_N_FIELDS] =
     { NULL, 0 }
   }
 };
-static const uint column_stat_pk_col[]= {0,1,2};
+static const uint column_stat_pk_col[]= {0,1,2,3};
 static const TABLE_FIELD_DEF
-column_stat_def= {COLUMN_STAT_N_FIELDS, column_stat_fields, 3, column_stat_pk_col};
+column_stat_def= {COLUMN_STAT_N_FIELDS, column_stat_fields, 4, column_stat_pk_col};
 
 static const
 TABLE_FIELD_TYPE index_stat_fields[INDEX_STAT_N_FIELDS] =
@@ -897,6 +903,7 @@ private:
 
   Field *db_name_field;     /* Field for the column column_stats.db_name */
   Field *table_name_field;  /* Field for the column column_stats.table_name */
+  Field *partition_id_field;
   Field *column_name_field; /* Field for the column column_stats.column_name */
 
   Field *table_field;  /* Field from 'table' to read /update statistics on */
@@ -905,6 +912,7 @@ private:
   {
     db_name_field= stat_table->field[COLUMN_STAT_DB_NAME];
     table_name_field= stat_table->field[COLUMN_STAT_TABLE_NAME];
+    partition_id_field= stat_table->field[COLUMN_STAT_PARTITION_ID];
     column_name_field= stat_table->field[COLUMN_STAT_COLUMN_NAME];
   } 
 
@@ -982,10 +990,22 @@ public:
   void set_key_fields(Field *col)
   {
     set_full_table_name();
+    partition_id_field->set_max();
     column_name_field->store(col->field_name.str, col->field_name.length,
                              system_charset_info);  
     table_field= col;
   }
+
+#ifdef WITH_PARTITION_STORAGE_ENGINE
+  void set_key_fields(Field *col, partition_element &el)
+  {
+    set_full_table_name();
+    partition_id_field->store(el.id, true);
+    column_name_field->store(col->field_name.str, col->field_name.length,
+                             system_charset_info);
+    table_field= col;
+  }
+#endif
 
 
   /** 
@@ -2892,6 +2912,23 @@ int update_statistics_for_table(THD *thd, TABLE *table)
     if (err && !rc)
       rc= 1;
   }
+
+#ifdef WITH_PARTITION_STORAGE_ENGINE
+  partition_info *part_info= table->part_info;
+  if (part_info && part_info->vers_info)
+  {
+    DBUG_ASSERT(table->versioned());
+    List_iterator<partition_element> it(part_info->partitions);
+    while (partition_element *el= it++)
+    {
+      restore_record(stat_table, s->default_values);
+      column_stat.set_key_fields(table->vers_end_field(), *el);
+      err= column_stat.update_stat();
+      if (err && !rc)
+        rc= 1;
+    }
+  }
+#endif
 
   /* Update the statistical table index_stats */
   stat_table= tables[INDEX_STAT].table;

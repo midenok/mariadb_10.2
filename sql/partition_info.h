@@ -412,8 +412,7 @@ public:
       return vers_info->hist_part;
 
     List_iterator<partition_element> it(partitions);
-    partition_element *el;
-    while ((el= it++))
+    while (partition_element *el= it++)
     {
       DBUG_ASSERT(el->type() != partition_element::CONVENTIONAL);
       if (el->type() == partition_element::HISTORY &&

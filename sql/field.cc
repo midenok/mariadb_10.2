@@ -4277,6 +4277,27 @@ void Field_long::sql_type(String &res) const
   add_zerofill_and_unsigned(res);
 }
 
+void Field_long::set_max()
+{
+  ASSERT_COLUMN_MARKED_FOR_WRITE_OR_COMPUTED;
+  set_notnull();
+  int4store(ptr, unsigned_flag ? UINT_MAX32 : INT_MAX32);
+}
+
+bool Field_long::is_max()
+{
+  ASSERT_COLUMN_MARKED_FOR_READ;
+  if (unsigned_flag)
+  {
+    uint32 j;
+    j= uint4korr(ptr);
+    return j == UINT_MAX32;
+  }
+  int32 j;
+  j= sint4korr(ptr);
+  return j == INT_MAX32;
+}
+
 /****************************************************************************
  Field type longlong int (8 bytes)
 ****************************************************************************/

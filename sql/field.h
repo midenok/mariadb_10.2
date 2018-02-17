@@ -2120,6 +2120,8 @@ public:
   {
     return unpack_int32(to, from, from_end);
   }
+  void set_max();
+  bool is_max();
 };
 
 
