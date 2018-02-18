@@ -1033,7 +1033,7 @@ bool partition_info::vers_setup_expression(THD * thd, uint32 alter_add)
         DBUG_ASSERT(table && table->s);
         Vers_pruning_stat *stat_trx_end= new (&table->s->mem_root)
           Vers_pruning_stat(&table->s->vers_end_field()->field_name, table->s);
-        table->s->vers_pruning_stats[id * num_columns + Vers_pruning_stat::ROW_END]= stat_trx_end;
+        *vers_stat_ptr(id)= stat_trx_end;
         el->id= id++;
         if (el->type() == partition_element::CURRENT)
           break;
@@ -1185,12 +1185,12 @@ bool partition_info::vers_scan_stats(THD *thd, partition_element *part)
           Field_timestampf fld(buf, NULL, 0, Field::NONE, &table->vers_end_field()->field_name, NULL, 6);
           if (!vers_trx_id_to_ts(thd, table->vers_end_field(), fld))
           {
-            vers_pruning_stat(Vers_pruning_stat::ROW_END, part).update_unguarded(&fld);
+            vers_stat(part->id).update_unguarded(&fld);
           }
         }
         else
         {
-          vers_pruning_stat(Vers_pruning_stat::ROW_END, part).update_unguarded(table->vers_end_field());
+          vers_stat(part->id).update_unguarded(table->vers_end_field());
         }
       }
       file->ha_rnd_end();

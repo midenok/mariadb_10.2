@@ -449,17 +449,20 @@ public:
     // TODO: cache thread-shared part_recs and increment on INSERT
     return table->file->part_records(part) >= vers_info->limit;
   }
-  Vers_pruning_stat& vers_pruning_stat(Vers_pruning_stat::field_t fld, uint32 part_element_id)
+  Vers_pruning_stat** vers_stat_ptr(uint32 part_id,
+    Vers_pruning_stat::field_t field= Vers_pruning_stat::ROW_END)
   {
-    DBUG_ASSERT(table && table->s && table->s->vers_pruning_stats);
-    Vers_pruning_stat* res= table->s->vers_pruning_stats[part_element_id * num_columns + fld];
+    DBUG_ASSERT(table && table->s);
+    DBUG_ASSERT(vers_info);
+    DBUG_ASSERT(table->s->vers_pruning_stats);
+    return &table->s->vers_pruning_stats[part_id * num_columns + field];
+  }
+  Vers_pruning_stat& vers_stat(uint32 part_id,
+    Vers_pruning_stat::field_t field= Vers_pruning_stat::ROW_END)
+  {
+    Vers_pruning_stat* res= *vers_stat_ptr(part_id, field);
     DBUG_ASSERT(res);
     return *res;
-  }
-  Vers_pruning_stat& vers_pruning_stat(Vers_pruning_stat::field_t fld, partition_element *part)
-  {
-    DBUG_ASSERT(part);
-    return vers_pruning_stat(fld, part->id);
   }
   bool vers_interval_exceed(my_time_t max_time, partition_element *part= NULL)
   {
@@ -471,12 +474,12 @@ public:
       DBUG_ASSERT(vers_info->initialized());
       part= vers_hist_part();
     }
-    my_time_t min_time= vers_pruning_stat(Vers_pruning_stat::ROW_END, part).min_time();
+    my_time_t min_time= vers_stat(part->id).min_time();
     return max_time - min_time > vers_info->interval;
   }
   bool vers_interval_exceed(partition_element *part)
   {
-    return vers_interval_exceed(vers_pruning_stat(Vers_pruning_stat::ROW_END, part).max_time(), part);
+    return vers_interval_exceed(vers_stat(part->id).max_time(), part);
   }
   bool vers_interval_exceed()
   {
@@ -513,8 +516,7 @@ public:
         vers_pruning_stat(Vers_pruning_stat::ROW_END, el->id).update(&fld);
     }
 #endif
-    updated= vers_pruning_stat(Vers_pruning_stat::ROW_END, el->id).
-      update(table->vers_end_field());
+    updated= vers_stat(el->id).update(table->vers_end_field());
     if (updated)
       table->s->stat_serial++;
     mysql_rwlock_unlock(&table->s->LOCK_stat_serial);

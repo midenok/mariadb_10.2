@@ -156,6 +156,22 @@ public:
     mysql_rwlock_unlock(&lock);
     return res;
   }
+  bool get(Field *to_min, Field *to_max)
+  {
+    DBUG_ASSERT(to_min);
+    DBUG_ASSERT(to_max);
+    bool error;
+    mysql_rwlock_rdlock(&lock);
+    error= min_value.save_in_field(to_min);
+    if (!error)
+      to_min->set_notnull();
+    if (max_value.save_in_field(to_max))
+      error= true;
+    else
+      to_max->set_notnull();
+    mysql_rwlock_unlock(&lock);
+    return error;
+  }
 };
 
 

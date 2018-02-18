@@ -899,7 +899,7 @@ public:
 class Column_stat: public Stat_table
 {
 
-private:
+protected:
 
   Field *db_name_field;     /* Field for the column column_stats.db_name */
   Field *table_name_field;  /* Field for the column column_stats.table_name */
@@ -961,11 +961,12 @@ public:
     of the statistical table column_stats in the record buffer.
   */
 
-  void set_full_table_name()
+  virtual void set_full_table_name()
   {
     db_name_field->store(db_name->str, db_name->length, system_charset_info);
     table_name_field->store(table_name->str, table_name->length,
                             system_charset_info);
+    partition_id_field->set_max();
   }
 
 
@@ -990,23 +991,10 @@ public:
   void set_key_fields(Field *col)
   {
     set_full_table_name();
-    partition_id_field->set_max();
     column_name_field->store(col->field_name.str, col->field_name.length,
                              system_charset_info);  
     table_field= col;
   }
-
-#ifdef WITH_PARTITION_STORAGE_ENGINE
-  void set_key_fields(Field *col, partition_element &el)
-  {
-    set_full_table_name();
-    partition_id_field->store(el.id, true);
-    column_name_field->store(col->field_name.str, col->field_name.length,
-                             system_charset_info);
-    table_field= col;
-  }
-#endif
-
 
   /** 
     @brief
@@ -1230,6 +1218,35 @@ public:
   }
 
 };
+
+#ifdef WITH_PARTITION_STORAGE_ENGINE
+class Vers_column_stat : public Column_stat
+{
+  uint32 partition_id;
+
+public:
+  Vers_column_stat(TABLE *stat, TABLE *tab, partition_element &part) :
+    Column_stat(stat, tab), partition_id(part.id)
+  {}
+  virtual void set_full_table_name()
+  {
+    db_name_field->store(db_name->str, db_name->length, system_charset_info);
+    table_name_field->store(table_name->str, table_name->length,
+                            system_charset_info);
+    partition_id_field->store(partition_id, true);
+  }
+  void store_stat_fields()
+  {
+    DBUG_ASSERT(table);
+    DBUG_ASSERT(table_share);
+    DBUG_ASSERT(table->part_info);
+    Vers_pruning_stat &prun_stat= table->part_info->vers_stat(partition_id);
+    Field *min_value= stat_table->field[COLUMN_STAT_MIN_VALUE];
+    Field *max_value= stat_table->field[COLUMN_STAT_MAX_VALUE];
+    prun_stat.get(min_value, max_value);
+  }
+};
+#endif
 
 
 /*
@@ -2921,8 +2938,9 @@ int update_statistics_for_table(THD *thd, TABLE *table)
     List_iterator<partition_element> it(part_info->partitions);
     while (partition_element *el= it++)
     {
+      Vers_column_stat column_stat(stat_table, table, *el);
       restore_record(stat_table, s->default_values);
-      column_stat.set_key_fields(table->vers_end_field(), *el);
+      column_stat.set_key_fields(table->vers_end_field());
       err= column_stat.update_stat();
       if (err && !rc)
         rc= 1;
