@@ -817,6 +817,20 @@ struct TABLE_SHARE
       mysql_cond_wait(&COND_rotation, &LOCK_rotation);
   }
 
+  Vers_pruning_stat** vers_stat_ptr(uint32 part_id,
+    Vers_pruning_stat::field_t field= Vers_pruning_stat::ROW_END)
+  {
+    DBUG_ASSERT(vers_pruning_stats);
+    return &vers_pruning_stats[part_id * num_columns + field];
+  }
+  Vers_pruning_stat& vers_stat(uint32 part_id,
+    Vers_pruning_stat::field_t field= Vers_pruning_stat::ROW_END)
+  {
+    Vers_pruning_stat* res= *vers_stat_ptr(part_id, field);
+    DBUG_ASSERT(res);
+    return *res;
+  }
+
   /**
     Cache the checked structure of this table.
 

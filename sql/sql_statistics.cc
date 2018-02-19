@@ -518,6 +518,13 @@ public:
     table_name= &table_share->table_name;
   }
 
+  Stat_table(TABLE *stat, TABLE_SHARE *share)
+    :stat_table(stat), table(NULL), table_share(share)
+  {
+    common_init_stat_table();
+    db_name= &table_share->db;
+    table_name= &table_share->table_name;
+  }
 
   /**
     @details
@@ -935,7 +942,12 @@ public:
   Column_stat(TABLE *stat, TABLE *tab) :Stat_table(stat, tab)
   {
     common_init_column_stat_table();
-  } 
+  }
+
+  Column_stat(TABLE *stat, TABLE_SHARE *share) :Stat_table(stat, share)
+  {
+    common_init_column_stat_table();
+  }
 
 
   /**
@@ -1225,8 +1237,8 @@ class Vers_column_stat : public Column_stat
   uint32 partition_id;
 
 public:
-  Vers_column_stat(TABLE *stat, TABLE *tab, partition_element &part) :
-    Column_stat(stat, tab), partition_id(part.id)
+  Vers_column_stat(TABLE *stat, TABLE_SHARE *share, uint32 part_id) :
+    Column_stat(stat, share), partition_id(part_id)
   {}
   virtual void set_full_table_name()
   {
@@ -1237,10 +1249,8 @@ public:
   }
   void store_stat_fields()
   {
-    DBUG_ASSERT(table);
     DBUG_ASSERT(table_share);
-    DBUG_ASSERT(table->part_info);
-    Vers_pruning_stat &prun_stat= table->part_info->vers_stat(partition_id);
+    Vers_pruning_stat &prun_stat= table_share->vers_stat(partition_id);
     Field *min_value= stat_table->field[COLUMN_STAT_MIN_VALUE];
     Field *max_value= stat_table->field[COLUMN_STAT_MAX_VALUE];
     prun_stat.get(min_value, max_value);
@@ -2847,6 +2857,19 @@ int collect_statistics_for_table(THD *thd, TABLE *table)
   }
 
   DBUG_RETURN(rc);          
+}
+
+
+int TABLE_SHARE::vers_flush_statistics(THD *thd, uint32 part_id)
+{
+  DBUG_ASSERT(versioned);
+
+  Vers_column_stat column_stat(stat_table, table, part_id);
+  restore_record(stat_table, s->default_values);
+  column_stat.set_key_fields(table->vers_end_field());
+  err= column_stat.update_stat();
+  if (err && !rc)
+    rc= 1;
 }
 
 
