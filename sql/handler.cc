@@ -7058,37 +7058,6 @@ bool Table_scope_and_contents_source_st::vers_fix_system_fields(
     }
   } // while (Create_field *f= it++)
 
-#if 0
-  /* Assign selected system fields to explicit system fields if any */
-  if (vers_tables)
-  {
-    it.rewind();
-    while (Create_field *f= it++)
-    {
-      uint flags_left= VERS_SYSTEM_FIELD;
-      if (flags_left && (vers_info.is_start(*f) || vers_info.is_end(*f)) && !f->field)
-      {
-        uint sys_flag= f->flags & flags_left;
-        flags_left-= sys_flag;
-        List_iterator_fast<Item> it2(*items);
-        while (Item *item= it2++)
-        {
-          if (item->type() != Item::FIELD_ITEM)
-            continue;
-          Field *fld= static_cast<Item_field *>(item)->field;
-          DBUG_ASSERT(fld);
-          if ((fld->flags & sys_flag) &&
-            LString_i(f->field_name) == fld->field_name)
-          {
-            f->field= fld;
-            *versioned_write= false;
-          }
-        } // while (item)
-      } // if (flags_left ...
-    } // while (Create_field *f= it++)
-  } // if (vers_tables)
-#endif
-
   if (create_list)
     alter_info->create_list.disjoin(create_list);
   if (vers_info.fix_implicit(thd, alter_info))
