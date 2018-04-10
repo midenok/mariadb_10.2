@@ -3260,7 +3260,7 @@ mysql_execute_command(THD *thd)
       case SYSTEM_TIME_BEFORE:
         if (tl->vers_conditions.start.unit == VERS_TRX_ID)
           break;
-        if (TR_table::add_subquery(thd, tl->vers_conditions.start.item))
+        if (TR_table::add_subquery(thd, tl->vers_conditions.start))
           ; // FIXME: error
         break;
       case SYSTEM_TIME_FROM_TO:
@@ -8184,9 +8184,13 @@ TABLE_LIST *st_select_lex::add_table_to_list(THD *thd,
 					     enum_mdl_type mdl_type,
 					     List<Index_hint> *index_hints_arg,
                                              List<String> *partition_names,
-                                             LEX_STRING *option)
+                                             LEX_STRING *option,
+                                             TABLE_LIST *ptr)
 {
+<<<<<<< HEAD
   TABLE_LIST *ptr;
+=======
+>>>>>>> Store trt into vers_history_point_t
   TABLE_LIST *UNINIT_VAR(previous_table_ref); /* The table preceding the current one. */
   LEX_CSTRING alias_str;
   LEX *lex= thd->lex;
@@ -8222,7 +8226,7 @@ TABLE_LIST *st_select_lex::add_table_to_list(THD *thd,
     if (unlikely(!(alias_str.str= (char*) thd->memdup(alias_str.str, alias_str.length+1))))
       DBUG_RETURN(0);
   }
-  if (unlikely(!(ptr = (TABLE_LIST *) thd->calloc(sizeof(TABLE_LIST)))))
+  if (!ptr && unlikely(!(ptr = (TABLE_LIST *) thd->calloc(sizeof(TABLE_LIST)))))
     DBUG_RETURN(0);				/* purecov: inspected */
   if (table->db.str)
   {
