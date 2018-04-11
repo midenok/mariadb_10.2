@@ -717,7 +717,7 @@ void vers_select_conds_t::print(String *str, enum_query_type query_type) const
   }
 }
 
-int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr)
+int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
 {
   DBUG_ENTER("SELECT_LEX::vers_setup_cond");
 #define newx new (thd->mem_root)
@@ -900,9 +900,19 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables, COND **where_expr
         cond1= newx Item_func_eq(thd, row_end, curr);
         break;
       case SYSTEM_TIME_AS_OF:
-        trx_id0= vers_conditions.start.unit == VERS_TIMESTAMP
-          ? newx Item_func_trt_id(thd, point_in_time1, TR_table::FLD_TRX_ID)
-          : point_in_time1;
+        if (vers_conditions.start.unit == VERS_TIMESTAMP)
+        {
+	  // FIXME: respect point_in_time1
+          TABLE_LIST *trt= vers_conditions.start.trt;
+          DBUG_ASSERT(trt);
+          DBUG_ASSERT(trt->table);
+          DBUG_ASSERT(TR_table::FLD_TRX_ID < trt->table->s->fields);
+          trx_id0= newx Item_field(thd, &this->context, trt->table->field[TR_table::FLD_TRX_ID]);
+        }
+        else
+        {
+          trx_id0= point_in_time1;
+        }
         cond1= newx Item_func_trt_trx_sees_eq(thd, trx_id0, row_start);
         cond2= newx Item_func_trt_trx_sees(thd, row_end, trx_id0);
         break;
