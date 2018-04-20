@@ -88,6 +88,17 @@ public:
   {
     return str;
   }
+  operator LEX_CSTRING () const
+  {
+    return this->lex_cstring();
+  }
+  operator LEX_STRING () const
+  {
+    LEX_STRING res;
+    res.str= const_cast<char *>(this->ptr());
+    res.length= this->length();
+    return res;
+  }
   operator bool () const
   {
     return str != NULL;
