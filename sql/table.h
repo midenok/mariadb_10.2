@@ -1802,11 +1802,21 @@ class Index_hint;
 class Item_in_subselect;
 
 class TR_table;
+struct Name_resolution_context;
 /* trivial class, for %union in sql_yacc.yy */
 struct vers_history_point_t
 {
   vers_sys_type_t unit;
   Item *item;
+};
+
+enum tr_field_id_t {
+  FLD_TRX_ID= 0,
+  FLD_COMMIT_ID,
+  FLD_BEGIN_TS,
+  FLD_COMMIT_TS,
+  FLD_ISO_LEVEL,
+  FIELD_COUNT
 };
 
 class Vers_history_point : public vers_history_point_t
@@ -1848,6 +1858,8 @@ public:
   }
   void bad_expression_data_type_error(const char *type) const;
   bool eq(const vers_history_point_t &point) const;
+  Item_field *make_tr_field(THD *thd, Name_resolution_context &ctx,
+                           tr_field_id_t field) const;
 };
 
 struct vers_select_conds_t
@@ -2993,15 +3005,6 @@ class TR_table: public TABLE_LIST
   enum init_type {NO_INIT};
 
 public:
-  enum field_id_t {
-    FLD_TRX_ID= 0,
-    FLD_COMMIT_ID,
-    FLD_BEGIN_TS,
-    FLD_COMMIT_TS,
-    FLD_ISO_LEVEL,
-    FIELD_COUNT
-  };
-
   enum enabled {NO, MAYBE, YES};
   static enum enabled use_transaction_registry;
 
