@@ -6931,7 +6931,7 @@ bool Table_scope_and_contents_source_st::vers_native(THD *thd) const
 }
 
 bool Table_scope_and_contents_source_st::vers_fix_system_fields(
-  THD *thd, Alter_info *alter_info, const TABLE_LIST &create_table,
+  THD *thd, Alter_info *alter_info, const char *table_name,
   bool create_select)
 {
   DBUG_ASSERT(!(alter_info->flags & ALTER_DROP_SYSTEM_VERSIONING));
@@ -6953,8 +6953,7 @@ bool Table_scope_and_contents_source_st::vers_fix_system_fields(
 
   if (!(alter_info->flags & ALTER_ADD_SYSTEM_VERSIONING) && vers_info)
   {
-    my_error(ER_MISSING, MYF(0), create_table.table_name.str,
-             "WITH SYSTEM VERSIONING");
+    my_error(ER_MISSING, MYF(0), table_name, "WITH SYSTEM VERSIONING");
     return true;
   }
 
@@ -6990,8 +6989,7 @@ bool Table_scope_and_contents_source_st::vers_fix_system_fields(
     // CREATE from SELECT (Create_fields are not yet added)
     !create_select && vers_cols == 0 && (plain_cols == 0 || !vers_info))
   {
-    my_error(ER_VERS_TABLE_MUST_HAVE_COLUMNS, MYF(0),
-             create_table.table_name.str);
+    my_error(ER_VERS_TABLE_MUST_HAVE_COLUMNS, MYF(0), table_name);
     return true;
   }
 
@@ -7000,11 +6998,12 @@ bool Table_scope_and_contents_source_st::vers_fix_system_fields(
 
 
 bool Table_scope_and_contents_source_st::vers_check_system_fields(
-       THD *thd, Alter_info *alter_info, const TABLE_LIST &create_table)
+       THD *thd, Alter_info *alter_info, const char *table_name,
+       const char *db_name)
 {
   if (!(options & HA_VERSIONED_TABLE))
     return false;
-  return vers_info.check_sys_fields(create_table.table_name, create_table.db,
+  return vers_info.check_sys_fields(table_name, db_name,
                                     alter_info, vers_native(thd));
 }
 
@@ -7113,7 +7112,7 @@ bool Vers_parse_info::fix_alter_info(THD *thd, Alter_info *alter_info,
   if (alter_info->flags & ALTER_ADD_SYSTEM_VERSIONING)
   {
     bool native= create_info->vers_native(thd);
-    if (check_sys_fields(table_name, share->db, alter_info, native))
+    if (check_sys_fields(table_name, share->db.str, alter_info, native))
       return true;
   }
 
@@ -7187,19 +7186,19 @@ bool Vers_parse_info::need_check(const Alter_info *alter_info) const
          alter_info->flags & ALTER_DROP_SYSTEM_VERSIONING || *this;
 }
 
-bool Vers_parse_info::check_conditions(const LString &table_name,
-                                       const LString &db) const
+bool Vers_parse_info::check_conditions(const char *table_name,
+                                       const char *db) const
 {
   if (!as_row.start || !as_row.end)
   {
-    my_error(ER_MISSING, MYF(0), table_name.str,
+    my_error(ER_MISSING, MYF(0), table_name,
                 as_row.start ? "AS ROW END" : "AS ROW START");
     return true;
   }
 
   if (!system_time.start || !system_time.end)
   {
-    my_error(ER_MISSING, MYF(0), table_name.str, "PERIOD FOR SYSTEM_TIME");
+    my_error(ER_MISSING, MYF(0), table_name, "PERIOD FOR SYSTEM_TIME");
     return true;
   }
 
@@ -7210,7 +7209,7 @@ bool Vers_parse_info::check_conditions(const LString &table_name,
     return true;
   }
 
-  if (db.streq(MYSQL_SCHEMA_NAME))
+  if (0 == strcmp(db, MYSQL_SCHEMA_NAME.str))
   {
     my_error(ER_VERS_DB_NOT_SUPPORTED, MYF(0), MYSQL_SCHEMA_NAME.str);
     return true;
@@ -7237,11 +7236,11 @@ static void require_trx_id(const char *field, const char *table)
            table);
 }
 
-bool Vers_parse_info::check_sys_fields(const LString &table_name,
-                                       const LString &db,
+bool Vers_parse_info::check_sys_fields(const char *table_name,
+                                       const char *db_name,
                                        Alter_info *alter_info, bool native)
 {
-  if (check_conditions(table_name, db))
+  if (check_conditions(table_name, db_name))
     return true;
 
   List_iterator<Create_field> it(alter_info->create_list);

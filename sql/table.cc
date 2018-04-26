@@ -2711,9 +2711,6 @@ static bool sql_unusable_for_discovery(THD *thd, handlerton *engine,
   // ... engine
   if (create_info->db_type && create_info->db_type != engine)
     return 1;
-  // ... WITH SYSTEM VERSIONING
-  if (create_info->versioned())
-    return 1;
 
   return 0;
 }
@@ -2774,6 +2771,22 @@ int TABLE_SHARE::init_from_sql_statement_string(THD *thd, bool write,
     thd->lex->create_info.tabledef_version= tabledef_version;
 
   promote_first_timestamp_column(&thd->lex->alter_info.create_list);
+
+
+  {
+    Table_specification_st &ci= thd->lex->create_info;
+    Alter_info *ai= &thd->lex->alter_info;
+    const char *t= table_name.str;
+    const char *d= db.str;
+    if (ci.versioned())
+    {
+      error= (ci.vers_fix_system_fields(thd, ai, t, d) ||
+          ci.vers_check_system_fields(thd, ai, t, d));
+      if (error)
+        goto ret;
+    }
+  }
+
   file= mysql_create_frm_image(thd, &db, &table_name,
                                &thd->lex->create_info, &thd->lex->alter_info,
                                C_ORDINARY_CREATE, &unused1, &unused2, &frm);

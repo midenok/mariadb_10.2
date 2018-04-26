@@ -1955,7 +1955,7 @@ protected:
     return as_row.start || as_row.end || system_time.start || system_time.end;
   }
   bool need_check(const Alter_info *alter_info) const;
-  bool check_conditions(const LString &table_name, const LString &db) const;
+  bool check_conditions(const char *table_name, const char *db) const;
 public:
   static const LString_i default_start;
   static const LString_i default_end;
@@ -1964,7 +1964,7 @@ public:
                        HA_CREATE_INFO *create_info, TABLE *table);
   bool fix_create_like(Alter_info &alter_info, HA_CREATE_INFO &create_info,
                        TABLE_LIST &src_table, TABLE_LIST &table);
-  bool check_sys_fields(const LString &table_name, const LString &db,
+  bool check_sys_fields(const char *table_name, const char *db,
                         Alter_info *alter_info, bool native);
 
   /**
@@ -2052,11 +2052,10 @@ struct Table_scope_and_contents_source_st
   Vers_parse_info vers_info;
 
   bool vers_fix_system_fields(THD *thd, Alter_info *alter_info,
-                         const TABLE_LIST &create_table,
-                         bool create_select= false);
+                         const char *table_name, bool create_select= false);
 
   bool vers_check_system_fields(THD *thd, Alter_info *alter_info,
-                                const TABLE_LIST &create_table);
+                                const char *table_name, const char *db_name);
 
   bool vers_native(THD *thd) const;
 

@@ -4268,8 +4268,10 @@ mysql_execute_command(THD *thd)
       }
       else
       {
-        if (create_info.vers_fix_system_fields(thd, &alter_info, *create_table) ||
-            create_info.vers_check_system_fields(thd, &alter_info, *create_table))
+        const char *t= create_table->table_name.str;
+        const char *d= create_table->db.str;
+        if (create_info.vers_fix_system_fields(thd, &alter_info, t, d) ||
+            create_info.vers_check_system_fields(thd, &alter_info, t, d))
           goto end_with_restore_list;
 
         /*
