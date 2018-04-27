@@ -1913,7 +1913,7 @@ bool ha_federatedx::append_stmt_insert(String *query)
   */
   for (field= table->field; *field; field++)
   {
-    if (bitmap_is_set(table->write_set, (*field)->field_index))
+    if (!(*field)->invisible && bitmap_is_set(table->write_set, (*field)->field_index))
     {
       /* append the field name */
       append_ident(&insert_string, (*field)->field_name.str,
@@ -2006,7 +2006,8 @@ int ha_federatedx::write_row(uchar *buf)
   */
   for (field= table->field; *field; field++)
   {
-    if (bitmap_is_set(table->write_set, (*field)->field_index))
+    if (!(*field)->invisible &&
+        bitmap_is_set(table->write_set, (*field)->field_index))
     {
       if ((*field)->is_null())
         values_string.append(STRING_WITH_LEN(" NULL "));
@@ -2342,7 +2343,7 @@ int ha_federatedx::update_row(const uchar *old_data, const uchar *new_data)
 
   for (Field **field= table->field; *field; field++)
   {
-    if (bitmap_is_set(table->write_set, (*field)->field_index))
+    if (!(*field)->invisible && bitmap_is_set(table->write_set, (*field)->field_index))
     {
       append_ident(&update_string, (*field)->field_name.str,
                    (*field)->field_name.length,
