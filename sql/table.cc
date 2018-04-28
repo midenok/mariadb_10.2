@@ -8716,7 +8716,15 @@ bool TR_table::query_sees(bool &result, ulonglong trx_id1, ulonglong trx_id0,
 
   if (trx_id1 == ULONGLONG_MAX || trx_id0 == 0)
   {
-    result= true;
+    if (trx_id0 != trx_id1)
+      result= true;
+    return false;
+  }
+
+  if (trx_id0 == ULONGLONG_MAX || trx_id1 == 0)
+  {
+    if (trx_id0 != trx_id1)
+      result= false;
     return false;
   }
 
