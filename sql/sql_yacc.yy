@@ -5880,7 +5880,7 @@ opt_versioning_rotation:
 opt_versioning_interval_start:
          /* empty */
          {
-           $$= thd->systime();
+           $$= thd->query_start();
          }
        | remember_tok_start STARTS_SYM ulong_num
          {
