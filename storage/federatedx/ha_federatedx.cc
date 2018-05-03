@@ -3216,7 +3216,14 @@ int ha_federatedx::delete_all_rows()
   query.length(0);
 
   query.set_charset(system_charset_info);
-  query.append(STRING_WITH_LEN("TRUNCATE "));
+  if (thd->lex->sql_command == SQLCOM_TRUNCATE)
+  {
+    query.append(STRING_WITH_LEN("TRUNCATE "));
+  }
+  else
+  {
+    query.append(STRING_WITH_LEN("DELETE FROM "));
+  }
   append_ident(&query, share->table_name, share->table_name_length,
                ident_quote_char);
 
