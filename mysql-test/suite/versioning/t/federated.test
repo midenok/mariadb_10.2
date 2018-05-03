@@ -1,0 +1,25 @@
+--source include/not_embedded.inc
+--source suite/versioning/engines.inc
+--source suite/versioning/common.inc
+
+install soname 'ha_federatedx';
+
+call create_table('t1', 'x int');
+--replace_result $MASTER_MYPORT MASTER_MYPORT
+eval create or replace table tf engine=FEDERATED connection='mysql://root@127.0.0.1:$MASTER_MYPORT/test/t1';
+insert into t1 values (1);
+select * from tf;
+insert into tf (x) values (2);
+select * from t1;
+select * from tf;
+
+delete from tf;
+select *, check_row(row_start, row_end) from t1 for system_time all;
+select * from tf;
+
+truncate tf;
+select * from t1 for system_time all;
+
+drop database test;
+create database test;
+uninstall soname 'ha_federatedx';

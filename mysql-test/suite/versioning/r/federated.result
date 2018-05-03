@@ -1,0 +1,29 @@
+install soname 'ha_federatedx';
+call create_table('t1', 'x int');
+create or replace table tf engine=FEDERATED connection='mysql://root@127.0.0.1:MASTER_MYPORT/test/t1';
+insert into t1 values (1);
+select * from tf;
+x
+1
+insert into tf (x) values (2);
+select * from t1;
+x
+1
+2
+select * from tf;
+x
+1
+2
+delete from tf;
+select *, check_row(row_start, row_end) from t1 for system_time all;
+x	check_row(row_start, row_end)
+1	HISTORICAL ROW
+2	HISTORICAL ROW
+select * from tf;
+x
+truncate tf;
+select * from t1 for system_time all;
+x
+drop database test;
+create database test;
+uninstall soname 'ha_federatedx';
