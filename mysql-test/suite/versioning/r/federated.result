@@ -80,41 +80,6 @@ order by y;
 id	y	check_row(row_start, row_end)
 2	2	HISTORICAL ROW
 2	22	CURRENT ROW
-# Partitioned
-create or replace table t1 (x int)
-with system versioning
-partition by system_time limit 3 (
-partition p0 history,
-partition p1 history,
-partition pn current);
-insert into tf (x) values (1), (2), (3), (4);
-update tf set x= x + 10;
-select *, check_row(row_start, row_end) from t1 for system_time all
-order by x;
-x	check_row(row_start, row_end)
-1	HISTORICAL ROW
-2	HISTORICAL ROW
-3	HISTORICAL ROW
-4	HISTORICAL ROW
-11	CURRENT ROW
-12	CURRENT ROW
-13	CURRENT ROW
-14	CURRENT ROW
-delete from tf;
-select *, check_row(row_start, row_end) from t1 partition (p0)
-order by x;
-x	check_row(row_start, row_end)
-1	HISTORICAL ROW
-2	HISTORICAL ROW
-3	HISTORICAL ROW
-4	HISTORICAL ROW
-select *, check_row(row_start, row_end) from t1 partition (p1)
-order by x;
-x	check_row(row_start, row_end)
-11	HISTORICAL ROW
-12	HISTORICAL ROW
-13	HISTORICAL ROW
-14	HISTORICAL ROW
 drop database test;
 create database test;
 uninstall soname 'ha_federatedx';
