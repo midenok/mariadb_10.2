@@ -5,4 +5,8 @@ drop function current_row;
 drop function check_row;
 drop function check_result;
 drop procedure create_table;
+set @@global.time_zone= @saved_time_zime;
+
+drop database test;
+create database test;
 --enable_query_log
