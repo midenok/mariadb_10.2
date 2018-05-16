@@ -528,5 +528,15 @@ ERROR HY000: System versioning tables in the `mysql` database are not suported
 alter table user add system versioning;
 ERROR HY000: System versioning tables in the `mysql` database are not suported
 use test;
+# ignore CHECK for historical rows
+create or replace table t (a int) with system versioning;
+insert into t values (0), (1);
+delete from t where a = 0;
+alter table t add check (a > 1);
+ERROR 23000: CONSTRAINT `CONSTRAINT_1` failed for `test`.`t`
+alter table t add check (a > 0);
+insert into t values (0);
+ERROR 23000: CONSTRAINT `CONSTRAINT_1` failed for `test`.`t`
+insert into t values (2);
 drop database test;
 create database test;
