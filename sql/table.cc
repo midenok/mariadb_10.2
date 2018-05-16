@@ -5225,6 +5225,8 @@ int TABLE::verify_constraints(bool ignore_failure)
   if (check_constraints &&
       !(in_use->variables.option_bits & OPTION_NO_CHECK_CONSTRAINT_CHECKS))
   {
+    if (versioned() && !vers_end_field()->is_max())
+      return VIEW_CHECK_OK;
     for (Virtual_column_info **chk= check_constraints ; *chk ; chk++)
     {
       /* yes! NULL is ok, see 4.23.3.4 Table check constraints, part 2, SQL:2016 */

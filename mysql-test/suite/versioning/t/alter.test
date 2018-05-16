@@ -16,6 +16,7 @@ alter table t add column y int;
 alter table t add primary key (a);
 --error ER_VERS_ALTER_NOT_ALLOWED
 alter table t add unique key (a);
+alter table t add check (a > 0);
 --error ER_VERS_ALTER_ENGINE_PROHIBITED
 alter table t engine innodb;
 
