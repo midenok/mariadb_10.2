@@ -8678,14 +8678,14 @@ bool TR_table::add_subquery(THD* thd, Vers_history_point &p, uint &subq_n, bool 
       return true;
     }
     static const LEX_CSTRING subq_prefix= {C_STRING_WITH_LEN("__trt_")};
-    SString *alias_str= newx SString(subq_prefix);
+    String *alias_str= newx String(subq_prefix, table_alias_charset);
     if (!alias_str)
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
     alias_str->append_ulonglong(subq_n);
-    LEX_CSTRING alias= *alias_str;
+    LEX_CSTRING alias= alias_str->lex_cstring();
     TABLE_LIST *subquery= thd->lex->select_lex.add_table_to_list(thd, ti, &alias, 0,
                                                    TL_READ, MDL_SHARED_READ);
     if (!subquery)
