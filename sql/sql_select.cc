@@ -900,8 +900,7 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
         cond1= newx Item_func_eq(thd, row_end, curr);
         break;
       case SYSTEM_TIME_AS_OF:
-	// FIXME: respect point_in_time1
-        trx_id0= vers_conditions.start.get_item(thd, context);
+        trx_id0= vers_conditions.start.make_trx_id(thd, context);
         cond1= newx Item_func_trt_trx_sees_eq(thd, trx_id0, row_start);
         cond2= newx Item_func_trt_trx_sees(thd, row_end, trx_id0);
         break;
@@ -909,9 +908,8 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
 	cond3= newx Item_func_lt(thd, point_in_time1, point_in_time2);
         /* fall through */
       case SYSTEM_TIME_BETWEEN:
-	// FIXME: respect point_in_time
-        trx_id0= vers_conditions.start.get_item(thd, context);
-        trx_id1= vers_conditions.end.get_item(thd, context);
+        trx_id0= vers_conditions.start.make_trx_id(thd, context);
+        trx_id1= vers_conditions.end.make_trx_id(thd, context);
         cond1= vers_conditions.type == SYSTEM_TIME_FROM_TO
           ? newx Item_func_trt_trx_sees(thd, trx_id1, row_start)
           : newx Item_func_trt_trx_sees_eq(thd, trx_id1, row_start);
@@ -920,10 +918,7 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
 	  cond3= newx Item_func_le(thd, point_in_time1, point_in_time2);
         break;
       case SYSTEM_TIME_BEFORE:
-	// FIXME: use get_item()
-        trx_id0= vers_conditions.start.unit == VERS_TIMESTAMP
-          ? newx Item_func_trt_id(thd, point_in_time1, FLD_TRX_ID, true)
-          : point_in_time1;
+        trx_id0= vers_conditions.start.make_trx_id(thd, context);
         cond1= newx Item_func_trt_trx_sees(thd, trx_id0, row_end);
         break;
       default:

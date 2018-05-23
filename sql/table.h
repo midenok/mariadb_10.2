@@ -1860,7 +1860,7 @@ public:
   bool eq(const vers_history_point_t &point) const;
   Item_field *make_tr_field(THD *thd, Name_resolution_context &ctx,
                            tr_field_id_t field) const;
-  Item *get_item(THD *thd, Name_resolution_context &ctx) const;
+  Item *make_trx_id(THD *thd, Name_resolution_context &ctx) const;
 };
 
 struct vers_select_conds_t
@@ -3018,7 +3018,7 @@ public:
 
   bool setup_select();
   static
-  bool add_subquery(THD* thd, Vers_history_point &p, uint &subq_n, bool backwards= false);
+  bool add_subquery(THD* thd, Vers_history_point &p, SELECT_LEX *sl, uint &subq_n, bool backwards= false);
 
   /**
      Opens a transaction_registry table.

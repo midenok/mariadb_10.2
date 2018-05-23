@@ -8569,7 +8569,7 @@ bool fk_modifies_child(enum_fk_option opt)
 
 
 #define newx new (thd->mem_root)
-Item* Vers_history_point::get_item(THD* thd, Name_resolution_context& ctx) const
+Item* Vers_history_point::make_trx_id(THD* thd, Name_resolution_context& ctx) const
 {
   if (unit != VERS_TIMESTAMP)
     return item;
@@ -8579,7 +8579,9 @@ Item* Vers_history_point::get_item(THD* thd, Name_resolution_context& ctx) const
   return newx Item_field(thd, &ctx, tr_table->table->field[FLD_TRX_ID]);
 }
 
-bool TR_table::add_subquery(THD* thd, Vers_history_point &p, uint &subq_n, bool backwards)
+bool TR_table::add_subquery(THD* thd, Vers_history_point &p,
+                            SELECT_LEX *cur_select, uint &subq_n,
+                            bool backwards)
 {
   LEX *lex= thd->lex;
   if (!lex->expr_allows_subselect)
@@ -8669,7 +8671,7 @@ bool TR_table::add_subquery(THD* thd, Vers_history_point &p, uint &subq_n, bool 
     lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_LIMIT);
   }
   { // add subquery to outer query
-    thd->lex->current_select= &thd->lex->select_lex;
+    thd->lex->current_select= cur_select;
     SELECT_LEX_UNIT *unit= sel->master_unit();
     Table_ident *ti= newx Table_ident(unit);
     if (ti == NULL)
@@ -8678,7 +8680,7 @@ bool TR_table::add_subquery(THD* thd, Vers_history_point &p, uint &subq_n, bool 
       return true;
     }
     static const LEX_CSTRING subq_prefix= {C_STRING_WITH_LEN("__trt_")};
-    String *alias_str= newx String(subq_prefix, table_alias_charset);
+    String *alias_str= newx String(subq_prefix.str, table_alias_charset);
     if (!alias_str)
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
@@ -8686,12 +8688,12 @@ bool TR_table::add_subquery(THD* thd, Vers_history_point &p, uint &subq_n, bool 
     }
     alias_str->append_ulonglong(subq_n);
     LEX_CSTRING alias= alias_str->lex_cstring();
-    TABLE_LIST *subquery= thd->lex->select_lex.add_table_to_list(thd, ti, &alias, 0,
+    TABLE_LIST *subquery= cur_select->add_table_to_list(thd, ti, &alias, 0,
                                                    TL_READ, MDL_SHARED_READ);
     if (!subquery)
       return true;
 
-    thd->lex->select_lex.add_joined_table(subquery);
+    cur_select->add_joined_table(subquery);
     p.tr_table= subquery;
     subq_n++;
   }
