@@ -8579,6 +8579,28 @@ Item* Vers_history_point::make_trx_id(THD* thd, Name_resolution_context& ctx) co
   return newx Item_field(thd, &ctx, tr_table->table->field[FLD_TRX_ID]);
 }
 
+class LEX_context
+{
+  LEX *lex;
+  SELECT_LEX *current_select;
+  int nest_level;
+
+public:
+  LEX_context(LEX *_lex, SELECT_LEX *new_select) :
+    lex(_lex),
+    current_select(_lex->current_select),
+    nest_level(_lex->nest_level)
+  {
+    lex->current_select= new_select;
+    lex->nest_level= new_select->nest_level;
+  }
+  ~LEX_context()
+  {
+    lex->current_select= current_select;
+    lex->nest_level= nest_level;
+  }
+};
+
 bool TR_table::add_subquery(THD* thd, Vers_history_point &p,
                             SELECT_LEX *cur_select, uint &subq_n,
                             bool backwards)
@@ -8590,9 +8612,10 @@ bool TR_table::add_subquery(THD* thd, Vers_history_point &p,
     return true;
   }
 
-  Query_arena_stmt on_stmt_arena(thd);
+  Query_arena_stmt on_stmt_arena(thd); // FIXME: is it needed?
   lex->derived_tables|= DERIVED_SUBQUERY;
 
+  LEX_context lex_ctx(lex, cur_select);
   if (mysql_new_select(lex, 1, NULL))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
@@ -8671,7 +8694,7 @@ bool TR_table::add_subquery(THD* thd, Vers_history_point &p,
     lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_LIMIT);
   }
   { // add subquery to outer query
-    thd->lex->current_select= cur_select;
+    lex->current_select= cur_select;
     SELECT_LEX_UNIT *unit= sel->master_unit();
     Table_ident *ti= newx Table_ident(unit);
     if (ti == NULL)
