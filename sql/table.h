@@ -1858,8 +1858,6 @@ public:
   }
   void bad_expression_data_type_error(const char *type) const;
   bool eq(const vers_history_point_t &point) const;
-  Item_field *make_tr_field(THD *thd, Name_resolution_context &ctx,
-                           tr_field_id_t field) const;
   Item *make_trx_id(THD *thd, Name_resolution_context &ctx) const;
 };
 
