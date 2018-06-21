@@ -62,6 +62,9 @@ static inline bool dd_frm_is_view(THD *thd, char *path)
   return dd_frm_type(thd, path, NULL, &not_used2, NULL) == TABLE_TYPE_VIEW;
 }
 
+bool dd_table_versioned(THD *thd, const char *db, const char *table_name,
+                        bool &versioned);
+
 bool dd_recreate_table(THD *thd, const char *db, const char *table_name,
                        const char *path = NULL);
 

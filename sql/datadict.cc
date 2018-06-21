@@ -182,6 +182,27 @@ err:
 }
 
 
+/**
+  Check if table is versioned.
+
+  @param[in]  thd               The current session.
+  @param[in]  db                Database name
+  @param[in]  table_name        Table name
+  @param[out] versioned         True if versioned
+
+  @retval  FALSE  Success.
+  @retval  TRUE   Error.
+*/
+
+bool dd_table_versioned(THD *thd, const char *db, const char *table_name,
+                        bool &versioned)
+{
+  char path[FN_REFLEN + 1];
+  build_table_filename(path, sizeof(path) - 1, db, table_name, "", 0);
+  return TABLE_TYPE_UNKNOWN == dd_frm_type(thd, path, NULL, NULL, &versioned);
+}
+
+
 /*
   Regenerate a metadata locked table.
 

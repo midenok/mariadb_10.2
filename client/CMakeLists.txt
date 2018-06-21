@@ -52,7 +52,7 @@ SET_TARGET_PROPERTIES(mysqltest PROPERTIES ENABLE_EXPORTS TRUE)
 MYSQL_ADD_EXECUTABLE(mysqlcheck mysqlcheck.c)
 TARGET_LINK_LIBRARIES(mysqlcheck ${CLIENT_LIB})
 
-MYSQL_ADD_EXECUTABLE(mysqldump mysqldump.c ../sql-common/my_user.c)
+MYSQL_ADD_EXECUTABLE(mysqldump mysqldump.cc ../sql-common/my_user.c)
 TARGET_LINK_LIBRARIES(mysqldump ${CLIENT_LIB})
 
 

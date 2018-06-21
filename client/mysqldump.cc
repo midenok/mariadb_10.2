@@ -16,7 +16,7 @@
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 */
 
-/* mysqldump.c  - Dump a tables contents and format to an ASCII file
+/* mysqldump.cc  - Dump a tables contents and format to an ASCII file
 **
 ** The author's original notes follow :-
 **
@@ -53,6 +53,7 @@
 #include "mysql.h"
 #include "mysql_version.h"
 #include "mysqld_error.h"
+#include "datadict.h"
 
 #include <welcome_copyright_notice.h> /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
@@ -3742,6 +3743,14 @@ static void dump_table(char *table, char *db)
 
   result_table= quote_name(table,table_buff, 1);
   opt_quoted_table= quote_name(table, table_buff2, 0);
+
+  if (dd_table_versioned(db, table, versioned))
+  {
+    fprintf(stderr,"%s: Error in getting FRM info for table: %s !  Aborting.\n",
+            my_progname_short, result_table);
+    error= EX_ILLEGAL_TABLE;
+    goto err;
+  }
 
   verbose_msg("-- Sending SELECT query...\n");
 

@@ -6,7 +6,7 @@ select ifnull(max(transaction_id), 0) into @start_trx_id from mysql.transaction_
 set @test_start=now(6);
 
 delimiter ~~;
-create procedure if not exists verify_trt()
+create or replace procedure verify_trt()
 begin
   set @i= 0;
   select
@@ -22,7 +22,7 @@ begin
   from mysql.transaction_registry;
 end~~
 
-create procedure if not exists verify_trt_dummy(recs int)
+create or replace procedure verify_trt_dummy(recs int)
 begin
   declare i int default 1;
   create temporary table tmp (No int, A bool, B bool, C bool, D bool);
@@ -36,7 +36,7 @@ end~~
 
 delimiter ;~~
 
-create function check_result (cond boolean)
+create or replace function check_result (cond boolean)
     returns char(50) deterministic
     return if(cond = 1, '[CORRECT]', '[WRONG]');
 
