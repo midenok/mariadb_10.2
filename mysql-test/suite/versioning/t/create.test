@@ -25,6 +25,43 @@ create or replace table t1 (
 --replace_result $default_engine DEFAULT_ENGINE
 show create table t1;
 
+create or replace table t1 (
+  y int unsigned
+) with transactional system versioning
+engine innodb;
+show create table t1;
+
+--error ER_VERS_ENGINE_UNSUPPORTED
+create or replace table t1 (
+  y2 int unsigned
+) with transactional system versioning
+engine myisam;
+
+--error ER_VERS_FIELD_WRONG_TYPE
+create or replace table t1 (
+  y3 int unsigned,
+  row_start timestamp(6) as row start invisible,
+  row_end timestamp(6) as row end invisible,
+  period for system_time (row_start, row_end)
+) with transactional system versioning;
+
+--error ER_VERS_FIELD_WRONG_TYPE
+create or replace table t1 (
+  y4 int unsigned,
+  row_start bigint(20) unsigned as row start invisible,
+  row_end timestamp(6) as row end invisible,
+  period for system_time (row_start, row_end)
+) with transactional system versioning;
+
+create or replace table t1 (
+  y5 int unsigned,
+  row_start bigint(20) unsigned as row start invisible,
+  row_end bigint(20) unsigned as row end invisible,
+  period for system_time (row_start, row_end)
+) with transactional system versioning
+engine innodb;
+show create table t1;
+
 --replace_result $default_engine DEFAULT_ENGINE
 --error ER_VERS_PERIOD_COLUMNS
 eval create or replace table t1 (

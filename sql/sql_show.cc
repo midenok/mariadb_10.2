@@ -2409,7 +2409,15 @@ int show_create_table(THD *thd, TABLE_LIST *table_list, String *packet,
                       table_list->schema_table != 0, 0, packet);
 
   if (table->versioned())
-    packet->append(STRING_WITH_LEN(" WITH SYSTEM VERSIONING"));
+  {
+    if (table->versioned(VERS_TRX_ID) &&
+        table->vers_start_field()->invisible  > INVISIBLE_USER)
+    {
+      packet->append(STRING_WITH_LEN(" WITH TRANSACTIONAL SYSTEM VERSIONING"));
+    }
+    else
+      packet->append(STRING_WITH_LEN(" WITH SYSTEM VERSIONING"));
+  }
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   {

@@ -1308,6 +1308,8 @@ int Lex_input_stream::lex_token(YYSTYPE *yylval, THD *thd)
       return WITH_ROLLUP_SYM;
     case SYSTEM:
       return WITH_SYSTEM_SYM;
+    case TRANSACTIONAL_SYM:
+      return WITH_TRANSACTIONAL_SYM;
     default:
       /*
         Save the token following 'WITH'

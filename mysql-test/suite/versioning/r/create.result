@@ -84,6 +84,49 @@ t1	CREATE TABLE `t1` (
   `x2` int(10) unsigned DEFAULT NULL
 ) ENGINE=DEFAULT_ENGINE DEFAULT CHARSET=latin1 WITH SYSTEM VERSIONING
 create or replace table t1 (
+y int unsigned
+) with transactional system versioning
+engine innodb;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `y` int(10) unsigned DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 WITH TRANSACTIONAL SYSTEM VERSIONING
+create or replace table t1 (
+y2 int unsigned
+) with transactional system versioning
+engine myisam;
+ERROR HY000: Transaction system versioning for `MyISAM` is not supported
+create or replace table t1 (
+y3 int unsigned,
+row_start timestamp(6) as row start invisible,
+row_end timestamp(6) as row end invisible,
+period for system_time (row_start, row_end)
+) with transactional system versioning;
+ERROR HY000: `row_start` must be of type BIGINT(20) UNSIGNED for system-versioned table `t1`
+create or replace table t1 (
+y4 int unsigned,
+row_start bigint(20) unsigned as row start invisible,
+row_end timestamp(6) as row end invisible,
+period for system_time (row_start, row_end)
+) with transactional system versioning;
+ERROR HY000: `row_end` must be of type BIGINT(20) UNSIGNED for system-versioned table `t1`
+create or replace table t1 (
+y5 int unsigned,
+row_start bigint(20) unsigned as row start invisible,
+row_end bigint(20) unsigned as row end invisible,
+period for system_time (row_start, row_end)
+) with transactional system versioning
+engine innodb;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `y5` int(10) unsigned DEFAULT NULL,
+  `row_start` bigint(20) unsigned GENERATED ALWAYS AS ROW START INVISIBLE,
+  `row_end` bigint(20) unsigned GENERATED ALWAYS AS ROW END INVISIBLE,
+  PERIOD FOR SYSTEM_TIME (`row_start`, `row_end`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 WITH SYSTEM VERSIONING
+create or replace table t1 (
 x3 int unsigned,
 Sys_start timestamp(6) as row start invisible,
 Sys_end timestamp(6) as row end invisible,

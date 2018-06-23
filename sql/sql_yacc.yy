@@ -1202,6 +1202,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 %token  WITH_CUBE_SYM                 /* INTERNAL */
 %token  WITH_ROLLUP_SYM               /* INTERNAL */
 %token  WITH_SYSTEM_SYM               /* INTERNAL */
+%token  WITH_TRANSACTIONAL_SYM        /* INTERNAL */
 %token  XOR
 %token  YEAR_MONTH_SYM
 %token  ZEROFILL
@@ -2166,6 +2167,7 @@ END_OF_INPUT
 %type <vers_range_unit> opt_history_unit
 %type <vers_history_point> history_point
 %type <vers_column_versioning> with_or_without_system
+%type <vers_range_unit> with_system
 %%
 
 
@@ -6331,8 +6333,19 @@ opt_versioning_option:
         | versioning_option
         ;
 
+with_system:
+        WITH_SYSTEM_SYM
+          {
+            $$= VERS_UNDEFINED;
+          }
+        | WITH_TRANSACTIONAL_SYM SYSTEM
+          {
+            $$= VERS_TRX_ID;
+          }
+        ;
+
 versioning_option:
-        WITH_SYSTEM_SYM VERSIONING_SYM
+        with_system VERSIONING_SYM
           {
             if (unlikely(Lex->create_info.options & HA_LEX_CREATE_TMP_TABLE))
             {
@@ -6346,6 +6359,7 @@ versioning_option:
             {
               Lex->alter_info.flags|= ALTER_ADD_SYSTEM_VERSIONING;
               Lex->create_info.options|= HA_VERSIONED_TABLE;
+              Lex->create_info.vers_info.check_unit= $1;
             }
           }
         ;
