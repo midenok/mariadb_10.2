@@ -178,6 +178,7 @@ extern char *opt_backup_history_logname, *opt_backup_progress_logname,
             *opt_backup_settings_name;
 extern const char *log_output_str;
 extern const char *log_backup_output_str;
+extern volatile sig_atomic_t kill_in_progress;
 
 /* System Versioning begin */
 enum vers_system_time_t
