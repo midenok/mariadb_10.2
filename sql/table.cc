@@ -1114,6 +1114,12 @@ bool parse_vcol_defs(THD *thd, MEM_ROOT *mem_root, TABLE *table,
     }
     else if (field->has_update_default_function() && !field->default_value)
       *(dfield_ptr++)= *field_ptr;
+    else if (field->flags & VERS_SYSTEM_FIELD)
+    {
+      vcol= add_virtual_expression(thd, );
+      (*field_ptr)->default_value= vcol;
+      *(dfield_ptr++)= *field_ptr;
+    }
   }
 
   if (vfield_ptr)
@@ -1960,7 +1966,15 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
         {
         case MYSQL_TYPE_TIMESTAMP2:
         case MYSQL_TYPE_DATETIME2:
+        {
+//           Item_default_value *def= new (&mem_root) Item_default_value(
+//             thd, thd->lex->current_context());
+          vcol_info= new (&mem_root) Virtual_column_info(/*VCOL_DEFAULT, def*/);
+          vcol_info->set_vcol_type(VCOL_DEFAULT);
+          vcol_info->stored_in_db= true;
+          share->default_expressions++;
           break;
+        }
         case MYSQL_TYPE_LONGLONG:
           if (vers_can_native)
           {

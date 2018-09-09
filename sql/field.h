@@ -574,6 +574,17 @@ public:
     name.str= NULL;
     name.length= 0;
   };
+  Virtual_column_info(enum_vcol_info_type _vcol_type, Item *_expr)
+  : vcol_type(_vcol_type),
+    field_type((enum enum_field_types)MYSQL_TYPE_VIRTUAL),
+    in_partitioning_expr(FALSE), stored_in_db(FALSE),
+    utf8(false), expr(_expr), flags(0)
+  {
+    DBUG_ASSERT(vcol_type != VCOL_TYPE_NONE);
+    DBUG_ASSERT(expr);
+    name.str= NULL;
+    name.length= 0;
+  };
   ~Virtual_column_info() {}
   enum_vcol_info_type get_vcol_type() const
   {
