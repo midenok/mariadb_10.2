@@ -892,10 +892,26 @@ update_begin:
           {
             if (table->versioned(VERS_TIMESTAMP))
             {
-              store_record(table, record[2]);
-              table->mark_columns_per_binlog_row_image();
-              error= vers_insert_history_row(table);
-              restore_record(table, record[2]);
+              error= table->file->extra(HA_EXTRA_REMEMBER_POS);
+              if (likely(!error))
+              {
+                store_record(table, record[2]);
+                table->mark_columns_per_binlog_row_image();
+                error= vers_insert_history_row(table);
+                restore_record(table, record[2]);
+
+                if (likely(!error))
+                {
+                  error= table->file->extra(HA_EXTRA_RESTORE_POS);
+                  if (likely(!error))
+                  {
+                    store_record(table, record[1]);
+                    table->vers_update_fields();
+                    error= table->file->ha_update_row(table->record[1],
+                                                      table->record[0]);
+                  }
+                }
+              }
             }
             if (likely(!error))
               updated_sys_ver++;
@@ -2415,14 +2431,26 @@ int multi_update::send_data(List<Item> &not_used_values)
           {
             if (table->versioned(VERS_TIMESTAMP))
             {
-              store_record(table, record[2]);
-              if (vers_insert_history_row(table))
+              error= table->file->extra(HA_EXTRA_REMEMBER_POS);
+              if (likely(!error))
               {
+                store_record(table, record[2]);
+                table->mark_columns_per_binlog_row_image();
+                error= vers_insert_history_row(table);
                 restore_record(table, record[2]);
-                error= 1;
-                break;
+
+                if (likely(!error))
+                {
+                  error= table->file->extra(HA_EXTRA_RESTORE_POS);
+                  if (likely(!error))
+                  {
+                    store_record(table, record[1]);
+                    table->vers_update_fields();
+                    error= table->file->ha_update_row(table->record[1],
+                                                      table->record[0]);
+                  }
+                }
               }
-              restore_record(table, record[2]);
             }
             updated_sys_ver++;
           }
@@ -2705,8 +2733,8 @@ int multi_update::do_updates()
             goto err2;
           }
         }
-        if (has_vers_fields && table->versioned())
-          table->vers_update_fields();
+//         if (has_vers_fields && table->versioned())
+//           table->vers_update_fields();
 
         if (unlikely((local_error=
                       table->file->ha_update_row(table->record[1],
@@ -2728,14 +2756,36 @@ int multi_update::do_updates()
           {
             if (table->versioned(VERS_TIMESTAMP))
             {
-              store_record(table, record[2]);
-              if ((local_error= vers_insert_history_row(table)))
+              local_error= table->file->extra(HA_EXTRA_REMEMBER_POS);
+              if (unlikely(local_error))
               {
-                restore_record(table, record[2]);
                 err_table = table;
                 goto err;
               }
+              store_record(table, record[2]);
+              table->mark_columns_per_binlog_row_image();
+              local_error= vers_insert_history_row(table);
               restore_record(table, record[2]);
+              if (unlikely(local_error))
+              {
+                err_table = table;
+                goto err;
+              }
+              local_error= table->file->extra(HA_EXTRA_RESTORE_POS);
+              if (unlikely(local_error))
+              {
+                err_table = table;
+                goto err;
+              }
+              store_record(table, record[1]);
+              table->vers_update_fields();
+              local_error= table->file->ha_update_row(table->record[1],
+                                                table->record[0]);
+              if (unlikely(local_error))
+              {
+                err_table = table;
+                goto err;
+              }
             }
             updated_sys_ver++;
           }
