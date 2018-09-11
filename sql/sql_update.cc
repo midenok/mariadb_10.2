@@ -266,6 +266,29 @@ static void prepare_record_for_error_message(int error, TABLE *table)
   DBUG_VOID_RETURN;
 }
 
+int TABLE::vers_process_update()
+{
+  int error= file->extra(HA_EXTRA_REMEMBER_POS);
+  if (unlikely(error))
+    return error;
+
+  store_record(this, record[2]);
+  mark_columns_per_binlog_row_image();
+  error= vers_insert_history_row(this);
+  restore_record(this, record[2]);
+  if (unlikely(error))
+    return error;
+
+  error= file->extra(HA_EXTRA_RESTORE_POS);
+  if (unlikely(error))
+    return error;
+
+  store_record(this, record[1]);
+  vers_update_fields();
+  error= file->ha_update_row(record[1], record[0]);
+  return error;
+}
+
 int mysql_update_inner(THD *thd, TABLE_LIST *table_list, List<Item> &fields,
                        List<Item> &values, COND *conds, uint order_num,
                        ORDER *order, ha_rows limit, bool ignore,
@@ -892,26 +915,7 @@ update_begin:
           {
             if (table->versioned(VERS_TIMESTAMP))
             {
-              error= table->file->extra(HA_EXTRA_REMEMBER_POS);
-              if (likely(!error))
-              {
-                store_record(table, record[2]);
-                table->mark_columns_per_binlog_row_image();
-                error= vers_insert_history_row(table);
-                restore_record(table, record[2]);
-
-                if (likely(!error))
-                {
-                  error= table->file->extra(HA_EXTRA_RESTORE_POS);
-                  if (likely(!error))
-                  {
-                    store_record(table, record[1]);
-                    table->vers_update_fields();
-                    error= table->file->ha_update_row(table->record[1],
-                                                      table->record[0]);
-                  }
-                }
-              }
+              error= table->vers_process_update();
             }
             if (likely(!error))
               updated_sys_ver++;
@@ -2431,26 +2435,7 @@ int multi_update::send_data(List<Item> &not_used_values)
           {
             if (table->versioned(VERS_TIMESTAMP))
             {
-              error= table->file->extra(HA_EXTRA_REMEMBER_POS);
-              if (likely(!error))
-              {
-                store_record(table, record[2]);
-                table->mark_columns_per_binlog_row_image();
-                error= vers_insert_history_row(table);
-                restore_record(table, record[2]);
-
-                if (likely(!error))
-                {
-                  error= table->file->extra(HA_EXTRA_RESTORE_POS);
-                  if (likely(!error))
-                  {
-                    store_record(table, record[1]);
-                    table->vers_update_fields();
-                    error= table->file->ha_update_row(table->record[1],
-                                                      table->record[0]);
-                  }
-                }
-              }
+              error= table->vers_process_update();
             }
             updated_sys_ver++;
           }
@@ -2756,34 +2741,10 @@ int multi_update::do_updates()
           {
             if (table->versioned(VERS_TIMESTAMP))
             {
-              local_error= table->file->extra(HA_EXTRA_REMEMBER_POS);
+              local_error= table->vers_process_update();
               if (unlikely(local_error))
               {
-                err_table = table;
-                goto err;
-              }
-              store_record(table, record[2]);
-              table->mark_columns_per_binlog_row_image();
-              local_error= vers_insert_history_row(table);
-              restore_record(table, record[2]);
-              if (unlikely(local_error))
-              {
-                err_table = table;
-                goto err;
-              }
-              local_error= table->file->extra(HA_EXTRA_RESTORE_POS);
-              if (unlikely(local_error))
-              {
-                err_table = table;
-                goto err;
-              }
-              store_record(table, record[1]);
-              table->vers_update_fields();
-              local_error= table->file->ha_update_row(table->record[1],
-                                                table->record[0]);
-              if (unlikely(local_error))
-              {
-                err_table = table;
+                err_table= table;
                 goto err;
               }
             }

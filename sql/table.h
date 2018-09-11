@@ -1546,6 +1546,7 @@ public:
   int delete_row();
   void vers_update_fields();
   void vers_update_end();
+  int vers_process_update();
 
 /** Number of additional fields used in versioned tables */
 #define VERSIONING_FIELDS 2
