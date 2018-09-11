@@ -268,24 +268,30 @@ static void prepare_record_for_error_message(int error, TABLE *table)
 
 int TABLE::vers_process_update()
 {
-  int error= file->extra(HA_EXTRA_REMEMBER_POS);
+  // record[1]: old row
+  // record[0]: new row
+  int error;
+
+  memcpy(record[2], record[1], s->reclength);
+  store_record(this, record[1]);
+  vers_update_fields();
+  if (file->ha_table_flags() & HA_PRIMARY_KEY_REQUIRED_FOR_POSITION)
+  {
+    error= file->ha_rnd_pos_by_record(record[1]);
+    if (unlikely(error))
+      return error;
+  }
+  error= file->ha_update_row(record[1], record[0]);
   if (unlikely(error))
     return error;
 
+  memcpy(record[1], record[2], s->reclength);
   store_record(this, record[2]);
-  mark_columns_per_binlog_row_image();
   error= vers_insert_history_row(this);
   restore_record(this, record[2]);
   if (unlikely(error))
     return error;
 
-  error= file->extra(HA_EXTRA_RESTORE_POS);
-  if (unlikely(error))
-    return error;
-
-  store_record(this, record[1]);
-  vers_update_fields();
-  error= file->ha_update_row(record[1], record[0]);
   return error;
 }
 
@@ -913,8 +919,9 @@ update_begin:
         {
           if (has_vers_fields && table->versioned())
           {
-            if (table->versioned(VERS_TIMESTAMP))
+            if (table->versioned(VERS_TIMESTAMP) && table->vers_write)
             {
+              table->mark_columns_per_binlog_row_image();
               error= table->vers_process_update();
             }
             if (likely(!error))
@@ -2433,7 +2440,7 @@ int multi_update::send_data(List<Item> &not_used_values)
           }
           else if (has_vers_fields && table->versioned())
           {
-            if (table->versioned(VERS_TIMESTAMP))
+            if (table->versioned(VERS_TIMESTAMP) && table->vers_write)
             {
               error= table->vers_process_update();
             }
@@ -2739,7 +2746,7 @@ int multi_update::do_updates()
 
           if (has_vers_fields && table->versioned())
           {
-            if (table->versioned(VERS_TIMESTAMP))
+            if (table->versioned(VERS_TIMESTAMP) && table->vers_write)
             {
               local_error= table->vers_process_update();
               if (unlikely(local_error))
