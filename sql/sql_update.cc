@@ -65,9 +65,12 @@ bool records_are_comparable(const TABLE *table) {
    @return false otherwise.
 */
 
-bool compare_record(const TABLE *table)
+bool compare_record(THD *thd, const TABLE *table)
 {
   DBUG_ASSERT(records_are_comparable(table));
+  const enum_sql_command sqlcom = thd->lex->sql_command;
+  bool skip_sys_fields= (sqlcom == SQLCOM_UPDATE || sqlcom == SQLCOM_UPDATE_MULTI)
+                        && table->versioned_write(VERS_TIMESTAMP);
 
   if ((table->file->ha_table_flags() & HA_PARTIAL_COLUMN_READ) != 0)
   {
@@ -79,6 +82,8 @@ bool compare_record(const TABLE *table)
     for (Field **ptr= table->field ; *ptr != NULL; ptr++)
     {
       Field *field= *ptr;
+      if (skip_sys_fields && field->flags & VERS_SYSTEM_FIELD)
+        continue;
       if (bitmap_is_set(table->write_set, field->field_index))
       {
         if (field->real_maybe_null())
@@ -101,7 +106,7 @@ bool compare_record(const TABLE *table)
      including those not in the write_set. This is cheaper than the
      field-by-field comparison done above.
   */ 
-  if (table->s->can_cmp_whole_record)
+  if (table->s->can_cmp_whole_record && !skip_sys_fields)
     return cmp_record(table,record[1]);
   /* Compare null bits */
   if (memcmp(table->null_flags,
@@ -111,6 +116,8 @@ bool compare_record(const TABLE *table)
   /* Compare updated fields */
   for (Field **ptr= table->field ; *ptr ; ptr++)
   {
+    if (skip_sys_fields && (*ptr)->flags & VERS_SYSTEM_FIELD)
+      continue;
     if (bitmap_is_set(table->write_set, (*ptr)->field_index) &&
 	(*ptr)->cmp_binary_offset(table->s->rec_buff_length))
       return TRUE;
@@ -817,7 +824,7 @@ update_begin:
 
       found++;
 
-      if (!can_compare_record || compare_record(table) ||
+      if (!can_compare_record || compare_record(thd, table) ||
           thd->lex->sql_command == SQLCOM_DELETE)
       {
         if (table->versioned(VERS_TIMESTAMP) &&
@@ -2356,7 +2363,7 @@ int multi_update::send_data(List<Item> &not_used_values)
       */
       table->auto_increment_field_not_null= FALSE;
       found++;
-      if (!can_compare_record || compare_record(table))
+      if (!can_compare_record || compare_record(thd, table))
       {
 	int error;
 
@@ -2685,7 +2692,7 @@ int multi_update::do_updates()
                                             TRG_ACTION_BEFORE, TRUE))
         goto err2;
 
-      if (!can_compare_record || compare_record(table))
+      if (!can_compare_record || compare_record(thd, table))
       {
         int error;
         if (table->default_field &&
