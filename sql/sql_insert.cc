@@ -1813,7 +1813,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
           goto before_trg_err;
 
         bool different_records= (!records_are_comparable(table) ||
-                                 compare_record(thd, table));
+                                 compare_record(table));
         /*
           Default fields must be updated before checking view updateability.
           This branch of INSERT is executed only when a UNIQUE key was violated
