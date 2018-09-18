@@ -978,7 +978,7 @@ public:
 };
 
 
-enum vers_sys_type_t
+enum vers_kind_t
 {
   VERS_UNDEFINED= 0,
   VERS_TIMESTAMP,
@@ -992,7 +992,7 @@ protected:
   Vers_type_handler() {}
 public:
   virtual ~Vers_type_handler() {}
-  virtual vers_sys_type_t kind() const
+  virtual vers_kind_t kind() const
   {
     DBUG_ASSERT(0);
     return VERS_UNDEFINED;
@@ -1007,7 +1007,7 @@ public:
 class Vers_type_timestamp: public Vers_type_handler
 {
 public:
-  virtual vers_sys_type_t kind() const
+  virtual vers_kind_t kind() const
   {
     return VERS_TIMESTAMP;
   }
@@ -1022,7 +1022,7 @@ extern MYSQL_PLUGIN_IMPORT Vers_type_timestamp vers_type_timestamp;
 class Vers_type_trx: public Vers_type_handler
 {
 public:
-  virtual vers_sys_type_t kind() const
+  virtual vers_kind_t kind() const
   {
     return VERS_TRX_ID;
   }
