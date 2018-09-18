@@ -7291,11 +7291,11 @@ bool Vers_parse_info::check_conditions(const Lex_table_name &table_name,
 }
 
 
-static void require_timestamp(const char *field, const char *table)
+static void require_timestamp_error(const char *field, const char *table)
 {
   my_error(ER_VERS_FIELD_WRONG_TYPE, MYF(0), field, "TIMESTAMP(6)", table);
 }
-static void require_trx_id(const char *field, const char *table)
+static void require_trx_id_error(const char *field, const char *table)
 {
   my_error(ER_VERS_FIELD_WRONG_TYPE, MYF(0), field, "BIGINT(20) UNSIGNED",
            table);
@@ -7324,22 +7324,22 @@ bool Vers_parse_info::check_sys_fields(const Lex_table_name &table_name,
 
   const char *row_start_name= row_start->field_name.str;
   const char *row_end_name= row_end->field_name.str;
-  vers_sys_type_t check_unit= VERS_UNDEFINED;
-  vers_sys_type_t row_start_kind= row_start->type_handler()->vers_kind();
-  vers_sys_type_t row_end_kind= row_end->type_handler()->vers_kind();
+  vers_kind_t check_unit= VERS_UNDEFINED;
+  vers_kind_t row_start_kind= row_start->type_handler()->vers_kind();
+  vers_kind_t row_end_kind= row_end->type_handler()->vers_kind();
 
   if (row_start_kind == VERS_TIMESTAMP)
   {
     if (row_start->length != MAX_DATETIME_FULL_WIDTH)
     {
-      require_timestamp(row_start_name, table_name);
+      require_timestamp_error(row_start_name, table_name);
       return true;
     }
 
     if (row_end_kind != VERS_TIMESTAMP ||
         row_end->length != MAX_DATETIME_FULL_WIDTH)
     {
-      require_timestamp(row_end_name, table_name);
+      require_timestamp_error(row_end_name, table_name);
       return true;
     }
 
@@ -7350,7 +7350,7 @@ bool Vers_parse_info::check_sys_fields(const Lex_table_name &table_name,
     if (!(row_start->flags & UNSIGNED_FLAG) ||
         row_start->length != (MY_INT64_NUM_DECIMAL_DIGITS - 1))
     {
-      require_trx_id(row_start_name, table_name);
+      require_trx_id_error(row_start_name, table_name);
       return true;
     }
 
@@ -7358,13 +7358,13 @@ bool Vers_parse_info::check_sys_fields(const Lex_table_name &table_name,
         !(row_end->flags & UNSIGNED_FLAG) ||
         row_end->length != (MY_INT64_NUM_DECIMAL_DIGITS - 1))
     {
-      require_trx_id(row_end_name, table_name);
+      require_trx_id_error(row_end_name, table_name);
       return true;
     }
 
     if (!native)
     {
-      require_timestamp(row_start_name, table_name);
+      require_timestamp_error(row_start_name, table_name);
       return true;
     }
 
@@ -7372,7 +7372,7 @@ bool Vers_parse_info::check_sys_fields(const Lex_table_name &table_name,
   }
   else
   {
-    require_timestamp(row_start_name, table_name);
+    require_timestamp_error(row_start_name, table_name);
     return true;
   }
 
