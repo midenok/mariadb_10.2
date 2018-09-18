@@ -31,6 +31,7 @@
 #include "thr_lock.h"                  /* thr_lock_type */
 #include "filesort_utils.h"
 #include "parse_file.h"
+#include "sql_type.h"               /* vers_sys_type_t */
 
 /* Structs that defines the TABLE */
 

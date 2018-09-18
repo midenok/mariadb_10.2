@@ -9054,15 +9054,15 @@ bool Vers_history_point::check_unit(THD *thd)
     return false;
   if (item->fix_fields_if_needed(thd, &item))
     return true;
-  return item->this_item()->type_handler_for_system_time()->
-           Vers_history_point_check_unit(thd, this);
-}
-
-
-void Vers_history_point::bad_expression_data_type_error(const char *type) const
-{
-  my_error(ER_ILLEGAL_PARAMETER_DATA_TYPE_FOR_OPERATION, MYF(0),
-           type, "FOR SYSTEM_TIME");
+  const Type_handler *t= item->this_item()->type_handler_for_system_time();
+  DBUG_ASSERT(t);
+  if (!t->vers())
+  {
+    my_error(ER_ILLEGAL_PARAMETER_DATA_TYPE_FOR_OPERATION, MYF(0),
+             t->name().ptr(), "FOR SYSTEM_TIME");
+    return true;
+  }
+  return false;
 }
 
 

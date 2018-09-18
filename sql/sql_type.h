@@ -72,7 +72,6 @@ class handler;
 struct Schema_specification_st;
 struct TABLE;
 struct SORT_FIELD_ATTR;
-class Vers_history_point;
 
 
 /**
@@ -979,6 +978,50 @@ public:
 };
 
 
+enum vers_sys_type_t
+{
+  VERS_UNDEFINED= 0,
+  VERS_TIMESTAMP,
+  VERS_TRX_ID
+};
+
+
+class Vers_type_handler
+{
+protected:
+  Vers_type_handler() {}
+public:
+  virtual ~Vers_type_handler() {}
+  virtual vers_sys_type_t kind() const
+  {
+    DBUG_ASSERT(0);
+    return VERS_UNDEFINED;
+  }
+};
+
+
+class Vers_type_timestamp: public Vers_type_handler
+{
+public:
+  virtual vers_sys_type_t kind() const
+  {
+    return VERS_TIMESTAMP;
+  }
+};
+extern MYSQL_PLUGIN_IMPORT Vers_type_timestamp vers_type_timestamp;
+
+
+class Vers_type_trx: public Vers_type_handler
+{
+public:
+  virtual vers_sys_type_t kind() const
+  {
+    return VERS_TRX_ID;
+  }
+};
+extern MYSQL_PLUGIN_IMPORT Vers_type_trx vers_type_trx;
+
+
 class Type_handler
 {
 protected:
@@ -1411,8 +1454,8 @@ public:
   virtual bool
   Item_func_mod_fix_length_and_dec(Item_func_mod *func) const= 0;
 
-  virtual bool
-  Vers_history_point_check_unit(THD *thd, Vers_history_point *point) const;
+  virtual const Vers_type_handler *vers() const { return NULL; }
+  vers_sys_type_t vers_kind() const { return vers() ? vers()->kind() : VERS_UNDEFINED; }
 };
 
 
@@ -2099,6 +2142,7 @@ public:
   bool Item_func_mul_fix_length_and_dec(Item_func_mul *) const;
   bool Item_func_div_fix_length_and_dec(Item_func_div *) const;
   bool Item_func_mod_fix_length_and_dec(Item_func_mod *) const;
+  virtual const Vers_type_handler *vers() const { return &vers_type_trx; }
 };
 
 
@@ -2109,7 +2153,6 @@ public:
   virtual const Type_limits_int *
     type_limits_int_by_unsigned_flag(bool unsigned_flag) const= 0;
   uint32 max_display_length(const Item *item) const;
-  bool Vers_history_point_check_unit(THD *thd, Vers_history_point *p) const;
 };
 
 
@@ -2179,7 +2222,7 @@ public:
   bool Item_func_mul_fix_length_and_dec(Item_func_mul *) const;
   bool Item_func_div_fix_length_and_dec(Item_func_div *) const;
   bool Item_func_mod_fix_length_and_dec(Item_func_mod *) const;
-  bool Vers_history_point_check_unit(THD *thd, Vers_history_point *p) const;
+  virtual const Vers_type_handler *vers() const { return &vers_type_timestamp; }
 };
 
 
@@ -2297,6 +2340,7 @@ public:
   bool Item_func_mul_fix_length_and_dec(Item_func_mul *) const;
   bool Item_func_div_fix_length_and_dec(Item_func_div *) const;
   bool Item_func_mod_fix_length_and_dec(Item_func_mod *) const;
+  virtual const Vers_type_handler *vers() const { return &vers_type_timestamp; }
 };
 
 
@@ -2304,7 +2348,6 @@ class Type_handler_general_purpose_string: public Type_handler_string_result
 {
 public:
   bool is_general_purpose_string_type() const { return true; }
-  bool Vers_history_point_check_unit(THD *thd, Vers_history_point *p) const;
 };
 
 
@@ -2537,6 +2580,7 @@ public:
                           TABLE *table) const;
   Item_cache *Item_get_cache(THD *thd, const Item *item) const;
   bool Item_get_date(Item *item, MYSQL_TIME *ltime, ulonglong fuzzydate) const;
+  virtual const Vers_type_handler *vers() const { return NULL; }
 };
 
 
@@ -2577,7 +2621,6 @@ public:
                           const Record_addr &addr,
                           const Type_all_attributes &attr,
                           TABLE *table) const;
-  bool Vers_history_point_check_unit(THD *thd, Vers_history_point *p) const;
 };
 
 
@@ -3392,7 +3435,7 @@ public:
                                          const;
   void Item_param_set_param_func(Item_param *param,
                                  uchar **pos, ulong len) const;
-  bool Vers_history_point_check_unit(THD *thd, Vers_history_point *p) const;
+  virtual const Vers_type_handler *vers() const { return NULL; }
 };
 
 
