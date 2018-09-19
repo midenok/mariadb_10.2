@@ -7301,6 +7301,65 @@ static void require_trx_id_error(const char *field, const char *table)
            table);
 }
 
+
+bool Vers_type_timestamp::check_sys_fields(const LEX_CSTRING &table_name,
+                                           const Column_definition *row_start,
+                                           const Column_definition *row_end,
+                                           bool native) const
+{
+  if (row_start->length != MAX_DATETIME_FULL_WIDTH)
+  {
+    require_timestamp_error(row_start->field_name.str, table_name.str);
+    return true;
+  }
+
+  if (row_end->type_handler()->vers() != this ||
+      row_end->length != MAX_DATETIME_FULL_WIDTH)
+  {
+    require_timestamp_error(row_end->field_name.str, table_name.str);
+    return true;
+  }
+
+  return false;
+}
+
+
+bool Vers_type_trx::check_sys_fields(const LEX_CSTRING &table_name,
+                                     const Column_definition *row_start,
+                                     const Column_definition *row_end,
+                                     bool native) const
+{
+  if (!(row_start->flags & UNSIGNED_FLAG) ||
+      row_start->length != (MY_INT64_NUM_DECIMAL_DIGITS - 1))
+  {
+    require_trx_id_error(row_start->field_name.str, table_name.str);
+    return true;
+  }
+
+  if (row_end->type_handler()->vers() != this ||
+      !(row_end->flags & UNSIGNED_FLAG) ||
+      row_end->length != (MY_INT64_NUM_DECIMAL_DIGITS - 1))
+  {
+    require_trx_id_error(row_end->field_name.str, table_name.str);
+    return true;
+  }
+
+  if (!native)
+  {
+    require_timestamp_error(row_start->field_name.str, table_name.str);
+    return true;
+  }
+
+  if (!TR_table::use_transaction_registry)
+  {
+    my_error(ER_VERS_TRT_IS_DISABLED, MYF(0));
+    return true;
+  }
+
+  return false;
+}
+
+
 bool Vers_parse_info::check_sys_fields(const Lex_table_name &table_name,
                                        const Lex_table_name &db,
                                        Alter_info *alter_info, bool native)
@@ -7322,67 +7381,16 @@ bool Vers_parse_info::check_sys_fields(const Lex_table_name &table_name,
   DBUG_ASSERT(row_start);
   DBUG_ASSERT(row_end);
 
-  const char *row_start_name= row_start->field_name.str;
-  const char *row_end_name= row_end->field_name.str;
-  vers_kind_t check_unit= VERS_UNDEFINED;
-  vers_kind_t row_start_kind= row_start->type_handler()->vers_kind();
-  vers_kind_t row_end_kind= row_end->type_handler()->vers_kind();
+  const Vers_type_handler *row_start_vers= row_start->type_handler()->vers();
 
-  if (row_start_kind == VERS_TIMESTAMP)
+  if (!row_start_vers)
   {
-    if (row_start->length != MAX_DATETIME_FULL_WIDTH)
-    {
-      require_timestamp_error(row_start_name, table_name);
-      return true;
-    }
-
-    if (row_end_kind != VERS_TIMESTAMP ||
-        row_end->length != MAX_DATETIME_FULL_WIDTH)
-    {
-      require_timestamp_error(row_end_name, table_name);
-      return true;
-    }
-
-    check_unit= VERS_TIMESTAMP;
-  }
-  else if (row_start_kind == VERS_TRX_ID)
-  {
-    if (!(row_start->flags & UNSIGNED_FLAG) ||
-        row_start->length != (MY_INT64_NUM_DECIMAL_DIGITS - 1))
-    {
-      require_trx_id_error(row_start_name, table_name);
-      return true;
-    }
-
-    if (row_end_kind != VERS_TRX_ID ||
-        !(row_end->flags & UNSIGNED_FLAG) ||
-        row_end->length != (MY_INT64_NUM_DECIMAL_DIGITS - 1))
-    {
-      require_trx_id_error(row_end_name, table_name);
-      return true;
-    }
-
-    if (!native)
-    {
-      require_timestamp_error(row_start_name, table_name);
-      return true;
-    }
-
-    check_unit= VERS_TRX_ID;
-  }
-  else
-  {
-    require_timestamp_error(row_start_name, table_name);
+    require_timestamp_error(row_start->field_name.str, table_name);
     return true;
   }
 
-  DBUG_ASSERT(check_unit);
-
-  if (check_unit == VERS_TRX_ID && !TR_table::use_transaction_registry)
-  {
-    my_error(ER_VERS_TRT_IS_DISABLED, MYF(0));
+  if (row_start_vers->check_sys_fields(table_name, row_start, row_end, native))
     return true;
-  }
 
   return false;
 }

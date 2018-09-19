@@ -997,6 +997,10 @@ public:
     DBUG_ASSERT(0);
     return VERS_UNDEFINED;
   }
+  virtual bool check_sys_fields(const LEX_CSTRING &table_name,
+                                const Column_definition *row_start,
+                                const Column_definition *row_end,
+                                bool native) const= 0;
 };
 
 
@@ -1007,6 +1011,10 @@ public:
   {
     return VERS_TIMESTAMP;
   }
+  bool check_sys_fields(const LEX_CSTRING &table_name,
+                        const Column_definition *row_start,
+                        const Column_definition *row_end,
+                        bool native) const;
 };
 extern MYSQL_PLUGIN_IMPORT Vers_type_timestamp vers_type_timestamp;
 
@@ -1018,6 +1026,10 @@ public:
   {
     return VERS_TRX_ID;
   }
+  bool check_sys_fields(const LEX_CSTRING &table_name,
+                        const Column_definition *row_start,
+                        const Column_definition *row_end,
+                        bool native) const;
 };
 extern MYSQL_PLUGIN_IMPORT Vers_type_trx vers_type_trx;
 
@@ -1455,7 +1467,6 @@ public:
   Item_func_mod_fix_length_and_dec(Item_func_mod *func) const= 0;
 
   virtual const Vers_type_handler *vers() const { return NULL; }
-  vers_kind_t vers_kind() const { return vers() ? vers()->kind() : VERS_UNDEFINED; }
 };
 
 
