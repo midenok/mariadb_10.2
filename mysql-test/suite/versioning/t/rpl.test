@@ -179,9 +179,9 @@ update t1 set x= 2;
 select * from t1;
 --let $datadir= `select @@datadir`
 --let $f2= query_get_value(SHOW SLAVE STATUS, Relay_Log_File, 1)
---exec $MYSQL_BINLOG -v $datadir/$f2
-#| $MYSQL test
-#select * from t1;
+--echo # Replaying binlog...
+--exec $MYSQL_BINLOG -v $datadir/$f2| $MYSQL -S $SLAVE_MYSOCK test
+select * from t1;
 --connection master
 
 drop database test;
