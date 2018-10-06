@@ -555,9 +555,6 @@ const char* dbug_print_table_row(TABLE *table)
 
   for (pfield= table->field; *pfield ; pfield++)
   {
-    if (table->read_set && !bitmap_is_set(table->read_set, (*pfield)->field_index))
-      continue;
-    
     if (first)
       first= false;
     else
@@ -574,8 +571,12 @@ const char* dbug_print_table_row(TABLE *table)
   {
     Field *field=  *pfield;
 
+    bool tmp_read= false;
     if (table->read_set && !bitmap_is_set(table->read_set, (*pfield)->field_index))
-      continue;
+    {
+      bitmap_set_bit(table->read_set, (*pfield)->field_index);
+      tmp_read= true;
+    }
 
     if (first)
       first= false;
@@ -592,6 +593,8 @@ const char* dbug_print_table_row(TABLE *table)
         field->val_str(&tmp);
       output.append(tmp.ptr(), tmp.length());
     }
+    if (tmp_read)
+      bitmap_clear_bit(table->read_set, (*pfield)->field_index);
   }
   output.append(")");
   

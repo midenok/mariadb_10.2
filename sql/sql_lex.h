@@ -1468,6 +1468,7 @@ public:
     the tables.
   */
   enum_sql_command sql_command;
+
   /* Global list of all tables used by this statement */
   TABLE_LIST *query_tables;
   /* Pointer to next_global member of last element in the previous list. */
@@ -1737,6 +1738,11 @@ public:
     Maps elements of enum_binlog_stmt_unsafe to error codes.
   */
   static const int binlog_stmt_unsafe_errcode[BINLOG_STMT_UNSAFE_COUNT];
+
+  inline bool is_insert()
+  {
+    return sql_command == SQLCOM_INSERT || sql_command == SQLCOM_INSERT_SELECT;
+  }
 
   /**
     Determine if this statement is marked as unsafe.
