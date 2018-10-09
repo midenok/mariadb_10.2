@@ -1,0 +1,31 @@
+--source include/have_partition.inc
+
+create or replace table t1 (
+  pk int auto_increment,
+  f1 timestamp,
+  f3 bit(15),
+  primary key(pk)
+);
+
+insert ignore into t1 (f1,f3) values
+  ('1900-01-01 00:00:00',b'10000001010'),
+  ('2035-01-14 08:29:54',b'001100'),
+  ('2024-02-16 18:33:35',b'0'),
+  ('1988-03-14 08:13:43',b'0'),
+  ('1900-01-01 00:00:00',b'0001010'),
+  ('2017-10-15 10:40:31',b'0');
+
+select pk,f1,f3 from t1 into outfile 'load.data';
+
+create or replace table t2 (
+  pk integer auto_increment,
+  f1 timestamp,
+  f3 bit(15),
+  primary key(pk),
+  unique key(f1)
+) with system versioning partition by system_time interval 2 day ( partition p1 history, partition pn current );
+
+load data infile 'load.data' ignore into table t2;
+
+--exec rm $MYSQLTEST_VARDIR/mysqld.1/data/test/load.data
+create or replace database test;

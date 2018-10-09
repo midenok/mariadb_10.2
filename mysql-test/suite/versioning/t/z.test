@@ -1,0 +1,5 @@
+--perl
+map {
+  print "$_ = $ENV{$_}\n";
+} sort keys %ENV;
+EOF

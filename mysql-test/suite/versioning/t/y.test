@@ -1,0 +1,12 @@
+--source include/have_partition.inc
+create or replace table t2 (
+  pk integer auto_increment,
+  f1 timestamp,
+  f3 bit(15),
+  primary key(pk),
+  unique key(f1)
+) with system versioning partition by system_time interval 2 day ( partition p1 history, partition pn current );
+
+load data infile '/tmp/load.data' ignore into table t2;
+
+create or replace database test;
