@@ -7179,7 +7179,8 @@ bool Vers_parse_info::check_conditions(const Lex_table_name &table_name,
 
 static bool has_timestamp_type_handler(const Create_field *f)
 {
-  return f->type_handler() == &type_handler_timestamp2;
+  return f->type_handler() == &type_handler_timestamp2 ||
+    f->type_handler() == &type_handler_datetime2;
 }
 static bool has_trx_id_type_handler(const Create_field *f)
 {

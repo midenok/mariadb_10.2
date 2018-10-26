@@ -3192,6 +3192,8 @@ public:
   int reset();
   bool get_date(MYSQL_TIME *ltime, ulonglong fuzzydate)
   { return Field_datetimef::get_TIME(ltime, ptr, fuzzydate); }
+  void set_max();
+  bool is_max();
   uint size_of() const { return sizeof(*this); }
 };
 

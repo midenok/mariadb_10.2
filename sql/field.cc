@@ -6871,6 +6871,29 @@ void Field_datetimef::store_TIME(MYSQL_TIME *ltime)
   my_datetime_packed_to_binary(tmp, ptr, dec);
 }
 
+void Field_datetimef::set_max()
+{
+  DBUG_ENTER("Field_datetimef::set_max");
+  ASSERT_COLUMN_MARKED_FOR_WRITE_OR_COMPUTED;
+
+  set_notnull();
+
+  longlong tmp= 0x7ef3ff7efb0f423f;
+  my_datetime_packed_to_binary(tmp, ptr, dec);
+
+  DBUG_VOID_RETURN;
+}
+
+bool Field_datetimef::is_max()
+{
+  DBUG_ENTER("Field_datetimef::is_max");
+  ASSERT_COLUMN_MARKED_FOR_READ;
+
+  longlong tmp= my_datetime_packed_from_binary(ptr, dec);
+
+  DBUG_RETURN(tmp == 0x7ef3ff7efb0f423f);
+}
+
 bool Field_datetimef::get_TIME(MYSQL_TIME *ltime, const uchar *pos,
                                ulonglong fuzzydate) const
 {
