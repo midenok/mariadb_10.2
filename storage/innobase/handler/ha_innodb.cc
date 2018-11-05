@@ -6099,6 +6099,11 @@ no_such_table:
 		DBUG_RETURN(HA_ERR_NO_SUCH_TABLE);
 	}
 
+	if (!ib_table->not_redundant()) {
+		m_int_table_flags |= HA_EXTENDED_TYPES_CONVERSION;
+		cached_table_flags |= HA_EXTENDED_TYPES_CONVERSION;
+	}
+
 	size_t n_fields = mysql_fields(table);
 	size_t n_cols = dict_table_get_n_user_cols(ib_table)
 		+ dict_table_get_n_v_cols(ib_table)
@@ -20794,7 +20799,8 @@ innobase_get_computed_value(
 			row_sel_field_store_in_mysql_format(
 				mysql_rec + templ->mysql_col_offset,
 				templ, index, templ->clust_rec_field_no,
-				(const byte*)data, len);
+				(const byte*)data, len,
+				dict_table_is_comp(index->table));
 
 			if (templ->mysql_null_bit_mask) {
 				/* It is a nullable column with a
