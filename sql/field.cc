@@ -7798,8 +7798,9 @@ uint Field_varstring::is_equal(Create_field *new_field)
   {
     if (new_field->length == field_length)
       return IS_EQUAL_YES;
+    const Type_handler_varchar *t= static_cast<const Type_handler_varchar *>(type_handler());
     if (new_field->length > field_length &&
-	((new_field->length <= 255 && field_length <= 255) ||
+	(t->extended() || (new_field->length <= 255 && field_length <= 255) ||
 	 (new_field->length > 255 && field_length > 255)))
       return IS_EQUAL_PACK_LENGTH; // VARCHAR, longer variable length
   }
@@ -10151,6 +10152,7 @@ void Column_definition::set_attributes(const Lex_field_type_st &type,
     length= my_strtoll10(type.length(), NULL, &err);
     if (err)
       length= ~0ULL; // safety
+    char_length= length;
   }
 
   if (type.dec())
@@ -10229,6 +10231,14 @@ bool Column_definition::check_length(uint mysql_errno, uint limit) const
   return true;
 }
 
+
+bool Column_definition::check_length2(uint mysql_errno, uint limit) const
+{
+  if (char_length <= limit)
+    return false;
+  my_error(mysql_errno, MYF(0), field_name.str, static_cast<ulong>(limit));
+  return true;
+}
 
 bool Column_definition::fix_attributes_int(uint default_length)
 {
@@ -10391,7 +10401,7 @@ bool Column_definition::check(THD *thd)
     DBUG_RETURN(true);
 
   /* Remember the value of length */
-  char_length= (uint)length;
+  char_length= length;
 
   /*
     Set NO_DEFAULT_VALUE_FLAG if this field doesn't have a default value and
@@ -10534,7 +10544,7 @@ Column_definition::Column_definition(THD *thd, Field *old_field,
   versioning= VERSIONING_NOT_SET;
   invisible= old_field->invisible;
   interval_list.empty(); // prepare_interval_field() needs this
-  char_length= (uint) length;
+  char_length= length;
 
   if (orig_field)
   {

@@ -423,6 +423,9 @@ public:
 	/* An helper function for index_cond_func_innodb: */
 	bool is_thd_killed();
 
+	const Type_handler*
+	type_handler(Type_handler_hybrid_field_type* caller) const;
+
 protected:
 
 	/**

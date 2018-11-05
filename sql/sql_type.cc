@@ -2038,12 +2038,6 @@ bool Type_handler_varchar::
   return def->check_length(ER_TOO_BIG_DISPLAYWIDTH, MAX_FIELD_BLOBLENGTH);
 }
 
-bool Type_handler_string::
-       Column_definition_fix_attributes(Column_definition *def) const
-{
-  return def->check_length(ER_TOO_BIG_FIELDLENGTH, MAX_FIELD_CHARLENGTH);
-}
-
 bool Type_handler_blob_common::
        Column_definition_fix_attributes(Column_definition *def) const
 {
@@ -2447,6 +2441,19 @@ bool Type_handler_varchar::
                                         ulonglong table_flags) const
 {
   return def->prepare_stage2_varchar(table_flags);
+}
+
+bool Type_handler_string::
+       Column_definition_prepare_stage1(THD *thd,
+                                        MEM_ROOT *mem_root,
+                                        Column_definition *c,
+                                        handler *file,
+                                        ulonglong table_flags) const
+{
+  if (c->check_length2(ER_TOO_BIG_FIELDLENGTH, m_max_storage))
+    return true;
+  return Type_handler_longstr::
+    Column_definition_prepare_stage1(thd, mem_root, c, file, table_flags);
 }
 
 bool Type_handler_string::
@@ -7007,7 +7014,7 @@ Field *Type_handler_string::
   return new (mem_root)
     Field_string(rec.ptr(), (uint32) attr->length,
                  rec.null_ptr(), rec.null_bit(),
-                 attr->unireg_check, name, attr->charset);
+                 attr->unireg_check, name, attr->charset, this);
 }
 
 
@@ -7024,12 +7031,12 @@ Field *Type_handler_varchar::
                                  HA_VARCHAR_PACKLENGTH((uint32) attr->length),
                                  rec.null_ptr(), rec.null_bit(),
                                  attr->unireg_check, name, share, attr->charset,
-                                 zlib_compression_method);
+                                 zlib_compression_method, this);
   return new (mem_root)
     Field_varstring(rec.ptr(), (uint32) attr->length,
                     HA_VARCHAR_PACKLENGTH((uint32) attr->length),
                     rec.null_ptr(), rec.null_bit(),
-                    attr->unireg_check, name, share, attr->charset);
+                    attr->unireg_check, name, share, attr->charset, this);
 }
 
 

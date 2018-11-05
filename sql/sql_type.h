@@ -4618,7 +4618,9 @@ public:
 class Type_handler_string: public Type_handler_longstr
 {
   static const Name m_name_char;
+  uint m_max_storage;
 public:
+  Type_handler_string(uint max_storage= MAX_FIELD_CHARLENGTH) : m_max_storage(max_storage) {}
   virtual ~Type_handler_string() {}
   const Name name() const { return m_name_char; }
   enum_field_types field_type() const { return MYSQL_TYPE_STRING; }
@@ -4630,7 +4632,15 @@ public:
   }
   Field *make_conversion_table_field(TABLE *, uint metadata,
                                      const Field *target) const;
-  bool Column_definition_fix_attributes(Column_definition *c) const;
+  bool Column_definition_fix_attributes(Column_definition *c) const
+  {
+    return false;
+  }
+  bool Column_definition_prepare_stage1(THD *thd,
+                                        MEM_ROOT *mem_root,
+                                        Column_definition *c,
+                                        handler *file,
+                                        ulonglong table_flags) const;
   bool Column_definition_prepare_stage2(Column_definition *c,
                                         handler *file,
                                         ulonglong table_flags) const;
@@ -4681,7 +4691,9 @@ public:
 class Type_handler_varchar: public Type_handler_longstr
 {
   static const Name m_name_varchar;
+  bool m_extended;
 public:
+  Type_handler_varchar(bool extended= false) : m_extended(extended) {}
   virtual ~Type_handler_varchar() {}
   const Name name() const { return m_name_varchar; }
   enum_field_types field_type() const { return MYSQL_TYPE_VARCHAR; }
@@ -4716,6 +4728,7 @@ public:
                                    const Column_definition_attributes *attr,
                                    uint32 flags) const;
   bool adjust_spparam_type(Spvar_definition *def, Item *from) const;
+  bool extended() const { return m_extended; }
 };
 
 

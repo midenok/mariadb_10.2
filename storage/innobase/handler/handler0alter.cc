@@ -8934,14 +8934,16 @@ innobase_rename_or_enlarge_columns_cache(
 			ulint	col_n = is_virtual ? num_v : i - num_v;
 
 			if ((*fp)->is_equal(cf) == IS_EQUAL_PACK_LENGTH) {
-				if (is_virtual) {
-					dict_table_get_nth_v_col(
-						user_table, col_n)->m_col.len
-					= cf->length;
-				} else {
-					dict_table_get_nth_col(
-						user_table, col_n)->len
-					= cf->length;
+				dict_col_t *col = is_virtual ?
+					&dict_table_get_nth_v_col(
+						user_table, col_n)->m_col
+					: dict_table_get_nth_col(
+						user_table, col_n);
+				col->len = cf->length;
+				if (col->len > 255
+				    && (col->prtype & DATA_MYSQL_TRUE_VARCHAR)
+				    == DATA_MYSQL_TRUE_VARCHAR) {
+					col->prtype |= DATA_LONG_TRUE_VARCHAR;
 				}
 			}
 

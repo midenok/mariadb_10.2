@@ -1,0 +1,43 @@
+--source include/have_innodb.inc
+
+set default_storage_engine=innodb;
+set @saved_row_format= @@global.innodb_default_row_format;
+set global innodb_default_row_format= redundant;
+
+--echo # Case 1: VARCHAR(<255) -> VARCHAR(>255) conversion
+create or replace table t (a varchar(2));
+alter table t modify a varchar(300);
+set @bigval= repeat('0123456789', 30);
+insert into t values(@bigval);
+
+select count(a) from t where a = @bigval;
+
+--error ER_DATA_TOO_LONG
+insert into t values(repeat('X', 301));
+
+--echo # Case 2: CHAR extension, VARCHAR -> CHAR conversion
+--error ER_TOO_BIG_FIELDLENGTH
+create or replace table t (a char(256)) engine=myisam;
+create or replace table t (a char(256));
+
+create or replace table t (a char(2));
+alter table t modify a char(300);
+
+create or replace table t (a varchar(300));
+alter table t modify a char(300);
+
+create or replace table t (a varchar(300));
+alter table t modify a char(259);
+
+--echo # Case 4: instant conversion CHAR -> VARCHAR
+create or replace table t(a char(2));
+insert into t values('a ');
+select hex(a) from t;
+alter table t change a a varchar(2);
+select hex(a) from t;
+drop table t;
+
+set global innodb_default_row_format= @saved_row_format;
+
+drop database test;
+create database test;

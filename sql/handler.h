@@ -2812,6 +2812,8 @@ public:
 };
 
 
+class Type_handler_hybrid_field_type;
+
 /**
   The handler class is the interface for dynamically loadable
   storage engines. Do not add ifdefs and take care when adding or
@@ -4669,6 +4671,9 @@ public:
   { DBUG_ASSERT(ht); return partition_ht()->flags & HTON_NATIVE_SYS_VERSIONING; }
   virtual void update_partition(uint	part_id)
   {}
+
+  virtual const Type_handler *type_handler(Type_handler_hybrid_field_type *caller) const;
+
 protected:
   Handler_share *get_ha_share_ptr();
   void set_ha_share_ptr(Handler_share *arg_ha_share);

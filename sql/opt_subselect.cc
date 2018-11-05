@@ -4278,8 +4278,7 @@ SJ_TMP_TABLE::create_sj_weedout_tmp_table(THD *thd)
     field->unireg_check= Field::NONE;
     field->flags= (NOT_NULL_FLAG | BINARY_FLAG | NO_DEFAULT_VALUE_FLAG);
     field->reset_fields();
-    field->init(table);
-    field->orig_table= NULL;
+    field->init_no_orig(table);
      
     field->field_index= 0;
     
