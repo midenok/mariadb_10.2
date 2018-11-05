@@ -417,6 +417,9 @@ public:
 	Item* idx_cond_push(uint keyno, Item* idx_cond);
 	/* @} */
 
+	bool prepare_create_table(HA_CREATE_INFO &create_info,
+				  Alter_info &alter_info);
+
 protected:
 
 	/**

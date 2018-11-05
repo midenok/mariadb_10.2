@@ -2252,12 +2252,6 @@ bool Type_handler_varchar::
   return def->check_length(ER_TOO_BIG_DISPLAYWIDTH, MAX_FIELD_BLOBLENGTH);
 }
 
-bool Type_handler_string::
-       Column_definition_fix_attributes(Column_definition *def) const
-{
-  return def->check_length(ER_TOO_BIG_FIELDLENGTH, MAX_FIELD_CHARLENGTH);
-}
-
 bool Type_handler_blob_common::
        Column_definition_fix_attributes(Column_definition *def) const
 {
@@ -2661,6 +2655,24 @@ bool Type_handler_varchar::
                                         ulonglong table_flags) const
 {
   return def->prepare_stage2_varchar(table_flags);
+}
+
+bool Type_handler_string::
+       Column_definition_prepare_stage1(THD *thd,
+                                        MEM_ROOT *mem_root,
+                                        Column_definition *c,
+                                        handler *file,
+                                        ulonglong table_flags) const
+{
+  ulong limit= ((table_flags & HA_EXTENDED_TYPES_CONVERSION) ?
+                MAX_FIELD_VARCHARLENGTH : MAX_FIELD_CHARLENGTH);
+  if (c->char_length > limit)
+  {
+    my_error(ER_TOO_BIG_FIELDLENGTH, MYF(0), c->field_name.str, limit);
+    return true;
+  }
+  return Type_handler_longstr::
+    Column_definition_prepare_stage1(thd, mem_root, c, file, table_flags);
 }
 
 bool Type_handler_string::

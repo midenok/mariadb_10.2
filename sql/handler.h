@@ -316,6 +316,9 @@ enum enum_alter_inplace_result {
 */
 #define HA_SLOW_RND_POS  (1ULL << 55)
 
+#define HA_EXTENDED_TYPES_CONVERSION (1ULL << 56)
+#define HA_LAST_TABLE_FLAG HA_EXTENDED_TYPES_CONVERSION
+
 /* bits in index_flags(index_number) for what you can do with index */
 #define HA_READ_NEXT            1       /* TODO really use this flag */
 #define HA_READ_PREV            2       /* supports ::index_prev */
@@ -726,6 +729,7 @@ typedef ulonglong alter_table_operations;
   online alter of all partitions atomically (using group_commit_ctx)
 */
 #define ALTER_PARTITIONED                    (1ULL << 59)
+#define ALTER_COLUMN_EQUAL_PACK_LENGTH2      (1ULL << 60)
 
 /*
   Flags set in partition_flags when altering partitions
@@ -3120,7 +3124,11 @@ public:
   /**
     The cached_table_flags is set at ha_open and ha_external_lock
   */
-  Table_flags ha_table_flags() const { return cached_table_flags; }
+  Table_flags ha_table_flags() const
+  {
+    DBUG_ASSERT(cached_table_flags <= (HA_LAST_TABLE_FLAG << 1));
+    return cached_table_flags;
+  }
   /**
     These functions represent the public interface to *users* of the
     handler class, hence they are *not* virtual. For the inheritance
@@ -4676,6 +4684,12 @@ public:
   { DBUG_ASSERT(ht); return partition_ht()->flags & HTON_NATIVE_SYS_VERSIONING; }
   virtual void update_partition(uint	part_id)
   {}
+
+  virtual bool prepare_create_table(HA_CREATE_INFO &create_info, Alter_info &alter_info)
+  {
+    return false;
+  }
+
 protected:
   Handler_share *get_ha_share_ptr();
   void set_ha_share_ptr(Handler_share *arg_ha_share);
