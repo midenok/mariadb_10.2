@@ -7709,6 +7709,31 @@ err_exit:
 			DBUG_RETURN(true);
 		}
 
+		{
+			ha_innobase_inplace_ctx* ctx = static_cast<ha_innobase_inplace_ctx*>
+				(ha_alter_info->handler_ctx);
+			for (ulint i = 0; i < ulint(ctx->new_table->n_cols); i++) {
+				dict_col_t& c = ctx->new_table->cols[i];
+				if ((c.prtype & DATA_MYSQL_TRUE_VARCHAR) == DATA_MYSQL_TRUE_VARCHAR)
+					c.prtype |= DATA_LONG_TRUE_VARCHAR;
+			}
+		}
+// 		for (uint i = 0; i < altered_table->s->fields; i++) {
+// 			const Field*	field = altered_table->field[i];
+// 			ulint		field_type
+// 				= (ulint) field->type();
+// 			if (field->type() == MYSQL_TYPE_VARCHAR) {
+// 				uint32	length_bytes
+// 					= static_cast<const Field_varstring*>(
+// 						field)->length_bytes;
+//
+// 				if (length_bytes == 2) {
+// 					field_type |= DATA_LONG_TRUE_VARCHAR;
+// 				}
+//
+// 			}
+//                 }
+
 		DBUG_RETURN(false);
 	}
 

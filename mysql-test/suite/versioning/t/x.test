@@ -1,0 +1,14 @@
+create table t(a char(2)) engine=innodb;
+insert into t values('a ');
+select hex(a) from t;
+alter table t change a a varchar(2);
+select hex(a) from t;
+drop table t;
+
+create or replace table t (a varchar(2)) engine=innodb row_format=redundant;
+insert into t values('a ');
+alter table t change a a varchar(300);
+insert into t values(repeat('0123456789', 30));
+
+--error ER_DATA_TOO_LONG
+insert into t values(repeat('X', 301));
