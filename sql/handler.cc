@@ -7060,9 +7060,6 @@ static Create_field *vers_init_sys_field(THD *thd, const char *field_name, int f
   }
   f->invisible= DBUG_EVALUATE_IF("sysvers_show", VISIBLE, INVISIBLE_SYSTEM);
 
-  if (f->check(thd))
-    return NULL;
-
   return f;
 }
 
@@ -7077,6 +7074,11 @@ static bool vers_create_sys_field(THD *thd, const char *field_name,
   alter_info->create_list.push_back(f);
 
   return false;
+}
+
+const Type_handler* handler::type_handler(Type_handler_hybrid_field_type* caller) const
+{
+  return caller->type_handler();
 }
 
 const Lex_ident Vers_parse_info::default_start= "row_start";

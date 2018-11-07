@@ -6,7 +6,7 @@ set global innodb_default_row_format= redundant;
 
 --echo # Case 1: VARCHAR(<255) -> VARCHAR(>255) conversion
 create or replace table t (a varchar(2));
-alter table t change a a varchar(300);
+alter table t modify a varchar(300);
 set @bigval= repeat('0123456789', 30);
 insert into t values(@bigval);
 
@@ -14,6 +14,18 @@ select count(a) from t where a = @bigval;
 
 --error ER_DATA_TOO_LONG
 insert into t values(repeat('X', 301));
+
+--echo # Case 2: CHAR extension, VARCHAR -> CHAR conversion
+create or replace table t (a char(300));
+
+create or replace table t (a char(2));
+alter table t modify a char(300);
+
+create or replace table t (a varchar(300));
+alter table t modify a char(300);
+
+create or replace table t (a varchar(300));
+alter table t modify a char(259);
 
 --echo # Case 4: instant conversion CHAR -> VARCHAR
 create or replace table t(a char(2));

@@ -4999,6 +4999,14 @@ int create_table_impl(THD *thd,
     */
     if (!file || thd->is_error())
       goto err;
+
+    List_iterator<Create_field> it(alter_info->create_list);
+    while (Create_field *f= it++)
+    {
+      if (unlikely(f->check(thd, file)))
+        goto err;
+    }
+
     if (rea_create_table(thd, frm, path, db->str, table_name->str, create_info,
                          file, frm_only))
       goto err;

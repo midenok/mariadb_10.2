@@ -21474,3 +21474,14 @@ ib_push_frm_error(
 		break;
 	}
 }
+
+const Type_handler*
+ha_innobase::type_handler(Type_handler_hybrid_field_type* caller) const
+{
+	const Type_handler *type = caller->type_handler();
+	if (type == &type_handler_string) {
+		type = &type_handler_string;
+	}
+	return type;
+}
+

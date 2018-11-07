@@ -4630,7 +4630,7 @@ public:
   bool fix_attributes_temporal_with_time(uint int_part_length);
   bool fix_attributes_bit();
 
-  bool check(THD *thd);
+  bool check(THD *thd, handler *file);
 
   bool stored_in_db() const { return !vcol_info || vcol_info->stored_in_db; }
 
