@@ -16,7 +16,9 @@ select count(a) from t where a = @bigval;
 insert into t values(repeat('X', 301));
 
 --echo # Case 2: CHAR extension, VARCHAR -> CHAR conversion
-create or replace table t (a char(300));
+--error ER_TOO_BIG_FIELDLENGTH
+create or replace table t (a char(256)) engine=myisam;
+create or replace table t (a char(256));
 
 create or replace table t (a char(2));
 alter table t modify a char(300);
