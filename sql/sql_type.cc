@@ -2041,7 +2041,7 @@ bool Type_handler_varchar::
 bool Type_handler_string::
        Column_definition_fix_attributes(Column_definition *def) const
 {
-  return def->check_length(ER_TOO_BIG_FIELDLENGTH, MAX_FIELD_CHARLENGTH);
+  return def->check_length(ER_TOO_BIG_FIELDLENGTH, m_max_storage);
 }
 
 bool Type_handler_blob_common::
