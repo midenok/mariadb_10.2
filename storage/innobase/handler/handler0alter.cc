@@ -7709,31 +7709,6 @@ err_exit:
 			DBUG_RETURN(true);
 		}
 
-		{
-			ha_innobase_inplace_ctx* ctx = static_cast<ha_innobase_inplace_ctx*>
-				(ha_alter_info->handler_ctx);
-			for (ulint i = 0; i < ulint(ctx->new_table->n_cols); i++) {
-				dict_col_t& c = ctx->new_table->cols[i];
-				if ((c.prtype & DATA_MYSQL_TRUE_VARCHAR) == DATA_MYSQL_TRUE_VARCHAR)
-					c.prtype |= DATA_LONG_TRUE_VARCHAR;
-			}
-		}
-// 		for (uint i = 0; i < altered_table->s->fields; i++) {
-// 			const Field*	field = altered_table->field[i];
-// 			ulint		field_type
-// 				= (ulint) field->type();
-// 			if (field->type() == MYSQL_TYPE_VARCHAR) {
-// 				uint32	length_bytes
-// 					= static_cast<const Field_varstring*>(
-// 						field)->length_bytes;
-//
-// 				if (length_bytes == 2) {
-// 					field_type |= DATA_LONG_TRUE_VARCHAR;
-// 				}
-//
-// 			}
-//                 }
-
 		DBUG_RETURN(false);
 	}
 
@@ -9074,14 +9049,16 @@ innobase_rename_or_enlarge_columns_cache(
 			ulint	col_n = is_virtual ? num_v : i - num_v;
 
 			if ((*fp)->is_equal(cf) == IS_EQUAL_PACK_LENGTH) {
-				if (is_virtual) {
-					dict_table_get_nth_v_col(
-						user_table, col_n)->m_col.len
-					= cf->length;
-				} else {
-					dict_table_get_nth_col(
-						user_table, col_n)->len
-					= cf->length;
+				dict_col_t *col = is_virtual ?
+					&dict_table_get_nth_v_col(
+						user_table, col_n)->m_col
+					: dict_table_get_nth_col(
+						user_table, col_n);
+				col->len = cf->length;
+				if (col->len > 255
+				    && (col->prtype & DATA_MYSQL_TRUE_VARCHAR)
+				    == DATA_MYSQL_TRUE_VARCHAR) {
+					col->prtype |= DATA_LONG_TRUE_VARCHAR;
 				}
 			}
 
