@@ -10151,9 +10151,6 @@ void Column_definition::set_attributes(const Lex_field_type_st &type,
     length= my_strtoll10(type.length(), NULL, &err);
     if (err)
       length= ~0ULL; // safety
-
-    /* Remember the value of length */
-    char_length= (uint)length;
   }
 
   if (type.dec())
@@ -10314,7 +10311,7 @@ bool Column_definition::fix_attributes_temporal_with_time(uint int_part_length)
 }
 
 
-bool Column_definition::check(THD *thd, handler *file)
+bool Column_definition::check(THD *thd)
 {
   DBUG_ENTER("Column_definition::check");
 
@@ -10390,8 +10387,11 @@ bool Column_definition::check(THD *thd, handler *file)
   else if (flags & AUTO_INCREMENT_FLAG)
     unireg_check= Field::NEXT_NUMBER;
 
-  if (file->type_handler(this)->Column_definition_fix_attributes(this))
+  if (type_handler()->Column_definition_fix_attributes(this))
     DBUG_RETURN(true);
+
+  /* Remember the value of length */
+  char_length= (uint)length;
 
   /*
     Set NO_DEFAULT_VALUE_FLAG if this field doesn't have a default value and

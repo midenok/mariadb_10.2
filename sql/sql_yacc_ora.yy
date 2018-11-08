@@ -6631,6 +6631,9 @@ field_spec:
 
             $$->check_constraint= $4;
 
+            if (unlikely($$->check(thd)))
+              MYSQL_YYABORT;
+
             lex->alter_info.create_list.push_back($$, thd->mem_root);
 
             $$->create_if_not_exists= Lex->check_exists;

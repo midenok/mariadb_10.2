@@ -2038,12 +2038,6 @@ bool Type_handler_varchar::
   return def->check_length(ER_TOO_BIG_DISPLAYWIDTH, MAX_FIELD_BLOBLENGTH);
 }
 
-bool Type_handler_string::
-       Column_definition_fix_attributes(Column_definition *def) const
-{
-  return def->check_length(ER_TOO_BIG_FIELDLENGTH, m_max_storage);
-}
-
 bool Type_handler_blob_common::
        Column_definition_fix_attributes(Column_definition *def) const
 {
@@ -2454,6 +2448,8 @@ bool Type_handler_string::
                                         handler *file,
                                         ulonglong table_flags) const
 {
+  if (def->check_length(ER_TOO_BIG_FIELDLENGTH, m_max_storage))
+    return true;
   def->pack_flag= (def->charset->state & MY_CS_BINSORT) ? FIELDFLAG_BINARY : 0;
   return false;
 }

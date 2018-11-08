@@ -4632,7 +4632,10 @@ public:
   }
   Field *make_conversion_table_field(TABLE *, uint metadata,
                                      const Field *target) const;
-  bool Column_definition_fix_attributes(Column_definition *c) const;
+  bool Column_definition_fix_attributes(Column_definition *c) const
+  {
+    return false;
+  }
   bool Column_definition_prepare_stage2(Column_definition *c,
                                         handler *file,
                                         ulonglong table_flags) const;

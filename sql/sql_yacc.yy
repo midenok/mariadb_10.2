@@ -6608,7 +6608,11 @@ field_spec:
           {
             LEX *lex=Lex;
             $$= $<create_field>2;
+
             $$->check_constraint= $4;
+
+            if (unlikely($$->check(thd)))
+              MYSQL_YYABORT;
 
             lex->alter_info.create_list.push_back($$, thd->mem_root);
 
