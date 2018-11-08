@@ -3499,6 +3499,7 @@ private:
 
 
 class Field_varstring :public Field_longstr {
+  const Type_handler *m_type_handler;
 public:
   uchar *get_data() const
   {
@@ -3528,24 +3529,28 @@ public:
                   uint32 len_arg, uint length_bytes_arg,
                   uchar *null_ptr_arg, uchar null_bit_arg,
 		  enum utype unireg_check_arg, const LEX_CSTRING *field_name_arg,
-		  TABLE_SHARE *share, const DTCollation &collation)
+		  TABLE_SHARE *share, const DTCollation &collation,
+                  const Type_handler *type_handler= &type_handler_varchar)
     :Field_longstr(ptr_arg, len_arg, null_ptr_arg, null_bit_arg,
                    unireg_check_arg, field_name_arg, collation),
+     m_type_handler(type_handler),
      length_bytes(length_bytes_arg)
   {
     share->varchar_fields++;
   }
   Field_varstring(uint32 len_arg,bool maybe_null_arg,
                   const LEX_CSTRING *field_name_arg,
-                  TABLE_SHARE *share, const DTCollation &collation)
+                  TABLE_SHARE *share, const DTCollation &collation,
+                  const Type_handler *type_handler= &type_handler_varchar)
     :Field_longstr((uchar*) 0,len_arg, maybe_null_arg ? (uchar*) "": 0, 0,
                    NONE, field_name_arg, collation),
+     m_type_handler(type_handler),
      length_bytes(len_arg < 256 ? 1 :2)
   {
     share->varchar_fields++;
   }
 
-  const Type_handler *type_handler() const { return &type_handler_varchar; }
+  const Type_handler *type_handler() const { return m_type_handler; }
   enum ha_base_keytype key_type() const;
   uint row_pack_length() const { return field_length; }
   bool zero_pack() const { return 0; }
@@ -3611,10 +3616,11 @@ public:
                              enum utype unireg_check_arg,
                              const LEX_CSTRING *field_name_arg,
                              TABLE_SHARE *share, const DTCollation &collation,
-                             Compression_method *compression_method_arg):
+                             Compression_method *compression_method_arg,
+                             const Type_handler *type_handler= &type_handler_varchar):
     Field_varstring(ptr_arg, len_arg, length_bytes_arg, null_ptr_arg,
                     null_bit_arg, unireg_check_arg, field_name_arg,
-                    share, collation),
+                    share, collation, type_handler),
     compression_method_ptr(compression_method_arg) { DBUG_ASSERT(len_arg > 0); }
   Compression_method *compression_method() const
   { return compression_method_ptr; }

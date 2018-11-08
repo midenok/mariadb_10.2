@@ -7020,12 +7020,12 @@ Field *Type_handler_varchar::
                                  HA_VARCHAR_PACKLENGTH((uint32) attr->length),
                                  rec.null_ptr(), rec.null_bit(),
                                  attr->unireg_check, name, share, attr->charset,
-                                 zlib_compression_method);
+                                 zlib_compression_method, this);
   return new (mem_root)
     Field_varstring(rec.ptr(), (uint32) attr->length,
                     HA_VARCHAR_PACKLENGTH((uint32) attr->length),
                     rec.null_ptr(), rec.null_bit(),
-                    attr->unireg_check, name, share, attr->charset);
+                    attr->unireg_check, name, share, attr->charset, this);
 }
 
 

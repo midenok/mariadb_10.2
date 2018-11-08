@@ -4686,7 +4686,9 @@ public:
 class Type_handler_varchar: public Type_handler_longstr
 {
   static const Name m_name_varchar;
+  bool m_extended;
 public:
+  Type_handler_varchar(bool extended= false) : m_extended(extended) {}
   virtual ~Type_handler_varchar() {}
   const Name name() const { return m_name_varchar; }
   enum_field_types field_type() const { return MYSQL_TYPE_VARCHAR; }
