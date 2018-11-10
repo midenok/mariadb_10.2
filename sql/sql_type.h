@@ -4723,6 +4723,7 @@ public:
                                    const Column_definition_attributes *attr,
                                    uint32 flags) const;
   bool adjust_spparam_type(Spvar_definition *def, Item *from) const;
+  bool extended() const { return m_extended; }
 };
 
 

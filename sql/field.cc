@@ -7798,9 +7798,10 @@ uint Field_varstring::is_equal(Create_field *new_field)
   {
     if (new_field->length == field_length)
       return IS_EQUAL_YES;
-//     if (new_field->length > field_length &&
-// 	((new_field->length <= 255 && field_length <= 255) ||
-// 	 (new_field->length > 255 && field_length > 255)))
+    const Type_handler_varchar *t= static_cast<const Type_handler_varchar *>(type_handler());
+    if (t->extended() || (new_field->length > field_length &&
+	((new_field->length <= 255 && field_length <= 255) ||
+	 (new_field->length > 255 && field_length > 255))))
       return IS_EQUAL_PACK_LENGTH; // VARCHAR, longer variable length
   }
   return IS_EQUAL_NO;
