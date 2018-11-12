@@ -4630,6 +4630,7 @@ public:
   uint pack_flag_numeric(uint dec) const;
   uint sign_length() const { return flags & UNSIGNED_FLAG ? 0 : 1; }
   bool check_length(uint mysql_errno, uint max_allowed_length) const;
+  bool check_length2(uint mysql_errno, uint max_allowed_length) const;
   bool fix_attributes_real(uint default_length);
   bool fix_attributes_int(uint default_length);
   bool fix_attributes_decimal();

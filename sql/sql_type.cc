@@ -2448,7 +2448,7 @@ bool Type_handler_string::
                                         handler *file,
                                         ulonglong table_flags) const
 {
-  if (def->check_length(ER_TOO_BIG_FIELDLENGTH, m_max_storage))
+  if (def->check_length2(ER_TOO_BIG_FIELDLENGTH, m_max_storage))
     return true;
   def->pack_flag= (def->charset->state & MY_CS_BINSORT) ? FIELDFLAG_BINARY : 0;
   return false;
