@@ -2444,12 +2444,23 @@ bool Type_handler_varchar::
 }
 
 bool Type_handler_string::
+       Column_definition_prepare_stage1(THD *thd,
+                                        MEM_ROOT *mem_root,
+                                        Column_definition *c,
+                                        handler *file,
+                                        ulonglong table_flags) const
+{
+  if (c->check_length2(ER_TOO_BIG_FIELDLENGTH, m_max_storage))
+    return true;
+  return Type_handler_longstr::
+    Column_definition_prepare_stage1(thd, mem_root, c, file, table_flags);
+}
+
+bool Type_handler_string::
        Column_definition_prepare_stage2(Column_definition *def,
                                         handler *file,
                                         ulonglong table_flags) const
 {
-  if (def->check_length2(ER_TOO_BIG_FIELDLENGTH, m_max_storage))
-    return true;
   def->pack_flag= (def->charset->state & MY_CS_BINSORT) ? FIELDFLAG_BINARY : 0;
   return false;
 }

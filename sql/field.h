@@ -4502,7 +4502,7 @@ public:
     The value of `length' as set by parser: is the number of characters
     for most of the types, or of bytes for BLOBs or numeric types.
   */
-  uint32 char_length;
+  ulonglong char_length;
   uint  decimals, flags, pack_length, key_length;
   List<String> interval_list;
   engine_option_value *option_list;

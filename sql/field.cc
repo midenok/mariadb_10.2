@@ -10152,6 +10152,7 @@ void Column_definition::set_attributes(const Lex_field_type_st &type,
     length= my_strtoll10(type.length(), NULL, &err);
     if (err)
       length= ~0ULL; // safety
+    char_length= length;
   }
 
   if (type.dec())
@@ -10400,7 +10401,7 @@ bool Column_definition::check(THD *thd)
     DBUG_RETURN(true);
 
   /* Remember the value of length */
-  char_length= (uint)length;
+  char_length= length;
 
   /*
     Set NO_DEFAULT_VALUE_FLAG if this field doesn't have a default value and
@@ -10543,7 +10544,7 @@ Column_definition::Column_definition(THD *thd, Field *old_field,
   versioning= VERSIONING_NOT_SET;
   invisible= old_field->invisible;
   interval_list.empty(); // prepare_interval_field() needs this
-  char_length= (uint) length;
+  char_length= length;
 
   if (orig_field)
   {
