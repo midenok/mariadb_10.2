@@ -7014,7 +7014,7 @@ Field *Type_handler_string::
   return new (mem_root)
     Field_string(rec.ptr(), (uint32) attr->length,
                  rec.null_ptr(), rec.null_bit(),
-                 attr->unireg_check, name, attr->charset);
+                 attr->unireg_check, name, attr->charset, this);
 }
 
 

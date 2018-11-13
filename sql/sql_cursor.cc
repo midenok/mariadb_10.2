@@ -427,7 +427,7 @@ void Materialized_cursor::on_table_fill_finished()
 {
   uint fields= table->s->fields;
   for (uint i= 0; i < fields; i++)
-    table->field[i]->orig_table= table->field[i]->table;
+    table->field[i]->set_orig_table(table->field[i]->table);
 }
 
 /***************************************************************************
