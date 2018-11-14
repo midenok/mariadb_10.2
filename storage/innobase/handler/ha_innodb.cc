@@ -21475,7 +21475,7 @@ ib_push_frm_error(
 	}
 }
 
-static Type_handler_string innodb_type_handler_string(MAX_FIELD_VARCHARLENGTH);
+static Type_handler_string innodb_type_handler_string(300);
 static Type_handler_varchar innodb_type_handler_varchar(true);
 
 const Type_handler*
@@ -21491,17 +21491,3 @@ ha_innobase::type_handler(Type_handler_hybrid_field_type* caller) const
 	return caller->type_handler();
 }
 
-void
-ha_innobase::upgrade_type_handler(Field* field) const
-{
-	if (dict_table_is_comp(m_prebuilt->table))
-	{
-		return;
-	}
-	const Type_handler *type = field->type_handler();
-	if (type == &type_handler_string) {
-		field->set_handler(&innodb_type_handler_string);
-	} else if (type == &type_handler_varchar) {
-		field->set_handler(&innodb_type_handler_varchar);
-	}
-}

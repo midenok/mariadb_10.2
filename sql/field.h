@@ -1003,10 +1003,6 @@ public:
   virtual enum ha_base_keytype key_type() const { return HA_KEYTYPE_BINARY; }
   virtual uint32 key_length() const { return pack_length(); }
   virtual const Type_handler *type_handler() const= 0;
-  virtual void set_handler(const Type_handler *other)
-  {
-    DBUG_ASSERT(0);
-  }
   virtual enum_field_types type() const
   {
     return type_handler()->field_type();
@@ -3459,10 +3455,6 @@ public:
      m_type_handler(type_handler) {};
 
   const Type_handler *type_handler() const { return m_type_handler; }
-  void set_handler(const Type_handler *other)
-  {
-    m_type_handler= other;
-  }
   enum ha_base_keytype key_type() const
     { return binary() ? HA_KEYTYPE_BINARY : HA_KEYTYPE_TEXT; }
   bool zero_pack() const { return 0; }
@@ -3573,10 +3565,6 @@ public:
   }
 
   const Type_handler *type_handler() const { return m_type_handler; }
-  void set_handler(const Type_handler *other)
-  {
-    m_type_handler= other;
-  }
   enum ha_base_keytype key_type() const;
   uint row_pack_length() const { return field_length; }
   bool zero_pack() const { return 0; }
