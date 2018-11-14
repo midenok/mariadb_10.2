@@ -4673,6 +4673,7 @@ public:
   {}
 
   virtual const Type_handler *type_handler(Type_handler_hybrid_field_type *caller) const;
+  virtual void upgrade_type_handler(Field* field) const {}
 
 protected:
   Handler_share *get_ha_share_ptr();

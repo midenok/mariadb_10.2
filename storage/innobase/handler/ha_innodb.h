@@ -425,6 +425,7 @@ public:
 
 	const Type_handler*
 	type_handler(Type_handler_hybrid_field_type* caller) const;
+	void upgrade_type_handler(Field* field) const;
 
 protected:
 
