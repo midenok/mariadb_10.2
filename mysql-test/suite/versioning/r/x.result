@@ -1,54 +1,58 @@
---source include/have_innodb.inc
-
 set default_storage_engine=innodb;
 set @bigval= repeat('0123456789', 30);
-
---echo # Case 1: VARCHAR(<255) -> VARCHAR(>255) conversion
+# Case 1: VARCHAR(<255) -> VARCHAR(>255) conversion
 create or replace table t (a varchar(2)) row_format=redundant;
 alter table t modify a varchar(300);
 insert into t values(@bigval);
 select count(a) from t where a = @bigval;
-
---error ER_DATA_TOO_LONG
+count(a)
+1
 insert into t values(repeat('X', 301));
-
+ERROR 22001: Data too long for column 'a' at row 1
 check table t extended;
-
---echo # Case 2: CHAR extension, VARCHAR -> CHAR conversion
---error ER_TOO_BIG_FIELDLENGTH
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+# Case 2: CHAR extension, VARCHAR -> CHAR conversion
 create or replace table t (a char(256)) engine=myisam;
---error ER_TOO_BIG_FIELDLENGTH
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
 create or replace table t (a char(256)) engine=myisam row_format=redundant;
---error ER_TOO_BIG_FIELDLENGTH
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
 create or replace table t (a char(256));
+ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
 create or replace table t (a char(256)) row_format=redundant;
-
 create or replace table t (a char(2)) row_format=redundant;
 alter table t modify a char(300);
 insert into t values(@bigval);
 select count(a) from t where a = @bigval;
+count(a)
+1
 check table t extended;
-
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
 create or replace table t (a varchar(300)) row_format=redundant;
 alter table t modify a char(300);
 insert into t values(@bigval);
 select count(a) from t where a = @bigval;
+count(a)
+1
 check table t extended;
-
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
 create or replace table t (a varchar(300)) row_format=redundant;
 alter table t modify a char(259);
-
---echo # Case 4: instant conversion CHAR -> VARCHAR
+# Case 4: instant conversion CHAR -> VARCHAR
 create or replace table t(a char(2));
 insert into t values('a ');
 select hex(a) from t;
+hex(a)
+61
 alter table t change a a varchar(2);
 select hex(a) from t;
+hex(a)
+61
 drop table t;
-
---echo # Check assertion in wrong instant operation
+# Check assertion in wrong instant operation
 create or replace table t1 (a varchar(26) not null) default character set utf8mb4 row_format=redundant;
 alter table t1 modify a varchar(25) not null;
-
 drop database test;
 create database test;
