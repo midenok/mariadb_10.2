@@ -1,10 +1,21 @@
 --source include/have_innodb.inc
+--source include/maybe_debug.inc
 
 set default_storage_engine=innodb;
 set @bigval= repeat('0123456789', 30);
 
 --echo # Case 1: VARCHAR(<255) -> VARCHAR(>255) conversion
 create or replace table t (a varchar(2)) row_format=redundant;
+if ($have_debug) {
+--disable_query_log
+--disable_result_log
+set debug_dbug= '+d,ib_resize_column_error';
+--error ER_RECORD_FILE_FULL
+alter table t modify a varchar(300);
+set debug_dbug= default;
+--enable_query_log
+--enable_result_log
+}
 alter table t modify a varchar(300);
 insert into t values(@bigval);
 select count(a) from t where a = @bigval;
@@ -24,12 +35,32 @@ create or replace table t (a char(256));
 create or replace table t (a char(256)) row_format=redundant;
 
 create or replace table t (a char(2)) row_format=redundant;
+if ($have_debug) {
+--disable_query_log
+--disable_result_log
+set debug_dbug= '+d,ib_resize_column_error';
+--error ER_RECORD_FILE_FULL
+alter table t modify a char(300);
+set debug_dbug= default;
+--enable_query_log
+--enable_result_log
+}
 alter table t modify a char(300);
 insert into t values(@bigval);
 select count(a) from t where a = @bigval;
 check table t extended;
 
 create or replace table t (a varchar(300)) row_format=redundant;
+if ($have_debug) {
+--disable_query_log
+--disable_result_log
+set debug_dbug= '+d,ib_resize_column_error';
+--error ER_OUT_OF_RESOURCES
+alter table t modify a char(300);
+set debug_dbug= default;
+--enable_query_log
+--enable_result_log
+}
 alter table t modify a char(300);
 insert into t values(@bigval);
 select count(a) from t where a = @bigval;

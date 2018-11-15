@@ -8804,6 +8804,7 @@ innobase_enlarge_column_try(
 		ut_error;
 	case DATA_BINARY:
 	case DATA_VARCHAR:
+	case DATA_CHAR:
 	case DATA_VARMYSQL:
 	case DATA_DECIMAL:
 	case DATA_BLOB:
