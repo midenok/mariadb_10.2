@@ -2977,8 +2977,7 @@ bool Column_definition::prepare_stage2(handler *file,
   */
   DBUG_ASSERT(charset);
 
-  const Type_handler *th= file ? file->type_handler(this) : type_handler();
-  if (th->Column_definition_prepare_stage2(this, file, table_flags))
+  if (type_handler()->Column_definition_prepare_stage2(this, file, table_flags))
     DBUG_RETURN(true);
 
   if (!(flags & NOT_NULL_FLAG) ||

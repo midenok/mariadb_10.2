@@ -24080,7 +24080,7 @@ change_to_use_tmp_fields(THD *thd, Ref_ptr_array ref_pointer_array,
         DBUG_RETURN(true);                    // Fatal error
 
       if (item->real_item()->type() != Item::FIELD_ITEM)
-        field->set_orig_table(0);
+        field->orig_table= 0;
       item_field->name= item->name;
       if (item->type() == Item::REF_ITEM)
       {

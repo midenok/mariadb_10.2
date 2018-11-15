@@ -7016,7 +7016,7 @@ Field *Type_handler_string::
   return new (mem_root)
     Field_string(rec.ptr(), (uint32) attr->length,
                  rec.null_ptr(), rec.null_bit(),
-                 attr->unireg_check, name, attr->charset, this);
+                 attr->unireg_check, name, attr->charset);
 }
 
 
@@ -7033,12 +7033,12 @@ Field *Type_handler_varchar::
                                  HA_VARCHAR_PACKLENGTH((uint32) attr->length),
                                  rec.null_ptr(), rec.null_bit(),
                                  attr->unireg_check, name, share, attr->charset,
-                                 zlib_compression_method, this);
+                                 zlib_compression_method);
   return new (mem_root)
     Field_varstring(rec.ptr(), (uint32) attr->length,
                     HA_VARCHAR_PACKLENGTH((uint32) attr->length),
                     rec.null_ptr(), rec.null_bit(),
-                    attr->unireg_check, name, share, attr->charset, this);
+                    attr->unireg_check, name, share, attr->charset);
 }
 
 

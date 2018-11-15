@@ -645,11 +645,7 @@ public:
     only inside of val_*() and store() members (e.g. you can't use it in cons)
   */
   TABLE *table;                                 // Pointer for table
-protected:
   TABLE *orig_table;                            // Pointer to original table
-public:
-  TABLE *get_orig_table() const { return orig_table; }
-  virtual void set_orig_table(TABLE *t) { orig_table= t; }
   const char * const *table_name;               // Pointer to alias in TABLE
   LEX_CSTRING field_name;
   LEX_CSTRING comment;
@@ -1444,20 +1440,15 @@ public:
   {
     table_name= &alias->Ptr;
   }
-  void init_no_orig(TABLE *table_arg)
-  {
-    table= table_arg;
-    set_table_name(&table_arg->alias);
-  }
   void init(TABLE *table_arg)
   {
-    init_no_orig(table_arg);
-    set_orig_table(table);
+    orig_table= table= table_arg;
+    set_table_name(&table_arg->alias);
   }
-  void init_for_tmp_table(Field *org_field, TABLE *new_table)
+  virtual void init_for_tmp_table(Field *org_field, TABLE *new_table)
   {
-    init_no_orig(new_table);
-    set_orig_table(org_field->orig_table);
+    init(new_table);
+    orig_table= org_field->orig_table;
     vcol_info= 0;
     cond_selectivity= 1.0;
     next_equal_field= NULL;
@@ -1469,7 +1460,7 @@ public:
   }
   void init_for_make_new_field(TABLE *new_table_arg, TABLE *orig_table_arg)
   {
-    init_no_orig(new_table_arg);
+    init(new_table_arg);
     /*
       Normally orig_table is different from table only if field was
       created via ::make_new_field.  Here we alter the type of field,
@@ -1477,7 +1468,7 @@ public:
       preserve the original field metadata for the client-server
       protocol.
     */
-    set_orig_table(orig_table_arg);
+    orig_table= orig_table_arg;
   }
 
   /* maximum possible display length */
@@ -3424,7 +3415,6 @@ new_Field_datetime(MEM_ROOT *root, uchar *ptr, uchar *null_ptr, uchar null_bit,
 }
 
 class Field_string :public Field_longstr {
-  const Type_handler *m_type_handler;
   class Warn_filter_string: public Warn_filter
   {
   public:
@@ -3432,29 +3422,34 @@ class Field_string :public Field_longstr {
   };
   bool is_var_string() const
   {
-    return orig_table &&
+    return can_alter_field_type &&
+           orig_table &&
            (orig_table->s->db_create_options & HA_OPTION_PACK_RECORD) &&
            field_length >= 4 &&
            orig_table->s->frm_version < FRM_VER_TRUE_VARCHAR;
   }
 public:
+  bool can_alter_field_type;
   Field_string(uchar *ptr_arg, uint32 len_arg,uchar *null_ptr_arg,
 	       uchar null_bit_arg,
 	       enum utype unireg_check_arg, const LEX_CSTRING *field_name_arg,
-	       const DTCollation &collation,
-               const Type_handler *type_handler= &type_handler_string)
+	       const DTCollation &collation)
     :Field_longstr(ptr_arg, len_arg, null_ptr_arg, null_bit_arg,
                    unireg_check_arg, field_name_arg, collation),
-     m_type_handler(type_handler) {};
+     can_alter_field_type(1) {};
   Field_string(uint32 len_arg,bool maybe_null_arg,
                const LEX_CSTRING *field_name_arg,
-               const DTCollation &collation,
-               const Type_handler *type_handler= &type_handler_string)
+               const DTCollation &collation)
     :Field_longstr((uchar*) 0, len_arg, maybe_null_arg ? (uchar*) "": 0, 0,
                    NONE, field_name_arg, collation),
-     m_type_handler(type_handler) {};
+     can_alter_field_type(1) {};
 
-  const Type_handler *type_handler() const { return m_type_handler; }
+  const Type_handler *type_handler() const
+  {
+    if (is_var_string())
+      return &type_handler_var_string;
+    return &type_handler_string;
+  }
   enum ha_base_keytype key_type() const
     { return binary() ? HA_KEYTYPE_BINARY : HA_KEYTYPE_TEXT; }
   bool zero_pack() const { return 0; }
@@ -3498,22 +3493,12 @@ public:
   { return charset() == &my_charset_bin ? FALSE : TRUE; }
   Field *make_new_field(MEM_ROOT *root, TABLE *new_table, bool keep_type);
   virtual uint get_key_image(uchar *buff,uint length, imagetype type);
-  virtual void set_orig_table(TABLE *t)
-  {
-    Field_longstr::set_orig_table(t);
-    if (m_type_handler != &type_handler_var_string && is_var_string())
-    {
-      // TODO: deprecated frm support should be replaced by the requirement of database upgrade
-      m_type_handler= &type_handler_var_string;
-    }
-  }
 private:
   int save_field_metadata(uchar *first_byte);
 };
 
 
 class Field_varstring :public Field_longstr {
-  const Type_handler *m_type_handler;
 public:
   uchar *get_data() const
   {
@@ -3543,28 +3528,24 @@ public:
                   uint32 len_arg, uint length_bytes_arg,
                   uchar *null_ptr_arg, uchar null_bit_arg,
 		  enum utype unireg_check_arg, const LEX_CSTRING *field_name_arg,
-		  TABLE_SHARE *share, const DTCollation &collation,
-                  const Type_handler *type_handler= &type_handler_varchar)
+		  TABLE_SHARE *share, const DTCollation &collation)
     :Field_longstr(ptr_arg, len_arg, null_ptr_arg, null_bit_arg,
                    unireg_check_arg, field_name_arg, collation),
-     m_type_handler(type_handler),
      length_bytes(length_bytes_arg)
   {
     share->varchar_fields++;
   }
   Field_varstring(uint32 len_arg,bool maybe_null_arg,
                   const LEX_CSTRING *field_name_arg,
-                  TABLE_SHARE *share, const DTCollation &collation,
-                  const Type_handler *type_handler= &type_handler_varchar)
+                  TABLE_SHARE *share, const DTCollation &collation)
     :Field_longstr((uchar*) 0,len_arg, maybe_null_arg ? (uchar*) "": 0, 0,
                    NONE, field_name_arg, collation),
-     m_type_handler(type_handler),
      length_bytes(len_arg < 256 ? 1 :2)
   {
     share->varchar_fields++;
   }
 
-  const Type_handler *type_handler() const { return m_type_handler; }
+  const Type_handler *type_handler() const { return &type_handler_varchar; }
   enum ha_base_keytype key_type() const;
   uint row_pack_length() const { return field_length; }
   bool zero_pack() const { return 0; }
@@ -3630,11 +3611,10 @@ public:
                              enum utype unireg_check_arg,
                              const LEX_CSTRING *field_name_arg,
                              TABLE_SHARE *share, const DTCollation &collation,
-                             Compression_method *compression_method_arg,
-                             const Type_handler *type_handler= &type_handler_varchar):
+                             Compression_method *compression_method_arg):
     Field_varstring(ptr_arg, len_arg, length_bytes_arg, null_ptr_arg,
                     null_bit_arg, unireg_check_arg, field_name_arg,
-                    share, collation, type_handler),
+                    share, collation),
     compression_method_ptr(compression_method_arg) { DBUG_ASSERT(len_arg > 0); }
   Compression_method *compression_method() const
   { return compression_method_ptr; }

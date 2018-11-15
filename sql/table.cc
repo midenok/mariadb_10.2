@@ -2058,11 +2058,6 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
     name.length= strlen(name.str);
     attr.interval= interval_nr ? share->intervals + interval_nr - 1 : NULL;
     Record_addr addr(record + recpos, null_pos, null_bit_pos);
-    {
-      Type_handler_hybrid_field_type ft(handler);
-      handler_file->type_handler(&ft);
-      handler= ft.type_handler();
-    }
     *field_ptr= reg_field=
       attr.make_field(share, &share->mem_root, &addr, handler, &name, flags);
     if (!reg_field)				// Not supported field type

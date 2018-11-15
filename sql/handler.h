@@ -2815,8 +2815,6 @@ public:
 };
 
 
-class Type_handler_hybrid_field_type;
-
 /**
   The handler class is the interface for dynamically loadable
   storage engines. Do not add ifdefs and take care when adding or
@@ -4679,7 +4677,6 @@ public:
   virtual void update_partition(uint	part_id)
   {}
 
-  virtual const Type_handler *type_handler(Type_handler_hybrid_field_type *caller) const;
   virtual bool prepare_create_table(HA_CREATE_INFO &create_info, Alter_info &alter_info)
   {
     return false;

@@ -21488,20 +21488,3 @@ ib_push_frm_error(
 		break;
 	}
 }
-
-static Type_handler_string innodb_type_handler_string(300);
-static Type_handler_varchar innodb_type_handler_varchar(true);
-
-const Type_handler*
-ha_innobase::type_handler(Type_handler_hybrid_field_type* caller) const
-{
-	const Type_handler *type = caller->type_handler();
-	if (type == &type_handler_string) {
-		caller->set_handler(&innodb_type_handler_string);
-		return &innodb_type_handler_string;
-	} else if (type == &type_handler_varchar) {
-		caller->set_handler(&innodb_type_handler_varchar);
-	}
-	return caller->type_handler();
-}
-

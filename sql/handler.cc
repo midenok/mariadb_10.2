@@ -7079,11 +7079,6 @@ static bool vers_create_sys_field(THD *thd, const char *field_name,
   return false;
 }
 
-const Type_handler* handler::type_handler(Type_handler_hybrid_field_type* caller) const
-{
-  return caller->type_handler();
-}
-
 const Lex_ident Vers_parse_info::default_start= "row_start";
 const Lex_ident Vers_parse_info::default_end= "row_end";
 
