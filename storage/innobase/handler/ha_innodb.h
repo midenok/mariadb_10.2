@@ -425,6 +425,8 @@ public:
 
 	const Type_handler*
 	type_handler(Type_handler_hybrid_field_type* caller) const;
+	bool prepare_create_table(HA_CREATE_INFO &create_info,
+				  Alter_info &alter_info);
 
 protected:
 

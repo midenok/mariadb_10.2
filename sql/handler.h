@@ -302,6 +302,9 @@ enum enum_alter_inplace_result {
 /* calling cmp_ref() on the engine is expensive */
 #define HA_CMP_REF_IS_EXPENSIVE (1ULL << 54)
 
+#define HA_EXTENDED_TYPES_CONVERSION (1ULL << 55)
+#define HA_LAST_TABLE_FLAG HA_EXTENDED_TYPES_CONVERSION
+
 /* bits in index_flags(index_number) for what you can do with index */
 #define HA_READ_NEXT            1       /* TODO really use this flag */
 #define HA_READ_PREV            2       /* supports ::index_prev */
@@ -3113,7 +3116,11 @@ public:
   /**
     The cached_table_flags is set at ha_open and ha_external_lock
   */
-  Table_flags ha_table_flags() const { return cached_table_flags; }
+  Table_flags ha_table_flags() const
+  {
+    DBUG_ASSERT(cached_table_flags <= (HA_LAST_TABLE_FLAG << 1));
+    return cached_table_flags;
+  }
   /** PRIMARY KEY WITHOUT OVERLAPS check is done globally */
   int ha_check_overlaps(const uchar *old_data, const uchar* new_data);
   /**
@@ -4673,6 +4680,10 @@ public:
   {}
 
   virtual const Type_handler *type_handler(Type_handler_hybrid_field_type *caller) const;
+  virtual bool prepare_create_table(HA_CREATE_INFO &create_info, Alter_info &alter_info)
+  {
+    return false;
+  }
 
 protected:
   Handler_share *get_ha_share_ptr();

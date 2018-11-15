@@ -3406,6 +3406,10 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           mysql_add_invisible_index(thd, &alter_info->key_list
                   , &temp, Key::MULTIPLE);
           });
+
+  if (file->prepare_create_table(*create_info, *alter_info))
+    DBUG_RETURN(true);
+
   LEX_CSTRING* connect_string = &create_info->connect_string;
   if (connect_string->length != 0 &&
       connect_string->length > CONNECT_STRING_MAXLEN &&
