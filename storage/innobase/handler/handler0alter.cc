@@ -419,7 +419,7 @@ inline void dict_table_t::instant_column(const dict_table_t& table,
 // 			DBUG_ASSERT(!((c.prtype ^ o->prtype)
 // 				      & ~(DATA_NOT_NULL | DATA_VERSIONED)));
 // 			DBUG_ASSERT(c.mtype == o->mtype);
-			DBUG_ASSERT(c.len == o->len);
+// 			DBUG_ASSERT(c.len == o->len);
 			continue;
 		}
 

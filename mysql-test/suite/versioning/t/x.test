@@ -29,16 +29,17 @@ set debug_dbug= default;
 --enable_result_log
 }
 alter table t modify a varchar(300);
-insert into t values(@bigval);
+insert into t values (@bigval);
 select count(a) from t where a = @bigval;
-
 --error ER_DATA_TOO_LONG
-insert into t values(repeat('X', 301));
+insert into t values (repeat('X', 301));
+alter table t modify a char(4096);
+select count(a) from t where a = @bigval;
 
 check table t extended;
 call check_table('t');
 
---echo # Case 2: CHAR extension, VARCHAR -> CHAR conversion
+--echo # Case 2: CHAR extension
 --error ER_TOO_BIG_FIELDLENGTH
 create or replace table t (a char(256)) engine=myisam;
 --error ER_TOO_BIG_FIELDLENGTH
@@ -59,12 +60,15 @@ set debug_dbug= default;
 --enable_result_log
 }
 alter table t modify a char(300);
-insert into t values(@bigval);
+insert into t values (@bigval);
+select count(a) from t where a = @bigval;
+alter table t modify a char(4096);
 select count(a) from t where a = @bigval;
 
 check table t extended;
 call check_table('t');
 
+--echo # Case 3: VARCHAR -> CHAR conversion
 create or replace table t (a varchar(300)) row_format=redundant;
 if ($have_debug) {
 --disable_query_log
@@ -76,8 +80,8 @@ set debug_dbug= default;
 --enable_query_log
 --enable_result_log
 }
+insert into t values (@bigval);
 alter table t modify a char(300);
-insert into t values(@bigval);
 select count(a) from t where a = @bigval;
 
 check table t extended;
@@ -86,7 +90,44 @@ call check_table('t');
 create or replace table t (a varchar(300)) row_format=redundant;
 alter table t modify a char(259);
 
---echo # Case 4: instant conversion CHAR -> VARCHAR
+--echo # Case 4: integer conversions
+create or replace table t (x tinyint) row_format=redundant;
+if ($have_debug) {
+--disable_query_log
+--disable_result_log
+set debug_dbug= '+d,ib_instant_error';
+--error ER_RECORD_FILE_FULL
+alter table t modify x smallint;
+set debug_dbug= default;
+--enable_query_log
+--enable_result_log
+}
+insert into t values (127);
+alter table t modify x smallint;
+select * from t;
+check table t extended;
+call check_table('t');
+
+update t set x= 32767;
+alter table t modify x mediumint;
+select * from t;
+check table t extended;
+call check_table('t');
+
+update t set x= 8388607;
+alter table t modify x int;
+select * from t;
+check table t extended;
+call check_table('t');
+
+update t set x= 2147483647;
+alter table t modify x bigint;
+select * from t;
+check table t extended;
+call check_table('t');
+
+
+--echo # Case 5: instant conversion CHAR -> VARCHAR
 create or replace table t(a char(2));
 insert into t values('a ');
 select hex(a) from t;

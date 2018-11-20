@@ -9380,12 +9380,19 @@ bool Field_num::eq_def(const Field *field) const
 
 uint Field_num::is_equal(Create_field *new_field)
 {
-  return ((new_field->type_handler() == type_handler()) &&
-          ((new_field->flags & UNSIGNED_FLAG) == 
-           (uint) (flags & UNSIGNED_FLAG)) &&
-	  ((new_field->flags & AUTO_INCREMENT_FLAG) ==
-	   (uint) (flags & AUTO_INCREMENT_FLAG)) &&
-          (new_field->pack_length == pack_length()));
+  bool extended= (table->file->ha_table_flags() & HA_EXTENDED_TYPES_CONVERSION);
+  if ((extended ?
+       new_field->type_handler()->result_type() == type_handler()->result_type() :
+       new_field->type_handler() == type_handler()) &&
+      ((new_field->flags & UNSIGNED_FLAG) == (uint) (flags & UNSIGNED_FLAG)) &&
+      ((new_field->flags & AUTO_INCREMENT_FLAG) == (uint) (flags & AUTO_INCREMENT_FLAG)))
+  {
+    if (new_field->pack_length == pack_length())
+      return IS_EQUAL_YES;
+    if (extended && new_field->pack_length > pack_length())
+      return IS_EQUAL_PACK_LENGTH2;
+  }
+  return IS_EQUAL_NO;
 }
 
 

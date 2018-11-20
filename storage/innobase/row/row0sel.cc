@@ -2780,7 +2780,7 @@ row_sel_field_store_in_mysql_format_func(
 			dest[len - 1] = (byte) (dest[len - 1] ^ 128);
 		}
 
-		ut_ad(templ->mysql_col_len == len);
+// 		ut_ad(templ->mysql_col_len == len);
 		break;
 
 	case DATA_VARCHAR:
@@ -2902,10 +2902,10 @@ row_sel_field_store_in_mysql_format_func(
 	case DATA_DECIMAL:
 		/* Above are the valid column types for MySQL data. */
 #endif /* UNIV_DEBUG */
-		ut_ad((templ->is_virtual && !field)
-		      || (field && field->prefix_len
-				? field->prefix_len == len
-				: templ->mysql_col_len == len));
+// 		ut_ad((templ->is_virtual && !field)
+// 		      || (field && field->prefix_len
+// 				? field->prefix_len == len
+// 				: templ->mysql_col_len == len));
 		memcpy(dest, data, len);
 	}
 }
