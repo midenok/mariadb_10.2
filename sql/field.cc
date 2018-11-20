@@ -7799,7 +7799,9 @@ Field *Field_varstring::new_key_field(MEM_ROOT *root, TABLE *new_table,
 
 uint Field_varstring::is_equal(Create_field *new_field)
 {
-  if (new_field->type_handler() == type_handler() &&
+  bool extended= (table->file->ha_table_flags() & HA_EXTENDED_TYPES_CONVERSION);
+  if ((new_field->type_handler() == type_handler() ||
+      (extended && new_field->type_handler() == &type_handler_string)) &&
       new_field->charset == field_charset &&
       !new_field->compression_method() == !compression_method())
   {
@@ -7807,9 +7809,8 @@ uint Field_varstring::is_equal(Create_field *new_field)
       return IS_EQUAL_YES;
     if (new_field->length > field_length)
     {
-      if ((new_field->length <= 255 && field_length <= 255) ||
-          (new_field->length > 255 && field_length > 255) ||
-          (table->file->ha_table_flags() & HA_EXTENDED_TYPES_CONVERSION))
+      if (extended || (new_field->length <= 255 && field_length <= 255) ||
+          (new_field->length > 255 && field_length > 255))
         return IS_EQUAL_PACK_LENGTH; // VARCHAR, longer variable length
     }
   }
