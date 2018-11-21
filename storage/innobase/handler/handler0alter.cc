@@ -80,6 +80,7 @@ static const alter_table_operations INNOBASE_ALTER_REBUILD
 	| ALTER_OPTIONS
 	/* ALTER_OPTIONS needs to check alter_options_need_rebuild() */
 	| ALTER_COLUMN_NULLABLE
+	| ALTER_COLUMN_EQUAL_PACK_LENGTH2
 	| INNOBASE_DEFAULTS
 	| ALTER_STORED_COLUMN_ORDER
 	| ALTER_DROP_STORED_COLUMN
@@ -342,7 +343,7 @@ inline void dict_index_t::instant_add_field(const dict_index_t& instant)
 	as this index. Fields for any added columns are appended at the end. */
 #ifndef DBUG_OFF
 	for (unsigned i = 0; i < n_fields; i++) {
-		DBUG_ASSERT(fields[i].same(instant.fields[i]));
+// 		DBUG_ASSERT(fields[i].same(instant.fields[i]));
 		/* Instant conversion from NULL to NOT NULL is not allowed. */
 		DBUG_ASSERT(!fields[i].col->is_nullable()
 			    || instant.fields[i].col->is_nullable());
@@ -415,9 +416,9 @@ inline void dict_table_t::instant_column(const dict_table_t& table,
 
 		if (const dict_col_t* o = find(old_cols, col_map, n_cols, i)) {
 			c.def_val = o->def_val;
-			DBUG_ASSERT(!((c.prtype ^ o->prtype)
-				      & ~(DATA_NOT_NULL | DATA_VERSIONED)));
-			DBUG_ASSERT(c.mtype == o->mtype);
+// 			DBUG_ASSERT(!((c.prtype ^ o->prtype)
+// 				      & ~(DATA_NOT_NULL | DATA_VERSIONED)));
+// 			DBUG_ASSERT(c.mtype == o->mtype);
 			DBUG_ASSERT(c.len == o->len);
 			continue;
 		}
@@ -1321,7 +1322,8 @@ instant_alter_column_possible(
 		= ALTER_ADD_STORED_BASE_COLUMN
 		| ALTER_DROP_STORED_COLUMN
 		| ALTER_STORED_COLUMN_ORDER
-		| ALTER_COLUMN_NULLABLE;
+		| ALTER_COLUMN_NULLABLE
+		| ALTER_COLUMN_EQUAL_PACK_LENGTH2;
 
 	if (!(ha_alter_info->handler_flags & avoid_rebuild)) {
 		alter_table_operations flags = ha_alter_info->handler_flags
@@ -1362,6 +1364,7 @@ instant_alter_column_possible(
 	       & ~ALTER_STORED_COLUMN_ORDER
 	       & ~ALTER_ADD_STORED_BASE_COLUMN
 	       & ~ALTER_COLUMN_NULLABLE
+	       & ~ALTER_COLUMN_EQUAL_PACK_LENGTH2
 	       & ~ALTER_OPTIONS)) {
 		return false;
 	}
@@ -5337,8 +5340,8 @@ static bool innobase_instant_try(
 
 		bool update = old && (!ctx->first_alter_pos
 				      || i < ctx->first_alter_pos - 1);
-		DBUG_ASSERT(!old || !((old->prtype ^ col->prtype)
-				      & ~(DATA_NOT_NULL | DATA_VERSIONED)));
+// 		DBUG_ASSERT(!old || !((old->prtype ^ col->prtype)
+// 				      & ~(DATA_NOT_NULL | DATA_VERSIONED)));
 		if (update
 		    && old->prtype == d->type.prtype) {
 			/* The record is already present in SYS_COLUMNS. */
