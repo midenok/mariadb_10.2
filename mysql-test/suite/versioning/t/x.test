@@ -4,6 +4,18 @@
 set default_storage_engine=innodb;
 set @bigval= repeat('0123456789', 30);
 
+delimiter ~~;
+create or replace procedure check_table(table_name varchar(255))
+begin
+  select table_id into @table_id
+  from information_schema.innodb_sys_tables
+  where name = concat('test/', table_name);
+  select name, mtype, hex(prtype) as prtype, len
+  from information_schema.innodb_sys_columns
+  where table_id = @table_id;
+end~~
+delimiter ;~~
+
 --echo # Case 1: VARCHAR(<255) -> VARCHAR(>255) conversion
 create or replace table t (a varchar(2)) row_format=redundant;
 if ($have_debug) {
@@ -24,6 +36,7 @@ select count(a) from t where a = @bigval;
 insert into t values(repeat('X', 301));
 
 check table t extended;
+call check_table('t');
 
 --echo # Case 2: CHAR extension, VARCHAR -> CHAR conversion
 --error ER_TOO_BIG_FIELDLENGTH
@@ -48,14 +61,16 @@ set debug_dbug= default;
 alter table t modify a char(300);
 insert into t values(@bigval);
 select count(a) from t where a = @bigval;
+
 check table t extended;
+call check_table('t');
 
 create or replace table t (a varchar(300)) row_format=redundant;
 if ($have_debug) {
 --disable_query_log
 --disable_result_log
-set debug_dbug= '+d,ib_resize_column_error';
---error ER_OUT_OF_RESOURCES
+set debug_dbug= '+d,ib_instant_error';
+--error ER_RECORD_FILE_FULL
 alter table t modify a char(300);
 set debug_dbug= default;
 --enable_query_log
@@ -64,7 +79,9 @@ set debug_dbug= default;
 alter table t modify a char(300);
 insert into t values(@bigval);
 select count(a) from t where a = @bigval;
+
 check table t extended;
+call check_table('t');
 
 create or replace table t (a varchar(300)) row_format=redundant;
 alter table t modify a char(259);

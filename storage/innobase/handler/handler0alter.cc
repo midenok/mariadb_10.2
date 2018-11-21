@@ -5433,6 +5433,8 @@ add_all_virtual:
 		NULL, trx, ctx->heap, NULL);
 
 	dberr_t err = DB_SUCCESS;
+	DBUG_EXECUTE_IF("ib_instant_error",
+			err = DB_OUT_OF_FILE_SPACE; goto func_exit;);
 	if (rec_is_metadata(rec, *index)) {
 		ut_ad(page_rec_is_user_rec(rec));
 		if (!page_has_next(block->frame)
