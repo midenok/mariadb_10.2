@@ -139,5 +139,10 @@ drop table t;
 create or replace table t1 (a varchar(26) not null) default character set utf8mb4 row_format=redundant;
 alter table t1 modify a varchar(25) not null;
 
+--echo # Check row_mysql_store_col_in_innobase_format()
+create or replace table t1(x int primary key, a varchar(20)) row_format=redundant;
+insert into t1 (x) values (1);
+update t1 set a= 'foo' where x = 2;
+
 drop database test;
 create database test;
