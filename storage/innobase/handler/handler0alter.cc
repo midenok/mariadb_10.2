@@ -5344,8 +5344,9 @@ static bool innobase_instant_try(
 
 		bool update = old && (!ctx->first_alter_pos
 				      || i < ctx->first_alter_pos - 1);
-// 		DBUG_ASSERT(!old || !((old->prtype ^ col->prtype)
-// 				      & ~(DATA_NOT_NULL | DATA_VERSIONED)));
+		DBUG_ASSERT(!old || !((old->prtype ^ col->prtype)
+				      & ~(DATA_NOT_NULL | DATA_VERSIONED))
+			    || !dict_table_is_comp(user_table));
 		if (update
 		    && old->prtype == d->type.prtype) {
 			/* The record is already present in SYS_COLUMNS. */
