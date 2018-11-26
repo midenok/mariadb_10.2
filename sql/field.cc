@@ -6954,21 +6954,14 @@ uint Field::is_equal(Create_field *new_field)
 
 uint Field_str::is_equal(Create_field *new_field)
 {
-  if (new_field->charset == field_charset)
+  if (new_field->type_handler() == type_handler() &&
+      new_field->charset == field_charset)
   {
-    bool extended= (table->file->ha_table_flags() & HA_EXTENDED_TYPES_CONVERSION);
-    if (extended && new_field->type_handler() == &type_handler_varchar &&
-        new_field->length == max_display_length())
-    {
-      return IS_EQUAL_PACK_LENGTH2;
-    }
-    if (new_field->type_handler() == type_handler())
-    {
-      if (new_field->length == max_display_length())
-        return IS_EQUAL_YES;
-      if (extended && new_field->length > max_display_length())
-        return IS_EQUAL_PACK_LENGTH;
-    }
+    if (new_field->length == max_display_length())
+      return IS_EQUAL_YES;
+    if (new_field->length > max_display_length() &&
+        (table->file->ha_table_flags() & HA_EXTENDED_TYPES_CONVERSION))
+      return IS_EQUAL_PACK_LENGTH;
   }
   return IS_EQUAL_NO;
 }
