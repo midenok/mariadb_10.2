@@ -2450,10 +2450,13 @@ bool Type_handler_string::
                                         handler *file,
                                         ulonglong table_flags) const
 {
-  if (c->check_length2(ER_TOO_BIG_FIELDLENGTH,
-                       (table_flags & HA_EXTENDED_TYPES_CONVERSION) ?
-                       MAX_FIELD_VARCHARLENGTH : MAX_FIELD_CHARLENGTH))
+  ulong limit= ((table_flags & HA_EXTENDED_TYPES_CONVERSION) ?
+                MAX_FIELD_VARCHARLENGTH : MAX_FIELD_CHARLENGTH);
+  if (c->char_length > limit)
+  {
+    my_error(ER_TOO_BIG_FIELDLENGTH, MYF(0), c->field_name.str, limit);
     return true;
+  }
   return Type_handler_longstr::
     Column_definition_prepare_stage1(thd, mem_root, c, file, table_flags);
 }

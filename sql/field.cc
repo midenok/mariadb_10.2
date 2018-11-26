@@ -10257,14 +10257,6 @@ bool Column_definition::check_length(uint mysql_errno, uint limit) const
 }
 
 
-bool Column_definition::check_length2(uint mysql_errno, uint limit) const
-{
-  if (char_length <= limit)
-    return false;
-  my_error(mysql_errno, MYF(0), field_name.str, static_cast<ulong>(limit));
-  return true;
-}
-
 bool Column_definition::fix_attributes_int(uint default_length)
 {
   if (length)
