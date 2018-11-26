@@ -343,7 +343,8 @@ inline void dict_index_t::instant_add_field(const dict_index_t& instant)
 	as this index. Fields for any added columns are appended at the end. */
 #ifndef DBUG_OFF
 	for (unsigned i = 0; i < n_fields; i++) {
-// 		DBUG_ASSERT(fields[i].same(instant.fields[i]));
+		DBUG_ASSERT(fields[i].same(instant.fields[i])
+			    || !dict_table_is_comp(table));
 		/* Instant conversion from NULL to NOT NULL is not allowed. */
 		DBUG_ASSERT(!fields[i].col->is_nullable()
 			    || instant.fields[i].col->is_nullable());
@@ -416,10 +417,13 @@ inline void dict_table_t::instant_column(const dict_table_t& table,
 
 		if (const dict_col_t* o = find(old_cols, col_map, n_cols, i)) {
 			c.def_val = o->def_val;
-// 			DBUG_ASSERT(!((c.prtype ^ o->prtype)
-// 				      & ~(DATA_NOT_NULL | DATA_VERSIONED)));
-// 			DBUG_ASSERT(c.mtype == o->mtype);
-// 			DBUG_ASSERT(c.len == o->len);
+			DBUG_ASSERT(!((c.prtype ^ o->prtype)
+				      & ~(DATA_NOT_NULL | DATA_VERSIONED))
+				    || !dict_table_is_comp(&table));
+			DBUG_ASSERT(c.mtype == o->mtype
+				    || !dict_table_is_comp(&table));
+			DBUG_ASSERT(c.len == o->len
+				    || !dict_table_is_comp(&table));
 			continue;
 		}
 

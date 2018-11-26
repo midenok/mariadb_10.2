@@ -11,14 +11,14 @@ where table_id = @table_id;
 end~~
 # Case 1: VARCHAR(<255) -> VARCHAR(>255) conversion
 create or replace table t (a varchar(2)) row_format=redundant;
-alter table t modify a varchar(300);
+alter table t modify a varchar(300), algorithm=instant;
 insert into t values (@bigval);
 select count(a) from t where a = @bigval;
 count(a)
 1
 insert into t values (repeat('X', 301));
 ERROR 22001: Data too long for column 'a' at row 1
-alter table t modify a char(4096);
+alter table t modify a char(4096), algorithm=instant;
 select count(a) from t where a = @bigval;
 count(a)
 1
@@ -37,12 +37,12 @@ create or replace table t (a char(256));
 ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
 create or replace table t (a char(256)) row_format=redundant;
 create or replace table t (a char(2)) row_format=redundant;
-alter table t modify a char(300);
+alter table t modify a char(300), algorithm=instant;
 insert into t values (@bigval);
 select count(a) from t where a = @bigval;
 count(a)
 1
-alter table t modify a char(4096);
+alter table t modify a char(4096), algorithm=instant;
 select count(a) from t where a = @bigval;
 count(a)
 1
@@ -54,23 +54,54 @@ name	mtype	prtype	len
 a	2	800FE	4096
 # Case 3: VARCHAR -> CHAR conversion
 create or replace table t (a varchar(300)) row_format=redundant;
+alter table t modify a char(259), algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY
+alter table t modify a char(259), algorithm=copy;
+create or replace table t (a varchar(300)) row_format=redundant;
 insert into t values (@bigval);
-alter table t modify a char(300);
+insert into t values ('z');
+alter table t modify a char(300), algorithm=instant;
 select count(a) from t where a = @bigval;
 count(a)
 1
+select a, length(a) from t where a = 'z';
+a	length(a)
+z	1
+select * from t;
+a
+012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+z
 check table t extended;
 Table	Op	Msg_type	Msg_text
 test.t	check	status	OK
 call check_table('t');
 name	mtype	prtype	len
 a	2	800FE	300
-create or replace table t (a varchar(300)) row_format=redundant;
-alter table t modify a char(259);
+alter table t modify a varchar(300), algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY
+alter table t modify a varchar(300), algorithm=copy;
+# Convert to bigger size
+alter table t modify a char(310), algorithm=instant;
+select count(a) from t where a = @bigval;
+count(a)
+1
+select a, length(a) from t where a = 'z';
+a	length(a)
+z	1
+select * from t;
+a
+012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+z
+check table t extended;
+Table	Op	Msg_type	Msg_text
+test.t	check	status	OK
+call check_table('t');
+name	mtype	prtype	len
+a	2	800FE	310
 # Case 4: integer conversions
 create or replace table t (x tinyint) row_format=redundant;
 insert into t values (127);
-alter table t modify x smallint;
+alter table t modify x smallint, algorithm=instant;
 select * from t;
 x
 127
@@ -81,7 +112,7 @@ call check_table('t');
 name	mtype	prtype	len
 x	6	402	2
 update t set x= 32767;
-alter table t modify x mediumint;
+alter table t modify x mediumint, algorithm=instant;
 select * from t;
 x
 32767
@@ -92,7 +123,7 @@ call check_table('t');
 name	mtype	prtype	len
 x	6	409	3
 update t set x= 8388607;
-alter table t modify x int;
+alter table t modify x int, algorithm=instant;
 select * from t;
 x
 8388607
@@ -103,7 +134,7 @@ call check_table('t');
 name	mtype	prtype	len
 x	6	403	4
 update t set x= 2147483647;
-alter table t modify x bigint;
+alter table t modify x bigint, algorithm=instant;
 select * from t;
 x
 2147483647

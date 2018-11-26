@@ -7804,7 +7804,7 @@ uint Field_varstring::is_equal(Create_field *new_field)
   {
     bool extended= (table->file->ha_table_flags() & HA_EXTENDED_TYPES_CONVERSION);
     if (extended && new_field->type_handler() == &type_handler_string &&
-        new_field->length == field_length)
+        new_field->length >= field_length)
     {
       return IS_EQUAL_PACK_LENGTH2;
     }
