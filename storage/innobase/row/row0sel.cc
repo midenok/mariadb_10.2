@@ -2721,11 +2721,10 @@ row_sel_field_store_in_mysql_format_func(
 	bool		comp)
 {
 	byte*			ptr;
-#ifdef UNIV_DEBUG
 	const dict_field_t*	field
 		= templ->is_virtual
 			 ? NULL : dict_index_get_nth_field(index, field_no);
-#endif /* UNIV_DEBUG */
+	uint16_t unsigned_len;
 
 	ut_ad(len != UNIV_SQL_NULL);
 	UNIV_MEM_ASSERT_RW(data, len);
@@ -2750,7 +2749,9 @@ row_sel_field_store_in_mysql_format_func(
 			data++;
 		}
 
-		if (!templ->is_unsigned) {
+		unsigned_len = field ? field->col->unsigned_len : 0;
+
+		if (!templ->is_unsigned && len > unsigned_len) {
 			dest[len - 1] = (byte) (dest[len - 1] ^ 128);
 		}
 

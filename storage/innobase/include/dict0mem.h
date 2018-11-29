@@ -585,6 +585,9 @@ struct dict_col_t{
 					this column. Our current max limit is
 					3072 (REC_VERSION_56_MAX_INDEX_COL_LEN)
 					bytes. */
+	unsigned	unsigned_len:16; /*!< before ALTER to signed the field
+					 was unsigned and was of this length. */
+
 private:
 	/** Special value of ind for a dropped column */
 	static const unsigned DROPPED = 1023;
@@ -1577,6 +1580,15 @@ class field_map_element_t
 	/** Set if the column of the field was originally declared NOT NULL */
 	static constexpr uint16_t NOT_NULL = 1U << (IND_BITS + 4);
 
+	/** The field was unsigned before ALTER to signed:
+		0: never
+		1: tinyint
+		2: smallint
+		3: mediumint
+		4: int
+	*/
+	static constexpr uint16_t UNSIGNED_SIZE = 7U << (IND_BITS + 1);
+
 	/** Column index (if !(data & DROPPED)): table->cols[data & IND],
 	or field length (if (data & DROPPED)):
 	(data & IND) = 0 if variable-length with max_len < 256 bytes;
@@ -1601,8 +1613,17 @@ public:
 			clear_not_null();
 		}
 	}
+	uint16_t unsigned_len() const
+	{
+		return (data & UNSIGNED_SIZE) >> (IND_BITS + 1);
+	}
+	void or_unsigned_len(uint16_t unsigned_len)
+	{
+		ut_ad(unsigned_len <= 4);
+		data |= unsigned_len << (IND_BITS + 1);
+	}
 	uint16_t ind() const { return data & IND; }
-	void set_ind(uint16_t ind)
+	void or_ind(uint16_t ind)
 	{
 		DBUG_ASSERT(ind <= IND);
 		data |= ind;
@@ -1751,7 +1772,8 @@ struct dict_table_t {
 				    const ulint* col_map,
 				    unsigned& first_alter_pos);
 
-	/** Adjust table metadata for instant ADD/DROP/reorder COLUMN.
+	/** Adjust table metadata for instant ADD/DROP/reorder COLUMN,
+	unsigned -> bigger signed.
 	@param[in]	table	table on which prepare_instant() was invoked
 	@param[in]	col_map	mapping from cols[] and v_cols[] to table */
 	inline void instant_column(const dict_table_t& table,
