@@ -2917,9 +2917,6 @@ ha_innobase::ha_innobase(
 	m_start_of_scan(),
         m_mysql_has_locked()
 {
-	if (table_arg && table_arg->row_type == ROW_TYPE_REDUNDANT) {
-		m_int_table_flags |= HA_EXTENDED_TYPES_CONVERSION;
-	}
 }
 
 /*********************************************************************//**
@@ -6101,6 +6098,11 @@ no_such_table:
 		set_my_errno(ENOENT);
 
 		DBUG_RETURN(HA_ERR_NO_SUCH_TABLE);
+	}
+
+	if (!ib_table->not_redundant()) {
+		m_int_table_flags |= HA_EXTENDED_TYPES_CONVERSION;
+		cached_table_flags |= HA_EXTENDED_TYPES_CONVERSION;
 	}
 
 	size_t n_fields = mysql_fields(table);
