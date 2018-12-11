@@ -18,49 +18,22 @@ count(a)
 1
 insert into t values (repeat('X', 301));
 ERROR 22001: Data too long for column 'a' at row 1
-alter table t modify a char(4096), algorithm=instant;
-select count(a) from t where a = @bigval;
-count(a)
-1
 check table t extended;
 Table	Op	Msg_type	Msg_text
 test.t	check	status	OK
 call check_table('t');
 name	mtype	prtype	len
-a	2	800FE	4096
-# Case 2: CHAR extension
-create or replace table t (a char(256)) engine=myisam;
-ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
-create or replace table t (a char(256)) engine=myisam row_format=redundant;
-ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
-create or replace table t (a char(256));
-ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT instead
-create or replace table t (a char(256)) row_format=redundant;
-create or replace table t (a char(2)) row_format=redundant;
-alter table t modify a char(300), algorithm=instant;
-insert into t values (@bigval);
-select count(a) from t where a = @bigval;
-count(a)
-1
-alter table t modify a char(4096), algorithm=instant;
-select count(a) from t where a = @bigval;
-count(a)
-1
-check table t extended;
-Table	Op	Msg_type	Msg_text
-test.t	check	status	OK
-call check_table('t');
-name	mtype	prtype	len
-a	2	800FE	4096
-# Case 3: VARCHAR -> CHAR conversion
+a	1	8000F	300
+# Case 2: VARCHAR -> CHAR conversion
+set @bigval= repeat('0123456789', 20);
 create or replace table t (a varchar(300)) row_format=redundant;
-alter table t modify a char(259), algorithm=instant;
+alter table t modify a char(255), algorithm=instant;
 ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY
-alter table t modify a char(259), algorithm=copy;
-create or replace table t (a varchar(300)) row_format=redundant;
+alter table t modify a char(255), algorithm=copy;
+create or replace table t (a varchar(200)) row_format=redundant;
 insert into t values (@bigval);
 insert into t values ('z');
-alter table t modify a char(300), algorithm=instant;
+alter table t modify a char(200), algorithm=instant;
 select count(a) from t where a = @bigval;
 count(a)
 1
@@ -69,19 +42,19 @@ a	length(a)
 z	1
 select * from t;
 a
-012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
 z
 check table t extended;
 Table	Op	Msg_type	Msg_text
 test.t	check	status	OK
 call check_table('t');
 name	mtype	prtype	len
-a	2	800FE	300
-alter table t modify a varchar(300), algorithm=instant;
+a	2	800FE	200
+alter table t modify a varchar(200), algorithm=instant;
 ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY
-alter table t modify a varchar(300), algorithm=copy;
+alter table t modify a varchar(200), algorithm=copy;
 # Convert to bigger size
-alter table t modify a char(310), algorithm=instant;
+alter table t modify a char(255), algorithm=instant;
 select count(a) from t where a = @bigval;
 count(a)
 1
@@ -90,15 +63,15 @@ a	length(a)
 z	1
 select * from t;
 a
-012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
 z
 check table t extended;
 Table	Op	Msg_type	Msg_text
 test.t	check	status	OK
 call check_table('t');
 name	mtype	prtype	len
-a	2	800FE	310
-# Case 4: integer conversions
+a	2	800FE	255
+# Case 3: integer conversions
 create or replace table t (x tinyint) row_format=redundant;
 insert into t values (127);
 alter table t modify x smallint, algorithm=instant;
@@ -144,7 +117,7 @@ test.t	check	status	OK
 call check_table('t');
 name	mtype	prtype	len
 x	6	408	8
-# Case 5: instant conversion unsigned -> signed
+# Case 4: instant conversion unsigned -> signed
 create or replace table t(x int) row_format=redundant;
 alter table t modify x int unsigned, algorithm=instant;
 ERROR 0A000: ALGORITHM=INSTANT is not supported. Reason: Cannot change column type INPLACE. Try ALGORITHM=COPY

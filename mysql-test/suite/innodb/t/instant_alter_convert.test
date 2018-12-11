@@ -34,63 +34,33 @@ insert into t values (@bigval);
 select count(a) from t where a = @bigval;
 --error ER_DATA_TOO_LONG
 insert into t values (repeat('X', 301));
-alter table t modify a char(4096), algorithm=instant;
-select count(a) from t where a = @bigval;
 
 check table t extended;
 call check_table('t');
 
 
---echo # Case 2: CHAR extension
---error ER_TOO_BIG_FIELDLENGTH
-create or replace table t (a char(256)) engine=myisam;
---error ER_TOO_BIG_FIELDLENGTH
-create or replace table t (a char(256)) engine=myisam row_format=redundant;
---error ER_TOO_BIG_FIELDLENGTH
-create or replace table t (a char(256));
-create or replace table t (a char(256)) row_format=redundant;
+--echo # Case 2: VARCHAR -> CHAR conversion
+set @bigval= repeat('0123456789', 20);
 
-create or replace table t (a char(2)) row_format=redundant;
-if ($have_debug) {
---disable_query_log
---disable_result_log
-set debug_dbug= '+d,ib_resize_column_error';
---error ER_RECORD_FILE_FULL
-alter table t modify a char(300);
-set debug_dbug= default;
---enable_query_log
---enable_result_log
-}
-alter table t modify a char(300), algorithm=instant;
-insert into t values (@bigval);
-select count(a) from t where a = @bigval;
-alter table t modify a char(4096), algorithm=instant;
-select count(a) from t where a = @bigval;
-
-check table t extended;
-call check_table('t');
-
-
---echo # Case 3: VARCHAR -> CHAR conversion
 create or replace table t (a varchar(300)) row_format=redundant;
 --error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
-alter table t modify a char(259), algorithm=instant;
-alter table t modify a char(259), algorithm=copy;
+alter table t modify a char(255), algorithm=instant;
+alter table t modify a char(255), algorithm=copy;
 
-create or replace table t (a varchar(300)) row_format=redundant;
+create or replace table t (a varchar(200)) row_format=redundant;
 if ($have_debug) {
 --disable_query_log
 --disable_result_log
 set debug_dbug= '+d,ib_instant_error';
 --error ER_RECORD_FILE_FULL
-alter table t modify a char(300);
+alter table t modify a char(200);
 set debug_dbug= default;
 --enable_query_log
 --enable_result_log
 }
 insert into t values (@bigval);
 insert into t values ('z');
-alter table t modify a char(300), algorithm=instant;
+alter table t modify a char(200), algorithm=instant;
 select count(a) from t where a = @bigval;
 select a, length(a) from t where a = 'z';
 select * from t;
@@ -99,11 +69,11 @@ check table t extended;
 call check_table('t');
 
 --error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
-alter table t modify a varchar(300), algorithm=instant;
-alter table t modify a varchar(300), algorithm=copy;
+alter table t modify a varchar(200), algorithm=instant;
+alter table t modify a varchar(200), algorithm=copy;
 
 --echo # Convert to bigger size
-alter table t modify a char(310), algorithm=instant;
+alter table t modify a char(255), algorithm=instant;
 select count(a) from t where a = @bigval;
 select a, length(a) from t where a = 'z';
 select * from t;
@@ -112,7 +82,7 @@ check table t extended;
 call check_table('t');
 
 
---echo # Case 4: integer conversions
+--echo # Case 3: integer conversions
 create or replace table t (x tinyint) row_format=redundant;
 if ($have_debug) {
 --disable_query_log
@@ -149,7 +119,7 @@ check table t extended;
 call check_table('t');
 
 
---echo # Case 5: instant conversion unsigned -> signed
+--echo # Case 4: instant conversion unsigned -> signed
 create or replace table t(x int) row_format=redundant;
 --error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 alter table t modify x int unsigned, algorithm=instant;

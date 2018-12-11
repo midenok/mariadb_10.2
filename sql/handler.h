@@ -4685,11 +4685,6 @@ public:
   virtual void update_partition(uint	part_id)
   {}
 
-  virtual bool prepare_create_table(HA_CREATE_INFO &create_info, Alter_info &alter_info)
-  {
-    return false;
-  }
-
 protected:
   Handler_share *get_ha_share_ptr();
   void set_ha_share_ptr(Handler_share *arg_ha_share);

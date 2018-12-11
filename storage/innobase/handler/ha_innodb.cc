@@ -2922,16 +2922,6 @@ ha_innobase::ha_innobase(
 	}
 }
 
-bool ha_innobase::prepare_create_table(HA_CREATE_INFO &create_info,
-				       Alter_info &alter_info)
-{
-	if (create_info.row_type == ROW_TYPE_REDUNDANT) {
-		m_int_table_flags |= HA_EXTENDED_TYPES_CONVERSION;
-		cached_table_flags |= HA_EXTENDED_TYPES_CONVERSION;
-	}
-	return false;
-}
-
 /*********************************************************************//**
 Destruct ha_innobase handler. */
 
