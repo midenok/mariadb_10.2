@@ -33,6 +33,7 @@ Created 2012-08-21 Sunny Bains
 #include "sync0sync.h"
 #include "sync0debug.h"
 #include "srv0start.h"
+#include "srv0srv.h"
 #include "fil0fil.h"
 
 #include <vector>
@@ -1575,6 +1576,9 @@ struct CreateTracker {
 		uint16_t	line)
 		UNIV_NOTHROW
 	{
+		if (srv_operation != SRV_OPERATION_NORMAL)
+			return;
+
 		m_mutex.enter();
 
 		Files::iterator	lb = m_files.lower_bound(ptr);
@@ -1594,6 +1598,9 @@ struct CreateTracker {
 	void deregister_latch(const void* ptr)
 		UNIV_NOTHROW
 	{
+		if (srv_operation != SRV_OPERATION_NORMAL)
+			return;
+
 		m_mutex.enter();
 
 		Files::iterator	lb = m_files.lower_bound(ptr);
