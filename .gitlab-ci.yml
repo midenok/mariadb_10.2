@@ -5,6 +5,10 @@ ubuntu-self-contained:
   stage: build
   image: ubuntu:18.04
   script:
+  - mkdir build
+  - mkdir mkdist
+  - cd build/mkdist
+  - cmake ..
 
 ubuntu-system-dependencies:
   stage: build
