@@ -14,6 +14,7 @@ ubuntu-system-dependencies:
   stage: build
   image: ubuntu:18.04
   script:
+  - sed -i~orig -e 's/# deb-src/deb-src/' /etc/apt/sources.list
   - apt-get update
   - apt-get install -y -q \
     apt-utils build-essential python-dev sudo git \
