@@ -14,7 +14,16 @@ ubuntu-system-dependencies:
   stage: build
   image: ubuntu:18.04
   script:
+  - command -v sudo
+  - whoami
+  - cat /etc/apt/sources.list
   - sed -i~orig -e 's/# deb-src/deb-src/' /etc/apt/sources.list
+  - cat /etc/apt/sources.list
+  - sudo add-apt-repository main
+  - sudo add-apt-repository universe
+  - sudo add-apt-repository restricted
+  - sudo add-apt-repository multiverse
+  - cat /etc/apt/sources.list
   - apt-get update
   - apt-get install -y -q \
     apt-utils build-essential python-dev sudo git \
