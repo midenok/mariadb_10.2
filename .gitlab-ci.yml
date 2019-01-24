@@ -28,17 +28,13 @@ ubuntu-self-contained:
   - cmake ../..
     
 windows job:
-  stage:
-    - build
-  tags:
-    - windows
+  stage: build
+  tags: windows
   script:
     - echo Hello, %USERNAME%!
 
 osx job:
-  stage:
-    - build
-  tags:
-    - osx
+  stage: build
+  tags: osx
   script:
     - echo "Hello, $USER!"
