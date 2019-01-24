@@ -6,7 +6,7 @@ ubuntu-self-contained:
   image: ubuntu:18.04
   script:
   - mkdir build
-  - mkdir mkdist
+  - mkdir build/mkdist
   - cd build/mkdist
   - cmake ../..
 
