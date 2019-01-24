@@ -9,6 +9,8 @@ ubuntu-self-contained:
   - cat /etc/apt/sources.list
   - sed -i~orig -e 's/# deb-src/deb-src/' /etc/apt/sources.list
   - cat /etc/apt/sources.list
+  - sed -i~orig -e 's/# deb/deb/' /etc/apt/sources.list
+  - cat /etc/apt/sources.list
   - apt-get update
   - apt-get install -y -q \
     apt-utils build-essential cmake python-dev sudo git \
