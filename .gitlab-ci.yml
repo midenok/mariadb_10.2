@@ -26,15 +26,25 @@ ubuntu-self-contained:
   - mkdir build/mkdist
   - cd build/mkdist
   - cmake ../..
-    
-windows job:
-  stage: build
-  tags: windows
-  script:
-    - echo Hello, %USERNAME%!
 
-osx job:
+build win x86_64:
   stage: build
-  tags: osx
+  tags:
+    - win
+    - x86_64
   script:
-    - echo "Hello, $USER!"
+    - echo "I am a build stage job for win x86_64"
+    
+build osx:
+  stage: build
+  tags:
+  - osx
+  script:
+  - echo "Hello, $USER"
+    
+build windows:
+  stage: build
+  tags:
+  - windows
+  script:
+    - echo "Hello, %USERNAME%!"
