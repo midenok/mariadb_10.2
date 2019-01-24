@@ -1,4 +1,5 @@
 stages:
+- prepare
 - build
 
 ubuntu-self-contained:
@@ -11,10 +12,9 @@ ubuntu-self-contained:
   - cmake ../..
 
 ubuntu-system-dependencies:
-  stage: build
+  stage: prepare
   image: ubuntu:18.04
   script:
-  - command -v sudo
   - whoami
   - cat /etc/apt/sources.list
   - sed -i~orig -e 's/# deb-src/deb-src/' /etc/apt/sources.list
@@ -26,7 +26,7 @@ ubuntu-system-dependencies:
   - cat /etc/apt/sources.list
   - apt-get update
   - apt-get install -y -q \
-    apt-utils build-essential python-dev sudo git \
+    apt-utils build-essential cmake python-dev sudo git \
     devscripts equivs libcurl4-openssl-dev \
     ccache python3 python3-pip curl libssl-dev libzstd-dev \
     libevent-dev dpatch gawk gdb libboost-dev libcrack2-dev \
