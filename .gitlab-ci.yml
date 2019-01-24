@@ -8,7 +8,7 @@ ubuntu-self-contained:
   - mkdir build
   - mkdir mkdist
   - cd build/mkdist
-  - cmake ..
+  - cmake ../..
 
 ubuntu-system-dependencies:
   stage: build
