@@ -1627,7 +1627,7 @@ MDL_lock::MDL_object_lock::m_waiting_incompatible[MDL_TYPE_END]=
     TD        |  +   +   +   +   +   -   -   +   +   +   +   +   +   +  |
     SD        |  +   +   +   +   -   -   -   +   +   +   +   +   +   +  |
     DDL       |  +   +   +   -   -   -   -   +   +   +   +   -   +   +  |
-    BLOCK_DDL |  +   +   +   +   +   +   +   +   +   +   -   +   +   +  |
+    BLOCK_DDL |  -   +   +   +   +   +   +   +   +   +   -   +   +   +  |
     ALTER_COP |  +   +   +   +   +   -   -   +   +   +   +   +   +   +  |
     COMMIT    |  +   +   +   +   -   +   -   +   +   +   +   +   +   +  |
 
@@ -1666,7 +1666,7 @@ const MDL_lock::bitmap_t
 MDL_lock::MDL_backup_lock::m_granted_incompatible[MDL_BACKUP_END]=
 {
   /* MDL_BACKUP_START */
-  MDL_BIT(MDL_BACKUP_START) | MDL_BIT(MDL_BACKUP_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_DDL) | MDL_BIT(MDL_BACKUP_WAIT_COMMIT),
+  MDL_BIT(MDL_BACKUP_START) | MDL_BIT(MDL_BACKUP_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_DDL) | MDL_BIT(MDL_BACKUP_WAIT_COMMIT) | MDL_BIT(MDL_BACKUP_BLOCK_DDL),
   MDL_BIT(MDL_BACKUP_START),
   MDL_BIT(MDL_BACKUP_START) | MDL_BIT(MDL_BACKUP_DML),
   MDL_BIT(MDL_BACKUP_START) | MDL_BIT(MDL_BACKUP_DML) | MDL_BIT(MDL_BACKUP_DDL),
@@ -1682,7 +1682,7 @@ MDL_lock::MDL_backup_lock::m_granted_incompatible[MDL_BACKUP_END]=
   /* MDL_BACKUP_DDL */
   MDL_BIT(MDL_BACKUP_WAIT_DDL) | MDL_BIT(MDL_BACKUP_WAIT_COMMIT) | MDL_BIT(MDL_BACKUP_FTWRL1) | MDL_BIT(MDL_BACKUP_FTWRL2) | MDL_BIT(MDL_BACKUP_BLOCK_DDL),
   /* MDL_BACKUP_BLOCK_DDL */
-  MDL_BIT(MDL_BACKUP_DDL),
+  MDL_BIT(MDL_BACKUP_START) | MDL_BIT(MDL_BACKUP_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_DDL) | MDL_BIT(MDL_BACKUP_WAIT_COMMIT) | MDL_BIT(MDL_BACKUP_BLOCK_DDL) | MDL_BIT(MDL_BACKUP_DDL),
   MDL_BIT(MDL_BACKUP_FTWRL1) | MDL_BIT(MDL_BACKUP_FTWRL2),
   /* MDL_BACKUP_COMMIT */
   MDL_BIT(MDL_BACKUP_WAIT_COMMIT) | MDL_BIT(MDL_BACKUP_FTWRL2)
@@ -1693,7 +1693,7 @@ const MDL_lock::bitmap_t
 MDL_lock::MDL_backup_lock::m_waiting_incompatible[MDL_BACKUP_END]=
 {
   /* MDL_BACKUP_START */
-  MDL_BIT(MDL_BACKUP_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_DDL) | MDL_BIT(MDL_BACKUP_WAIT_COMMIT),
+  MDL_BIT(MDL_BACKUP_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_FLUSH) | MDL_BIT(MDL_BACKUP_WAIT_DDL) | MDL_BIT(MDL_BACKUP_WAIT_COMMIT) | MDL_BIT(MDL_BACKUP_BLOCK_DDL),
   0,
   0,
   0,
@@ -1709,7 +1709,7 @@ MDL_lock::MDL_backup_lock::m_waiting_incompatible[MDL_BACKUP_END]=
   /* MDL_BACKUP_DDL */
   MDL_BIT(MDL_BACKUP_WAIT_DDL) | MDL_BIT(MDL_BACKUP_WAIT_COMMIT) | MDL_BIT(MDL_BACKUP_FTWRL1) | MDL_BIT(MDL_BACKUP_FTWRL2) | MDL_BIT(MDL_BACKUP_BLOCK_DDL),
   /* MDL_BACKUP_BLOCK_DDL */
-  0,
+  MDL_BIT(MDL_BACKUP_START),
   MDL_BIT(MDL_BACKUP_FTWRL1) | MDL_BIT(MDL_BACKUP_FTWRL2),
   /* MDL_BACKUP_COMMIT */
   MDL_BIT(MDL_BACKUP_WAIT_COMMIT) | MDL_BIT(MDL_BACKUP_FTWRL2)
@@ -2974,6 +2974,10 @@ void MDL_context::release_all_locks_for_name(MDL_ticket *name)
 
 void MDL_ticket::downgrade_lock(enum_mdl_type type)
 {
+  DBUG_ENTER("MDL_ticket::downgrade_lock");
+  DBUG_PRINT("enter",("old_type: %s  new_type: %s",
+                      get_type_name()->str,
+                      get_type_name(type)->str));
   /*
     Do nothing if already downgraded. Used when we FLUSH TABLE under
     LOCK TABLES and a table is listed twice in LOCK TABLES list.
@@ -2982,7 +2986,10 @@ void MDL_ticket::downgrade_lock(enum_mdl_type type)
     here that target lock is weaker than existing lock.
   */
   if (m_type == type || !has_stronger_or_equal_type(type))
-    return;
+  {
+    DBUG_PRINT("info", ("Nothing to downgrade"));
+    DBUG_VOID_RETURN;
+  }
 
   /* Only allow downgrade in some specific known cases */
   DBUG_ASSERT((get_key()->mdl_namespace() != MDL_key::BACKUP &&
@@ -2990,6 +2997,7 @@ void MDL_ticket::downgrade_lock(enum_mdl_type type)
                 m_type == MDL_SHARED_NO_WRITE)) ||
               (get_key()->mdl_namespace() == MDL_key::BACKUP &&
                (m_type == MDL_BACKUP_DDL ||
+                m_type == MDL_BACKUP_BLOCK_DDL ||
                 m_type == MDL_BACKUP_WAIT_FLUSH)));
 
   mysql_prlock_wrlock(&m_lock->m_rwlock);
@@ -3002,6 +3010,7 @@ void MDL_ticket::downgrade_lock(enum_mdl_type type)
   m_lock->m_granted.add_ticket(this);
   m_lock->reschedule_waiters();
   mysql_prlock_unlock(&m_lock->m_rwlock);
+  DBUG_VOID_RETURN;
 }
 
 
