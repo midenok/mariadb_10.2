@@ -5959,8 +5959,9 @@ opt_versioning_rotation:
        | INTERVAL_SYM expr interval opt_versioning_interval_start
          {
            partition_info *part_info= Lex->part_info;
-           const char *table_name= thd->lex->create_last_non_select_table->table_name.str;
-           if (unlikely(part_info->vers_set_interval(thd, $2, $3, $4, table_name)))
+           const char *table_name= Lex->create_last_non_select_table->table_name.str;
+           if (unlikely(part_info->vers_set_interval(
+                          thd, $2, $3, $4, table_name, !Lex->part_info->table)))
              MYSQL_YYABORT;
          }
        | LIMIT ulonglong_num

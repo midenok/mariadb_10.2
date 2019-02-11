@@ -396,7 +396,8 @@ public:
   bool vers_init_info(THD *thd);
   bool vers_set_interval(THD *thd, Item *interval,
                          interval_type int_type, Item *starts,
-                         const char *table_name);
+                         const char *table_name,
+                         bool interactive);
   bool vers_set_limit(ulonglong limit)
   {
     DBUG_ASSERT(part_type == VERSIONING_PARTITION);
