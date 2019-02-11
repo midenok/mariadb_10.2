@@ -7975,3 +7975,6 @@ ER_PERIOD_WITHOUT_OVERLAPS_PARTITIONED
 
 ER_PERIOD_WITHOUT_OVERLAPS_NON_UNIQUE
         eng "Period WITHOUT OVERLAPS is only allowed for unique keys"
+
+ER_PART_STARTS_BEYOND_INTERVAL
+        eng "%`s: STARTS is too late, first history partition may exceed INTERVAL value"

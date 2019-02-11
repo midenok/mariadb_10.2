@@ -5984,7 +5984,8 @@ opt_versioning_rotation:
        | INTERVAL_SYM expr interval opt_versioning_interval_start
          {
            partition_info *part_info= Lex->part_info;
-           if (unlikely(part_info->vers_set_interval(thd, $2, $3, $4)))
+           const char *table_name= thd->lex->create_last_non_select_table->table_name.str;
+           if (unlikely(part_info->vers_set_interval(thd, $2, $3, $4, table_name)))
              MYSQL_YYABORT;
          }
        | LIMIT ulonglong_num
@@ -6004,7 +6005,7 @@ opt_versioning_rotation:
 opt_versioning_interval_start:
          /* empty */
          {
-           $$= new (thd->mem_root) Item_int(thd, (ulonglong) thd->query_start());
+           $$= NULL;
          }
        | STARTS_SYM literal
          {

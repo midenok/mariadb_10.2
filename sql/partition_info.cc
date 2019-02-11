@@ -2389,14 +2389,15 @@ static bool strcmp_null(const char *a, const char *b)
 */
 
 bool partition_info::vers_set_interval(THD* thd, Item* interval,
-                                       interval_type int_type, Item* start)
+                                       interval_type int_type, Item* starts,
+                                       const char *table_name)
 {
   DBUG_ASSERT(part_type == VERSIONING_PARTITION);
   MYSQL_TIME ltime;
   uint err;
   vers_info->interval.type= int_type;
 
-  /* 1. assign interval.step */
+  /* 1. assign INTERVAL to interval.step */
   if (interval->fix_fields_if_needed_for_scalar(thd, &interval))
     return true;
   bool error= get_interval_value(thd, interval, int_type, &vers_info->interval.step) ||
@@ -2411,22 +2412,22 @@ bool partition_info::vers_set_interval(THD* thd, Item* interval,
     return true;
   }
 
-  /* 2. assign interval.start */
-  if (start)
+  /* 2. assign STARTS to interval.start */
+  if (starts)
   {
-    if (start->fix_fields_if_needed_for_scalar(thd, &start))
+    if (starts->fix_fields_if_needed_for_scalar(thd, &starts))
       return true;
-    switch (start->result_type())
+    switch (starts->result_type())
     {
       case INT_RESULT:
       case DECIMAL_RESULT:
       case REAL_RESULT:
-        vers_info->interval.start= start->val_int();
+        vers_info->interval.start= starts->val_int();
         break;
       case STRING_RESULT:
       case TIME_RESULT:
       {
-        start->get_date(thd, &ltime, date_mode_t(0));
+        starts->get_date(thd, &ltime, date_mode_t(0));
         vers_info->interval.start= TIME_to_timestamp(thd, &ltime, &err);
         if (err)
           goto interval_starts_error;
@@ -2435,6 +2436,16 @@ bool partition_info::vers_set_interval(THD* thd, Item* interval,
       case ROW_RESULT:
       default:
         goto interval_starts_error;
+    }
+    my_tz_UTC->gmt_sec_to_TIME(&ltime, thd->query_start());
+    if (date_add_interval(thd, &ltime, int_type, vers_info->interval.step))
+      return true;
+    my_time_t boundary= TIME_to_timestamp(thd, &ltime, &err);
+    if (vers_info->interval.start > boundary) {
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+                          ER_PART_STARTS_BEYOND_INTERVAL,
+                          ER_THD(thd, ER_PART_STARTS_BEYOND_INTERVAL),
+                          table_name);
     }
   }
   else // calculate default STARTS depending on INTERVAL
@@ -2467,7 +2478,7 @@ interval_set_starts:
 
 interval_starts_error:
   my_error(ER_PART_WRONG_VALUE, MYF(0),
-          thd->lex->create_last_non_select_table->table_name.str,
+          table_name,
           "STARTS");
   return true;
 }
