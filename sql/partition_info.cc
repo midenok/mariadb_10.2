@@ -2382,6 +2382,96 @@ static bool strcmp_null(const char *a, const char *b)
   return true;
 }
 
+/**
+  Assign INTERVAL and STARTS for SYSTEM_TIME partitions.
+
+  @return true on error
+*/
+
+bool partition_info::vers_set_interval(THD* thd, Item* interval,
+                                       interval_type int_type, Item* start)
+{
+  DBUG_ASSERT(part_type == VERSIONING_PARTITION);
+  MYSQL_TIME ltime;
+  uint err;
+  vers_info->interval.type= int_type;
+
+  /* 1. assign interval.step */
+  if (interval->fix_fields_if_needed_for_scalar(thd, &interval))
+    return true;
+  bool error= get_interval_value(thd, interval, int_type, &vers_info->interval.step) ||
+          vers_info->interval.step.neg || vers_info->interval.step.second_part ||
+        !(vers_info->interval.step.year || vers_info->interval.step.month ||
+          vers_info->interval.step.day || vers_info->interval.step.hour ||
+          vers_info->interval.step.minute || vers_info->interval.step.second);
+  if (error) {
+    my_error(ER_PART_WRONG_VALUE, MYF(0),
+              thd->lex->create_last_non_select_table->table_name.str,
+              "INTERVAL");
+    return true;
+  }
+
+  /* 2. assign interval.start */
+  if (start)
+  {
+    if (start->fix_fields_if_needed_for_scalar(thd, &start))
+      return true;
+    switch (start->result_type())
+    {
+      case INT_RESULT:
+      case DECIMAL_RESULT:
+      case REAL_RESULT:
+        vers_info->interval.start= start->val_int();
+        break;
+      case STRING_RESULT:
+      case TIME_RESULT:
+      {
+        start->get_date(thd, &ltime, date_mode_t(0));
+        vers_info->interval.start= TIME_to_timestamp(thd, &ltime, &err);
+        if (err)
+          goto interval_starts_error;
+        break;
+      }
+      case ROW_RESULT:
+      default:
+        goto interval_starts_error;
+    }
+  }
+  else // calculate default STARTS depending on INTERVAL
+  {
+    my_tz_UTC->gmt_sec_to_TIME(&ltime, thd->query_start());
+    if (vers_info->interval.step.second)
+      goto interval_set_starts;
+    ltime.second= 0;
+    if (vers_info->interval.step.minute)
+      goto interval_set_starts;
+    ltime.minute= 0;
+    if (vers_info->interval.step.hour)
+      goto interval_set_starts;
+    ltime.hour= 0;
+    if (vers_info->interval.step.day)
+      goto interval_set_starts;
+    ltime.day= 1;
+    if (vers_info->interval.step.month)
+      goto interval_set_starts;
+    ltime.month= 1;
+    DBUG_ASSERT(vers_info->interval.step.year);
+
+interval_set_starts:
+    vers_info->interval.start= TIME_to_timestamp(thd, &ltime, &err);
+    if (err)
+      goto interval_starts_error;
+  }
+
+  return false;
+
+interval_starts_error:
+  my_error(ER_PART_WRONG_VALUE, MYF(0),
+          thd->lex->create_last_non_select_table->table_name.str,
+          "STARTS");
+  return true;
+}
+
 
 /**
   Check if the new part_info has the same partitioning.

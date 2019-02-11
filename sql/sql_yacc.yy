@@ -5979,7 +5979,7 @@ opt_versioning_rotation:
 opt_versioning_interval_start:
          /* empty */
          {
-           $$= new (thd->mem_root) Item_int(thd, (ulonglong) thd->query_start());
+           $$= NULL;
          }
        | STARTS_SYM literal
          {

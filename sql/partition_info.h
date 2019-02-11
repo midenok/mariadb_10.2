@@ -394,52 +394,8 @@ public:
   bool has_unique_name(partition_element *element);
 
   bool vers_init_info(THD *thd);
-  bool vers_set_interval(THD *thd, Item *item,
-                         interval_type int_type, Item *start)
-  {
-    DBUG_ASSERT(part_type == VERSIONING_PARTITION);
-    vers_info->interval.type= int_type;
-    if (start->fix_fields_if_needed_for_scalar(thd, &start))
-      return true;
-    switch (start->result_type())
-    {
-      case INT_RESULT:
-      case DECIMAL_RESULT:
-      case REAL_RESULT:
-        vers_info->interval.start= start->val_int();
-        break;
-      case STRING_RESULT:
-      case TIME_RESULT:
-      {
-        MYSQL_TIME t;
-        uint err;
-        start->get_date(thd, &t, date_mode_t(0));
-        vers_info->interval.start= TIME_to_timestamp(thd, &t, &err);
-        if (!err)
-          break;
-      }
-      case ROW_RESULT:
-      default:
-        my_error(ER_PART_WRONG_VALUE, MYF(0),
-                thd->lex->create_last_non_select_table->table_name.str,
-                "STARTS");
-        return true;
-    }
-
-    if (item->fix_fields_if_needed_for_scalar(thd, &item))
-      return true;
-    bool error= get_interval_value(thd, item, int_type, &vers_info->interval.step) ||
-           vers_info->interval.step.neg || vers_info->interval.step.second_part ||
-          !(vers_info->interval.step.year || vers_info->interval.step.month ||
-            vers_info->interval.step.day || vers_info->interval.step.hour ||
-            vers_info->interval.step.minute || vers_info->interval.step.second);
-    if (error) {
-      my_error(ER_PART_WRONG_VALUE, MYF(0),
-               thd->lex->create_last_non_select_table->table_name.str,
-               "INTERVAL");
-    }
-    return error;
-  }
+  bool vers_set_interval(THD *thd, Item *interval,
+                         interval_type int_type, Item *start);
   bool vers_set_limit(ulonglong limit)
   {
     DBUG_ASSERT(part_type == VERSIONING_PARTITION);
