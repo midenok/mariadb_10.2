@@ -2428,7 +2428,8 @@ bool partition_info::vers_set_interval(THD* thd, Item* interval,
       case STRING_RESULT:
       case TIME_RESULT:
       {
-        starts->get_date(thd, &ltime, date_mode_t(0));
+        starts->get_date(thd, &ltime,
+                         date_mode_t(TIME_NO_ZERO_DATE | TIME_NO_ZERO_IN_DATE));
         vers_info->interval.start= TIME_to_timestamp(thd, &ltime, &err);
         if (err)
           goto interval_starts_error;
