@@ -9,10 +9,10 @@ delete from t1;
 set timestamp=unix_timestamp('2001-02-04 10:20:50');
 insert t1 values (2);
 Warnings:
-Warning	4114	Versioned table `test`.`t1`: partition `p1` is full, add more HISTORY partitions
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
 delete from t1;
 Warnings:
-Warning	4114	Versioned table `test`.`t1`: partition `p1` is full, add more HISTORY partitions
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
 select subpartition_name,partition_description,table_rows from information_schema.partitions where table_schema='test' and table_name='t1';
 subpartition_name	partition_description	table_rows
 p1sp0	2001-02-04 00:00:00	1
@@ -238,4 +238,82 @@ t2	CREATE TABLE `t2` (
 (PARTITION `p0` HISTORY ENGINE = MyISAM,
  PARTITION `pn` CURRENT ENGINE = MyISAM)
 # Test rotation
+set timestamp= unix_timestamp('2001-01-01 00:00:00');
+# it's ok to add partitions for past
+create or replace table t1 (i int) with system versioning
+partition by system_time interval 1 day starts '2000-01-01 00:00:00'
+(partition p0 history, partition p1 history, partition pn current);
+# we are warned when we push to present
+insert into t1 values (0);
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
+set timestamp= unix_timestamp('2001-01-01 00:00:01');
+update t1 set i= i + 1;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
+set timestamp= unix_timestamp('2001-01-01 00:00:02');
+update t1 set i= i + 1;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
+select *, row_end from t1 partition (p0);
+i	row_end
+select *, row_end from t1 partition (p1);
+i	row_end
+0	2001-01-01 00:00:01.000000
+1	2001-01-01 00:00:02.000000
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
+# now we "overflow" first partition a bit
+create or replace table t1 (i int) with system versioning
+partition by system_time interval 1 day starts '2000-01-03 00:00:00'
+(partition p0 history, partition p1 history, partition pn current);
+Warnings:
+Warning	4163	`t1`: STARTS is too late, first history partition may exceed INTERVAL value
+insert into t1 values (0);
+set timestamp= unix_timestamp('2000-01-01 00:00:01');
+update t1 set i= i + 1;
+set timestamp= unix_timestamp('2000-01-02 00:00:01');
+update t1 set i= i + 1;
+set timestamp= unix_timestamp('2000-01-03 00:00:01');
+update t1 set i= i + 1;
+set timestamp= unix_timestamp('2000-01-04 00:00:01');
+update t1 set i= i + 1;
+select *, row_end from t1 partition (p0);
+i	row_end
+0	2000-01-01 00:00:01.000000
+1	2000-01-02 00:00:01.000000
+2	2000-01-03 00:00:01.000000
+select *, row_end from t1 partition (p1);
+i	row_end
+3	2000-01-04 00:00:01.000000
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
+# and this is how it usually goes
+create or replace table t1 (i int) with system versioning
+partition by system_time interval 1 day
+(partition p0 history, partition p1 history, partition pn current);
+insert into t1 values (0);
+set timestamp= unix_timestamp('2000-01-01 00:00:01');
+update t1 set i= i + 1;
+set timestamp= unix_timestamp('2000-01-02 00:00:01');
+update t1 set i= i + 1;
+set timestamp= unix_timestamp('2000-01-03 00:00:01');
+update t1 set i= i + 1;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
+set timestamp= unix_timestamp('2000-01-04 00:00:01');
+update t1 set i= i + 1;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
+alter table t1 add partition (partition p2 history, partition p3 history);
+select *, row_end from t1 partition (p0);
+i	row_end
+0	2000-01-01 00:00:01.000000
+select *, row_end from t1 partition (p1);
+i	row_end
+1	2000-01-02 00:00:01.000000
+select *, row_end from t1 partition (p2);
+i	row_end
+2	2000-01-03 00:00:01.000000
+select *, row_end from t1 partition (p3);
+i	row_end
+3	2000-01-04 00:00:01.000000
 drop tables t1, t2;
