@@ -5960,8 +5960,7 @@ opt_versioning_rotation:
          {
            partition_info *part_info= Lex->part_info;
            const char *table_name= Lex->create_last_non_select_table->table_name.str;
-           if (unlikely(part_info->vers_set_interval(
-                          thd, $2, $3, $4, table_name, !Lex->part_info->table)))
+           if (unlikely(part_info->vers_set_interval(thd, $2, $3, $4, table_name)))
              MYSQL_YYABORT;
          }
        | LIMIT ulonglong_num

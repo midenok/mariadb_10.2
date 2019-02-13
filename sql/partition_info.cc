@@ -851,8 +851,13 @@ void partition_info::vers_set_hist_part(THD *thd)
     if (records > vers_info->limit)
     {
       if (next == vers_info->now_part)
-        goto warn;
-      vers_info->hist_part= next;
+      {
+        my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
+                table->s->db.str, table->s->error_table_name(),
+                vers_info->hist_part->partition_name, "LIMIT");
+      }
+      else
+        vers_info->hist_part= next;
     }
     return;
   }
@@ -873,13 +878,10 @@ void partition_info::vers_set_hist_part(THD *thd)
       if (next->range_value > thd->query_start())
         return;
     }
-    goto warn;
+    my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
+            table->s->db.str, table->s->error_table_name(),
+            vers_info->hist_part->partition_name, "INTERVAL");
   }
-  return;
-warn:
-  my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
-           table->s->db.str, table->s->error_table_name(),
-           vers_info->hist_part->partition_name);
 }
 
 
@@ -2390,10 +2392,11 @@ static bool strcmp_null(const char *a, const char *b)
 
 bool partition_info::vers_set_interval(THD* thd, Item* interval,
                                        interval_type int_type, Item* starts,
-                                       const char *table_name,
-                                       bool interactive)
+                                       const char *table_name)
 {
   DBUG_ASSERT(part_type == VERSIONING_PARTITION);
+
+  const bool interactive= !table;
   MYSQL_TIME ltime;
   uint err;
   vers_info->interval.type= int_type;
@@ -2441,10 +2444,10 @@ bool partition_info::vers_set_interval(THD* thd, Item* interval,
     }
     if (interactive)
     {
-      my_tz_UTC->gmt_sec_to_TIME(&ltime, thd->query_start());
+      my_tz_OFFSET0->gmt_sec_to_TIME(&ltime, thd->query_start());
       if (date_add_interval(thd, &ltime, int_type, vers_info->interval.step))
         return true;
-      my_time_t boundary= TIME_to_timestamp(thd, &ltime, &err);
+      my_time_t boundary= my_tz_OFFSET0->TIME_to_gmt_sec(&ltime, &err);
       if (vers_info->interval.start > boundary) {
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
                             ER_PART_STARTS_BEYOND_INTERVAL,
@@ -2455,7 +2458,7 @@ bool partition_info::vers_set_interval(THD* thd, Item* interval,
   }
   else // calculate default STARTS depending on INTERVAL
   {
-    my_tz_UTC->gmt_sec_to_TIME(&ltime, thd->query_start());
+    thd->variables.time_zone->gmt_sec_to_TIME(&ltime, thd->query_start());
     if (vers_info->interval.step.second)
       goto interval_set_starts;
     ltime.second= 0;
@@ -2482,9 +2485,7 @@ interval_set_starts:
   return false;
 
 interval_starts_error:
-  my_error(ER_PART_WRONG_VALUE, MYF(0),
-          table_name,
-          "STARTS");
+  my_error(ER_PART_WRONG_VALUE, MYF(0), table_name, "STARTS");
   return true;
 }
 

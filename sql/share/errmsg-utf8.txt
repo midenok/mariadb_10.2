@@ -7836,7 +7836,7 @@ ER_PARTITION_WRONG_TYPE
         eng "Wrong partitioning type, expected type: %`s"
 
 WARN_VERS_PART_FULL
-        eng "Versioned table %`s.%`s: partition %`s is full, add more HISTORY partitions"
+        eng "Versioned table %`s.%`s: last HISTORY partition (%`s) is out of %s, need more HISTORY partitions"
 
 WARN_VERS_PARAMETERS
         eng "Maybe missing parameters: %s"
