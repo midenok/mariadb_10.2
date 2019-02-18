@@ -2625,7 +2625,7 @@ create:
           create_or_replace opt_temporary TABLE_SYM opt_if_not_exists
           {
             LEX *lex= thd->lex;
-            lex->create_info.init();
+            lex->create_info.init(&lex->alter_info);
             if (lex->main_select_push())
               MYSQL_YYABORT;
             lex->current_select->parsing_place= BEFORE_OPT_LIST;
@@ -2670,7 +2670,7 @@ create:
            LEX *lex= thd->lex;
            if (Lex->main_select_push())
              MYSQL_YYABORT;
-           lex->create_info.init();
+           lex->create_info.init(&lex->alter_info);
            if (unlikely(lex->set_command_with_check(SQLCOM_CREATE_SEQUENCE, $2,
                         $1 | $4)))
               MYSQL_YYABORT;
@@ -7679,7 +7679,7 @@ alter:
             Lex->sql_command= SQLCOM_ALTER_TABLE;
             Lex->duplicates= DUP_ERROR;
             Lex->first_select_lex()->order_list.empty();
-            Lex->create_info.init();
+            Lex->create_info.init(&Lex->alter_info);
             Lex->create_info.row_type= ROW_TYPE_NOT_USED;
             Lex->alter_info.reset();
             Lex->no_write_to_binlog= 0;
@@ -7883,7 +7883,7 @@ alter:
             lex->name= null_clex_str;
             lex->table_type= TABLE_TYPE_UNKNOWN;
             lex->sql_command= SQLCOM_ALTER_SEQUENCE;
-            lex->create_info.init();
+            lex->create_info.init(&lex->alter_info);
             lex->no_write_to_binlog= 0;
             DBUG_ASSERT(!lex->m_sql_cmd);
             if (Lex->main_select_push())
@@ -13692,7 +13692,7 @@ show:
               MYSQL_YYABORT;
             mysql_init_select(lex);
             lex->current_select->parsing_place= SELECT_LIST;
-            lex->create_info.init();
+            lex->create_info.init(NULL);
           }
           show_param
           {

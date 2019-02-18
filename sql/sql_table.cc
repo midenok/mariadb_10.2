@@ -5625,7 +5625,7 @@ bool mysql_create_like_table(THD* thd, TABLE_LIST* table,
     Set OR REPLACE and IF NOT EXISTS option as in the CREATE TABLE LIKE
     statement.
   */
-  local_create_info.init(create_info->create_like_options());
+  local_create_info.init(&local_alter_info, create_info->create_like_options());
   local_create_info.db_type= src_table->table->s->db_type();
   local_create_info.row_type= src_table->table->s->row_type;
   if (mysql_prepare_alter_table(thd, src_table->table, &local_create_info,

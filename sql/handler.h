@@ -2117,10 +2117,13 @@ struct Table_scope_and_contents_source_st
 struct HA_CREATE_INFO: public Table_scope_and_contents_source_st,
                        public Schema_specification_st
 {
-  void init()
+  Alter_info *alter_info;
+
+  void init(Alter_info *alter_info_arg)
   {
     Table_scope_and_contents_source_st::init();
     Schema_specification_st::init();
+    alter_info= alter_info_arg;
   }
   bool check_conflicting_charset_declarations(CHARSET_INFO *cs);
   bool add_table_option_default_charset(CHARSET_INFO *cs)
@@ -2167,14 +2170,14 @@ struct Table_specification_st: public HA_CREATE_INFO,
                                public DDL_options_st
 {
   // Deep initialization
-  void init()
+  void init(Alter_info *alter_info_arg)
   {
-    HA_CREATE_INFO::init();
+    HA_CREATE_INFO::init(alter_info_arg);
     DDL_options_st::init();
   }
-  void init(DDL_options_st::Options options_arg)
+  void init(Alter_info *alter_info_arg, DDL_options_st::Options options_arg)
   {
-    HA_CREATE_INFO::init();
+    HA_CREATE_INFO::init(alter_info_arg);
     DDL_options_st::init(options_arg);
   }
   /*
