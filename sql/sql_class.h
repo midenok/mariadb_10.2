@@ -365,6 +365,7 @@ public:
   LEX_CSTRING ref_db;
   LEX_CSTRING ref_table;
   List<Key_part_spec> ref_columns;
+  TABLE_LIST ref_table_list;
   enum enum_fk_option delete_opt, update_opt;
   enum fk_match_opt match_opt;
   Foreign_key(const LEX_CSTRING *name_arg, List<Key_part_spec> *cols,

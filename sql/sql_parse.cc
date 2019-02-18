@@ -7386,9 +7386,9 @@ bool check_fk_parent_table_access(THD *thd,
   {
     if (key->type == Key::FOREIGN_KEY)
     {
-      TABLE_LIST parent_table;
       bool is_qualified_table_name;
       Foreign_key *fk_key= (Foreign_key *)key;
+      TABLE_LIST &parent_table= fk_key->ref_table_list;
       LEX_CSTRING db_name;
       LEX_CSTRING table_name= { fk_key->ref_table.str,
                                fk_key->ref_table.length };
@@ -7454,7 +7454,8 @@ bool check_fk_parent_table_access(THD *thd,
         db_name.length= my_casedn_str(files_charset_info, (char*) db_name.str);
       }
 
-      parent_table.init_one_table(&db_name, &table_name, 0, TL_IGNORE);
+      parent_table.init_one_table(&db_name, &table_name, 0, TL_READ);
+      thd->lex->add_to_query_tables(&parent_table);
 
       /*
        Check if user has any of the "privileges" at table level on
