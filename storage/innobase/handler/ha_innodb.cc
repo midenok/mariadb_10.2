@@ -12383,6 +12383,12 @@ int create_table_info_t::create_table(bool create_fk)
 		dict_table_get_all_fts_indexes(m_table, fts->indexes);
 	}
 
+	dberr_t err = create_foreign_constraints();
+	if (err != DB_SUCCESS) {
+		error = convert_error_code_to_mysql(err, m_flags, NULL);
+		DBUG_RETURN(error);
+	}
+
 	stmt = innobase_get_stmt_unsafe(m_thd, &stmt_len);
 
 	if (stmt) {
@@ -12432,6 +12438,60 @@ int create_table_info_t::create_table(bool create_fk)
 	}
 
 	DBUG_RETURN(0);
+}
+
+dberr_t
+create_table_info_t::create_foreign_constraints()
+{
+	dberr_t		error = DB_SUCCESS;
+	ulint		number = 1; // FIXME: look for highest_id_so_far (ALTER-specific)
+	Key *key;
+	Alter_info *alter_info = m_create_info->alter_info;
+	List_iterator<Key> key_iterator(alter_info->key_list);
+
+	while ((key= key_iterator++))
+	{
+		if (key->type == Key::FOREIGN_KEY)
+			continue;
+		const char*&	constraint_name = key->name.str;
+		Foreign_key *fk_key = (Foreign_key *) key;
+		const TABLE *sql_table = fk_key->ref_table_list.table;
+		if (sql_table->file->ht != innodb_hton_ptr)
+		{
+			// FIXME: test other engines
+			return DB_CANNOT_ADD_CONSTRAINT;
+		}
+		ha_innobase *ref_handler = static_cast<ha_innobase *>(sql_table->file);
+		dict_table_t *table = ref_handler->ib_table();
+
+		dict_foreign_t*	foreign = NULL;
+		foreign = dict_mem_foreign_create();
+
+
+		if (constraint_name) {
+			ulint	db_len = fk_key->ref_db.length;
+
+			/* Catenate 'databasename/' to the constraint name specified
+			by the user: we conceive the constraint as belonging to the
+			same MySQL 'database' as the table itself. We store the name
+			to foreign->id. */
+
+			foreign->id = static_cast<char*>(mem_heap_alloc(
+				foreign->heap, db_len + strlen(constraint_name) + 2));
+
+			ut_memcpy(foreign->id, fk_key->ref_db.str, db_len);
+			foreign->id[db_len] = '/';
+			strcpy(foreign->id + db_len + 1, constraint_name);
+		} else {
+			error = dict_create_add_foreign_id(
+				&number, table->name.m_name, foreign);
+			if (error != DB_SUCCESS) {
+				dict_foreign_free(foreign);
+				return(error);
+			}
+		}
+	}
+	return error;
 }
 
 /** Update a new table in an InnoDB database.

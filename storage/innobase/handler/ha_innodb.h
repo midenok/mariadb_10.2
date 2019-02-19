@@ -499,6 +499,11 @@ protected:
 
         /** If mysql has locked with external_lock() */
         bool                    m_mysql_has_locked;
+public:
+	dict_table_t * ib_table()
+	{
+		return m_prebuilt->table;
+	}
 };
 
 
@@ -676,6 +681,10 @@ public:
 	/** Create the internal innodb table.
 	@param create_fk	whether to add FOREIGN KEY constraints */
 	int create_table(bool create_fk = true);
+
+	dberr_t
+	create_foreign_constraints();
+
 
 	/** Update the internal data dictionary. */
 	int create_table_update_dict();
