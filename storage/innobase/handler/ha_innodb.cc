@@ -12451,12 +12451,12 @@ create_table_info_t::create_foreign_constraints()
 
 	while ((key= key_iterator++))
 	{
-		if (key->type == Key::FOREIGN_KEY)
+		if (key->type != Key::FOREIGN_KEY)
 			continue;
 		const char*&	constraint_name = key->name.str;
 		Foreign_key *fk_key = (Foreign_key *) key;
 		const TABLE *sql_table = fk_key->ref_table_list.table;
-		if (sql_table->file->ht != innodb_hton_ptr)
+		if (sql_table->file->partition_ht() != innodb_hton_ptr)
 		{
 			// FIXME: test other engines
 			return DB_CANNOT_ADD_CONSTRAINT;

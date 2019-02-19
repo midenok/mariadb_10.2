@@ -162,6 +162,8 @@ Foreign_key::Foreign_key(const Foreign_key &rhs, MEM_ROOT *mem_root)
   match_opt(rhs.match_opt)
 {
   list_copy_and_replace_each_value(ref_columns, mem_root);
+  // FIXME: test
+  ref_table_list= rhs.ref_table_list;
 }
 
 /*
