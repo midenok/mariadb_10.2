@@ -4251,7 +4251,7 @@ dict_foreign_push_index_error(
 Scans a table create SQL string and adds to the data dictionary the foreign key
 constraints declared in the string. This function should be called after the
 indexes for a table have been created. Each foreign key constraint must be
-accompanied with indexes in bot participating tables. The indexes are allowed
+accompanied with indexes in both participating tables. The indexes are allowed
 to contain more fields than mentioned in the constraint.
 @return error code or DB_SUCCESS */
 static
@@ -4774,6 +4774,7 @@ col_loop1:
 	/* Note that referenced_table can be NULL if the user has suppressed
 	checking of foreign key constraints! */
 
+	// FIXME: put this block
 	if (!success || (!referenced_table && trx->check_foreigns)) {
 		char	buf[MAX_TABLE_NAME_LEN + 1] = "";
 		char*	bufend;

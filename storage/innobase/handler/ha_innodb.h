@@ -683,7 +683,7 @@ public:
 	int create_table(bool create_fk = true);
 
 	dberr_t
-	create_foreign_constraints();
+	create_foreign_constraints(trx_t* trx);
 
 
 	/** Update the internal data dictionary. */

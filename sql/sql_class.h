@@ -271,6 +271,22 @@ public:
 };
 
 
+inline
+int get_key_part_names(const char* dst[], List<Key_part_spec> &src, const uint max_count)
+{
+  if (max_count < src.elements)
+    return -1;
+  Key_part_spec *col;
+  uint cols= 0;
+  List_iterator_fast<Key_part_spec> it(src);
+  for (; (col= it++); cols++)
+  {
+    dst[cols]= col->field_name.str;
+  }
+  return cols;
+}
+
+
 class Alter_drop :public Sql_alloc {
 public:
   enum drop_type { KEY, COLUMN, FOREIGN_KEY, CHECK_CONSTRAINT, PERIOD };

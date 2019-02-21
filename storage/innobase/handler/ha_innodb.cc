@@ -12386,10 +12386,12 @@ int create_table_info_t::create_table(bool create_fk)
 		dict_table_get_all_fts_indexes(m_table, fts->indexes);
 	}
 
-	dberr_t err = create_foreign_constraints();
-	if (err != DB_SUCCESS) {
-		error = convert_error_code_to_mysql(err, m_flags, NULL);
-		DBUG_RETURN(error);
+	if (create_fk) {
+		dberr_t err = create_foreign_constraints(m_trx);
+		if (err != DB_SUCCESS) {
+			error = convert_error_code_to_mysql(err, m_flags, NULL);
+			DBUG_RETURN(error);
+		}
 	}
 
 	stmt = innobase_get_stmt_unsafe(m_thd, &stmt_len);
@@ -12443,21 +12445,95 @@ int create_table_info_t::create_table(bool create_fk)
 	DBUG_RETURN(0);
 }
 
+
+// FIXME: duplicate
+/**********************************************************************//**
+Checks if a table is in the dictionary cache.
+@return table, NULL if not found */
+UNIV_INLINE
+dict_table_t*
+dict_table_check_if_in_cache_low(
+/*=============================*/
+	const char*	table_name)	/*!< in: table name */
+{
+	dict_table_t*	table;
+	ulint		table_fold;
+
+	DBUG_ENTER("dict_table_check_if_in_cache_low");
+	DBUG_PRINT("dict_table_check_if_in_cache_low",
+		   ("table: '%s'", table_name));
+
+	ut_ad(table_name);
+	ut_ad(mutex_own(&dict_sys->mutex));
+
+	/* Look for the table name in the hash table */
+	table_fold = ut_fold_string(table_name);
+
+	HASH_SEARCH(name_hash, dict_sys->table_hash, table_fold,
+		    dict_table_t*, table, ut_ad(table->cached),
+		    !strcmp(table->name.m_name, table_name));
+	DBUG_RETURN(table);
+}
+
+// FIXME: duplicate
+/**********************************************************************//**
+Gets a table; loads it to the dictionary cache if necessary. A low-level
+function.
+@return table, NULL if not found */
+UNIV_INLINE
+dict_table_t*
+dict_table_get_low(
+/*===============*/
+	const char*	table_name)	/*!< in: table name */
+{
+	dict_table_t*	table;
+
+	ut_ad(table_name);
+	ut_ad(mutex_own(&dict_sys->mutex));
+
+	table = dict_table_check_if_in_cache_low(table_name);
+
+	if (table && table->corrupted) {
+		ib::error	error;
+		error << "Table " << table->name << "is corrupted";
+		if (srv_load_corrupted) {
+			error << ", but innodb_force_load_corrupted is set";
+		} else {
+			return(NULL);
+		}
+	}
+
+	if (table == NULL) {
+		table = dict_load_table(table_name, true, DICT_ERR_IGNORE_NONE);
+	}
+
+	ut_ad(!table || table->cached);
+
+	return(table);
+}
+
 dberr_t
-create_table_info_t::create_foreign_constraints()
+create_table_info_t::create_foreign_constraints(trx_t* trx)
 {
 	dberr_t		error = DB_SUCCESS;
+	dict_table_t*	table			= NULL;
+	dict_table_t*	ref_table		= NULL;
 	ulint		number = 1; // FIXME: look for highest_id_so_far (ALTER-specific)
 	Key *key;
 	Alter_info *alter_info = m_create_info->alter_info;
 	List_iterator<Key> key_iterator(alter_info->key_list);
 	dict_foreign_set	local_fk_set;
 	dict_index_t*	index			= NULL;
+	dict_foreign_t*	foreign			= NULL;
 	ulint		index_error		= DB_SUCCESS;
-	const char*	column_names[500];
+	static const uint max_cols = 500;
+	const char*	column_names[max_cols];
+	const char*	ref_column_names[max_cols];
 	dict_index_t*	err_index		= NULL;
 	ulint		err_col;
-	ulint		i;
+	int		i;
+
+	table = dict_table_get_low(m_table_name);
 
 	while ((key= key_iterator++))
 	{
@@ -12480,7 +12556,7 @@ create_table_info_t::create_foreign_constraints()
 			ref_handler = static_cast<ha_innobase *>(t->file);
 		}
 
-		dict_table_t *table = ref_handler->ib_table();
+		ref_table = ref_handler->ib_table();
 
 		dict_foreign_t*	foreign = NULL;
 		foreign = dict_mem_foreign_create();
@@ -12518,13 +12594,13 @@ create_table_info_t::create_foreign_constraints()
 			return(DB_CANNOT_ADD_CONSTRAINT);
 		}
 
-		foreign->foreign_table = table;
-		foreign->foreign_table_name = mem_heap_strdup(
-			foreign->heap, table->name.m_name);
-		dict_mem_foreign_table_name_lookup_set(foreign, TRUE);
+		i = get_key_part_names(column_names, key->columns, max_cols);
+		if (i < 0) {
+			return(DB_CANNOT_ADD_CONSTRAINT);
+		}
 
-		foreign->foreign_index = index;
-		foreign->n_fields = (unsigned int) i;
+		if (i != get_key_part_names(ref_column_names, fk_key->ref_columns, i))
+			return(DB_CANNOT_ADD_CONSTRAINT);
 
 		/* Try to find an index which contains the columns
 		as the first fields and in the right order. There is
@@ -12552,6 +12628,128 @@ create_table_info_t::create_foreign_constraints()
 			mutex_exit(&dict_foreign_err_mutex);
 			#endif
 			return(DB_CANNOT_ADD_CONSTRAINT);
+		}
+
+		foreign->foreign_table = table;
+		foreign->foreign_table_name = mem_heap_strdup(
+			foreign->heap, table->name.m_name);
+		dict_mem_foreign_table_name_lookup_set(foreign, TRUE);
+
+		foreign->foreign_index = index;
+		foreign->n_fields = (uint) i;
+
+		foreign->foreign_col_names = static_cast<const char**>(
+			mem_heap_alloc(foreign->heap, i * sizeof(void*)));
+
+		for (i = 0; i < foreign->n_fields; i++) {
+			foreign->foreign_col_names[i] = mem_heap_strdup(
+				foreign->heap, column_names[i]);
+		}
+
+		switch (fk_key->delete_opt) {
+		case FK_OPTION_CASCADE:
+			foreign->type |= DICT_FOREIGN_ON_DELETE_CASCADE;
+			break;
+		case FK_OPTION_SET_NULL:
+			foreign->type |= DICT_FOREIGN_ON_DELETE_SET_NULL;
+			break;
+		case FK_OPTION_NO_ACTION:
+			foreign->type |= DICT_FOREIGN_ON_DELETE_NO_ACTION;
+			break;
+		case FK_OPTION_SET_DEFAULT:
+		set_default_error:
+#if 0
+		dict_foreign_report_syntax_err(
+			"%s table %s with foreign key constraint"
+			" failed. Parse error in '%s'"
+			" near '%s'.\n",
+			operation, create_name, start_of_latest_foreign, start_of_latest_set);
+
+		ib_push_warning(trx, DB_CANNOT_ADD_CONSTRAINT,
+			"%s table %s with foreign key constraint"
+			" failed. Parse error in '%s'"
+			" near '%s'.",
+			operation, create_name, start_of_latest_foreign, start_of_latest_set);
+#endif
+			return(DB_CANNOT_ADD_CONSTRAINT);
+		case FK_OPTION_RESTRICT:
+		case FK_OPTION_UNDEF:
+			break;
+		}
+
+		switch (fk_key->update_opt) {
+		case FK_OPTION_CASCADE:
+			foreign->type |= DICT_FOREIGN_ON_UPDATE_CASCADE;
+			break;
+		case FK_OPTION_SET_NULL:
+			foreign->type |= DICT_FOREIGN_ON_UPDATE_SET_NULL;
+			break;
+		case FK_OPTION_NO_ACTION:
+			foreign->type |= DICT_FOREIGN_ON_UPDATE_NO_ACTION;
+			break;
+		case FK_OPTION_SET_DEFAULT:
+			goto set_default_error;
+		case FK_OPTION_RESTRICT:
+		case FK_OPTION_UNDEF:
+			break;
+		}
+
+		/* Try to find an index which contains the columns as the first fields
+		and in the right order, and the types are the same as in
+		foreign->foreign_index */
+
+		if (ref_table) {
+			index = dict_foreign_find_index(ref_table, NULL,
+							ref_column_names, i,
+							foreign->foreign_index,
+				TRUE, FALSE, &index_error, &err_col, &err_index);
+
+			if (!index) {
+				#if 0
+				mutex_enter(&dict_foreign_err_mutex);
+				dict_foreign_error_report_low(ef, create_name);
+				fprintf(ef, "%s:\n"
+					"Cannot find an index in the"
+					" referenced table where the\n"
+					"referenced columns appear as the"
+					" first columns, or column types\n"
+					"in the table and the referenced table"
+					" do not match for constraint.\n"
+					"Note that the internal storage type of"
+					" ENUM and SET changed in\n"
+					"tables created with >= InnoDB-4.1.12,"
+					" and such columns in old tables\n"
+					"cannot be referenced by such columns"
+					" in new tables.\n%s\n",
+					start_of_latest_foreign,
+					FOREIGN_KEY_CONSTRAINTS_MSG);
+
+				dict_foreign_push_index_error(trx, operation, create_name, start_of_latest_foreign,
+					column_names, index_error, err_col, err_index, referenced_table, ef);
+
+				mutex_exit(&dict_foreign_err_mutex);
+				#endif
+
+				return(DB_CANNOT_ADD_CONSTRAINT);
+			}
+		} else {
+			ut_a(trx->check_foreigns == FALSE);
+			index = NULL;
+		}
+
+		foreign->referenced_index = index;
+		foreign->referenced_table = ref_table;
+
+		foreign->referenced_table_name = mem_heap_strdup(
+			foreign->heap, ref_table->name.m_name);
+		dict_mem_referenced_table_name_lookup_set(foreign, TRUE);
+
+		foreign->referenced_col_names = static_cast<const char**>(
+			mem_heap_alloc(foreign->heap, i * sizeof(void*)));
+
+		for (i = 0; i < foreign->n_fields; i++) {
+			foreign->referenced_col_names[i]
+				= mem_heap_strdup(foreign->heap, ref_column_names[i]);
 		}
 	}
 	return error;
