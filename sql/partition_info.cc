@@ -2382,6 +2382,26 @@ static bool strcmp_null(const char *a, const char *b)
   return true;
 }
 
+bool partition_info::vers_set_interval(THD* thd, Item* item, interval_type int_type, long int start)
+{
+  DBUG_ASSERT(part_type == VERSIONING_PARTITION);
+  vers_info->interval.type= int_type;
+  vers_info->interval.start= start;
+  if (item->fix_fields_if_needed_for_scalar(thd, &item))
+    return true;
+  bool error= get_interval_value(thd, item, int_type, &vers_info->interval.step) ||
+          vers_info->interval.step.neg || vers_info->interval.step.second_part ||
+        !(vers_info->interval.step.year || vers_info->interval.step.month ||
+          vers_info->interval.step.day || vers_info->interval.step.hour ||
+          vers_info->interval.step.minute || vers_info->interval.step.second);
+  if (error) {
+    my_error(ER_PART_WRONG_VALUE, MYF(0),
+              thd->lex->create_last_non_select_table->table_name.str,
+              "INTERVAL");
+  }
+  return error;
+}
+
 
 /**
   Check if the new part_info has the same partitioning.

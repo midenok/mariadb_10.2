@@ -54,6 +54,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <my_bitmap.h>
 #include <mysql/service_thd_alloc.h>
 #include <mysql/service_thd_wait.h>
+#include <partition_info.h>
+#include <ha_partition.h>
 
 // MYSQL_PLUGIN_IMPORT extern my_bool lower_case_file_system;
 // MYSQL_PLUGIN_IMPORT extern char mysql_unpacked_real_data_home[];
@@ -74,6 +76,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "btr0defragment.h"
 #include "dict0crea.h"
 #include "dict0dict.h"
+#include "dict0mem.h"
 #include "dict0stats.h"
 #include "dict0stats_bg.h"
 #include "fil0fil.h"
@@ -12448,6 +12451,13 @@ create_table_info_t::create_foreign_constraints()
 	Key *key;
 	Alter_info *alter_info = m_create_info->alter_info;
 	List_iterator<Key> key_iterator(alter_info->key_list);
+	dict_foreign_set	local_fk_set;
+	dict_index_t*	index			= NULL;
+	ulint		index_error		= DB_SUCCESS;
+	const char*	column_names[500];
+	dict_index_t*	err_index		= NULL;
+	ulint		err_col;
+	ulint		i;
 
 	while ((key= key_iterator++))
 	{
@@ -12455,13 +12465,21 @@ create_table_info_t::create_foreign_constraints()
 			continue;
 		const char*&	constraint_name = key->name.str;
 		Foreign_key *fk_key = (Foreign_key *) key;
-		const TABLE *sql_table = fk_key->ref_table_list.table;
-		if (sql_table->file->partition_ht() != innodb_hton_ptr)
-		{
+		const TABLE *t = fk_key->ref_table_list.table;
+		const bool by_sys_time = t->part_info && t->part_info->vers_info;
+		if (t->file->partition_ht() != innodb_hton_ptr || !by_sys_time) {
 			// FIXME: test other engines
 			return DB_CANNOT_ADD_CONSTRAINT;
 		}
-		ha_innobase *ref_handler = static_cast<ha_innobase *>(sql_table->file);
+		ha_innobase *ref_handler;
+		if (by_sys_time) {
+			const ha_partition *handler = static_cast<ha_partition *>(t->file);
+			const partition_element *now_part = t->part_info->vers_info->now_part;
+			ref_handler = static_cast<ha_innobase *>(handler->part_handler(now_part));
+		} else {
+			ref_handler = static_cast<ha_innobase *>(t->file);
+		}
+
 		dict_table_t *table = ref_handler->ib_table();
 
 		dict_foreign_t*	foreign = NULL;
@@ -12489,6 +12507,51 @@ create_table_info_t::create_foreign_constraints()
 				dict_foreign_free(foreign);
 				return(error);
 			}
+		}
+
+		// FIXME: test duplicate FK names
+		std::pair<dict_foreign_set::iterator, bool>	ret
+			= local_fk_set.insert(foreign);
+		if (!ret.second) {
+			/* A duplicate foreign key name has been found */
+			dict_foreign_free(foreign);
+			return(DB_CANNOT_ADD_CONSTRAINT);
+		}
+
+		foreign->foreign_table = table;
+		foreign->foreign_table_name = mem_heap_strdup(
+			foreign->heap, table->name.m_name);
+		dict_mem_foreign_table_name_lookup_set(foreign, TRUE);
+
+		foreign->foreign_index = index;
+		foreign->n_fields = (unsigned int) i;
+
+		/* Try to find an index which contains the columns
+		as the first fields and in the right order. There is
+		no need to check column type match (on types_idx), since
+		the referenced table can be NULL if foreign_key_checks is
+		set to 0 */
+
+		index = dict_foreign_find_index(
+			table, NULL, column_names, i,
+			NULL, TRUE, FALSE, &index_error, &err_col, &err_index);
+
+		if (!index) {
+			#if 0
+			mutex_enter(&dict_foreign_err_mutex);
+			dict_foreign_error_report_low(ef, create_name);
+			fputs("There is no index in table ", ef);
+			ut_print_name(ef, NULL, create_name);
+			fprintf(ef, " where the columns appear\n"
+				"as the first columns. Constraint:\n%s\n%s",
+				start_of_latest_foreign,
+				FOREIGN_KEY_CONSTRAINTS_MSG);
+			dict_foreign_push_index_error(trx, operation, create_name, start_of_latest_foreign,
+				column_names, index_error, err_col, err_index, table, ef);
+
+			mutex_exit(&dict_foreign_err_mutex);
+			#endif
+			return(DB_CANNOT_ADD_CONSTRAINT);
 		}
 	}
 	return error;

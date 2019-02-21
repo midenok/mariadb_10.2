@@ -1490,9 +1490,9 @@ public:
   {
     partition_element *part_elem= reinterpret_cast<partition_element *>(_part_elem);
     DBUG_ASSERT(m_part_info);
-    uint32 sub_factor= m_part_info->num_subparts ? m_part_info->num_subparts : 1;
+    const uint32 sub_factor= m_part_info->num_subparts ? m_part_info->num_subparts : 1;
     uint32 part_id= part_elem->id * sub_factor;
-    uint32 part_id_end= part_id + sub_factor;
+    const uint32 part_id_end= part_id + sub_factor;
     DBUG_ASSERT(part_id_end <= m_tot_parts);
     ha_rows part_recs= 0;
     for (; part_id < part_id_end; ++part_id)
@@ -1503,6 +1503,15 @@ public:
       part_recs+= file->stats.records;
     }
     return part_recs;
+  }
+
+  handler *part_handler(const void *_part_elem) const
+  {
+    const partition_element *part_elem= reinterpret_cast<const partition_element *>(_part_elem);
+    DBUG_ASSERT(m_part_info);
+    const uint32 sub_factor= m_part_info->num_subparts ? m_part_info->num_subparts : 1;
+    const uint32 part_id= part_elem->id * sub_factor;
+    return m_file[part_id];
   }
 
   friend int cmp_key_rowid_part_id(void *ptr, uchar *ref1, uchar *ref2);
