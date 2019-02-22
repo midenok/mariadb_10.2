@@ -13129,16 +13129,6 @@ Rows_log_event::write_row(rpl_group_info *rgi,
     DBUG_RETURN(HA_ERR_GENERIC); // in case if error is not set yet
   }
 
-  // Handle INSERT.
-  if (table->versioned(VERS_TIMESTAMP))
-  {
-    ulong sec_part;
-    bitmap_set_bit(table->read_set, table->vers_start_field()->field_index);
-    // Check whether a row came from unversioned table and fix vers fields.
-    if (table->vers_start_field()->get_timestamp(&sec_part) == 0 && sec_part == 0)
-      table->vers_update_fields();
-  }
-
   /* 
     Try to write record. If a corresponding record already exists in the table,
     we try to change it using ha_update_row() if possible. Otherwise we delete
@@ -13463,10 +13453,6 @@ static bool record_compare(TABLE *table)
   /* Compare fields */
   for (Field **ptr=table->field ; *ptr ; ptr++)
   {
-    if (table->versioned() && (*ptr)->vers_sys_field())
-    {
-      continue;
-    }
     /**
       We only compare field contents that are not null.
       NULL fields (i.e., their null bits) were compared 
@@ -13671,24 +13657,6 @@ int Rows_log_event::find_row(rpl_group_info *rgi)
   
   prepare_record(table, m_width, FALSE);
   error= unpack_current_row(rgi);
-
-  m_vers_from_plain= false;
-  if (table->versioned())
-  {
-    Field *row_end= table->vers_end_field();
-    DBUG_ASSERT(table->read_set);
-    bitmap_set_bit(table->read_set, row_end->field_index);
-    // check whether master table is unversioned
-    if (row_end->val_int() == 0)
-    {
-      bitmap_set_bit(table->write_set, row_end->field_index);
-      // Plain source table may have a PRIMARY KEY. And row_end is always
-      // a part of PRIMARY KEY. Set it to max value for engine to find it in
-      // index. Needed for an UPDATE/DELETE cases.
-      table->vers_end_field()->set_max();
-      m_vers_from_plain= true;
-    }
-  }
 
   DBUG_PRINT("info",("looking for the following record"));
   DBUG_DUMP("record[0]", table->record[0], table->s->reclength);
@@ -14057,19 +14025,7 @@ int Delete_rows_log_event::do_exec_row(rpl_group_info *rgi)
     if (likely(!error))
     {
       m_table->mark_columns_per_binlog_row_image();
-      if (m_vers_from_plain && m_table->versioned(VERS_TIMESTAMP))
-      {
-        Field *end= m_table->vers_end_field();
-        bitmap_set_bit(m_table->write_set, end->field_index);
-        store_record(m_table, record[1]);
-        end->set_time();
-        error= m_table->file->ha_update_row(m_table->record[1],
-                                            m_table->record[0]);
-      }
-      else
-      {
-        error= m_table->file->ha_delete_row(m_table->record[0]);
-      }
+      error= m_table->file->ha_delete_row(m_table->record[0]);
       m_table->default_column_bitmaps();
     }
     if (invoke_triggers && likely(!error) &&
@@ -14332,17 +14288,6 @@ Update_rows_log_event::do_exec_row(rpl_group_info *rgi)
   memcpy(m_table->write_set->bitmap, m_cols_ai.bitmap, (m_table->write_set->n_bits + 7) / 8);
 
   m_table->mark_columns_per_binlog_row_image();
-  if (m_vers_from_plain && m_table->versioned(VERS_TIMESTAMP))
-    m_table->vers_update_fields();
-  error= m_table->file->ha_update_row(m_table->record[1], m_table->record[0]);
-  if (unlikely(error == HA_ERR_RECORD_IS_THE_SAME))
-    error= 0;
-  if (m_vers_from_plain && m_table->versioned(VERS_TIMESTAMP))
-  {
-    store_record(m_table, record[2]);
-    error= vers_insert_history_row(m_table);
-    restore_record(m_table, record[2]);
-  }
   m_table->default_column_bitmaps();
 
   if (invoke_triggers && likely(!error) &&
