@@ -328,8 +328,7 @@ bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *conds,
       if (select_lex->vers_setup_conds(thd, table_list))
         DBUG_RETURN(TRUE);
 
-      conds= table_list->on_expr;
-      table_list->on_expr= NULL;
+      conds= select_lex->where;
     }
   }
 

@@ -792,6 +792,17 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
     }
   }
 
+  bool is_select= false;
+  switch (thd->lex->sql_command)
+  {
+  case SQLCOM_SELECT:
+  case SQLCOM_INSERT_SELECT:
+  case SQLCOM_REPLACE_SELECT:
+    is_select= true;
+  default:
+    break;
+  }
+
   for (table= tables; table; table= table->next_local)
   {
     if (!table->table || !table->table->versioned())
@@ -801,7 +812,8 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
     Vers_part_info *vers_info;
-    if (table->table->part_info && (vers_info= table->table->part_info->vers_info))
+    if (is_select && table->table->part_info &&
+        (vers_info= table->table->part_info->vers_info))
     {
       if (table->partition_names)
       {
@@ -835,7 +847,7 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
     }
 
     // propagate system_time from sysvar
-    if (!vers_conditions.is_set())
+    if (!vers_conditions.is_set() && is_select)
     {
       if (vers_conditions.init_from_sysvar(thd))
         DBUG_RETURN(-1);
@@ -965,7 +977,10 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
     {
       cond1= and_items(thd, cond2, cond1);
       cond1= and_items(thd, cond3, cond1);
-      table->on_expr= and_items(thd, table->on_expr, cond1);
+      if (is_select)
+        table->on_expr= and_items(thd, table->on_expr, cond1);
+      else
+        where= and_items(thd, where, cond1);
     }
 
     table->vers_conditions.type= SYSTEM_TIME_ALL;
