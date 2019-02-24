@@ -798,6 +798,7 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
   case SQLCOM_SELECT:
   case SQLCOM_INSERT_SELECT:
   case SQLCOM_REPLACE_SELECT:
+  case SQLCOM_UPDATE_MULTI:
     is_select= true;
   default:
     break;

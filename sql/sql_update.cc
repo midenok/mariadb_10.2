@@ -1760,6 +1760,9 @@ bool mysql_multi_update(THD *thd,
   thd->abort_on_warning= !ignore && thd->is_strict_mode();
   List<Item> total_list;
 
+  if (select_lex->vers_setup_conds(thd, table_list))
+    DBUG_RETURN(1);
+
   res= mysql_select(thd,
                     table_list, select_lex->with_wild, total_list, conds,
                     select_lex->order_list.elements, select_lex->order_list.first,
@@ -2318,11 +2321,6 @@ int multi_update::send_data(List<Item> &not_used_values)
     */
     if (table->status & (STATUS_NULL_ROW | STATUS_UPDATED))
       continue;
-
-    if (table->versioned() && !table->vers_end_field()->is_max())
-    {
-      continue;
-    }
 
     if (table == table_to_update)
     {
