@@ -1242,11 +1242,6 @@ int multi_delete::send_data(List<Item> &values)
     if (table->status & (STATUS_NULL_ROW | STATUS_DELETED))
       continue;
 
-    if (table->versioned() && !table->vers_end_field()->is_max())
-    {
-      continue;
-    }
-
     table->file->position(table->record[0]);
     found++;
 
