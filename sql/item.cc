@@ -5917,6 +5917,12 @@ mark_non_agg_field:
         select_lex->set_non_agg_field_used(true);
     }
   }
+  if (field->table->versioned() && !(field->flags & VERS_SYSTEM_FIELD) &&
+      !field->vers_update_unversioned())
+  {
+    field->table->vers_write= true;
+  }
+
   return FALSE;
 
 error:

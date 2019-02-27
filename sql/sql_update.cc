@@ -409,7 +409,7 @@ int mysql_update(THD *thd,
   {
     DBUG_RETURN(1);
   }
-  bool has_vers_fields= check_has_vers_fields(table, fields);
+//   const bool has_vers_fields= table->versioned(); //check_has_vers_fields(table, fields);
   if (check_key_in_view(thd, table_list))
   {
     my_error(ER_NON_UPDATABLE_TABLE, MYF(0), table_list->alias.str, "UPDATE");
@@ -955,7 +955,7 @@ update_begin:
         }
         else if (likely(!error))
         {
-          if (has_vers_fields && table->versioned())
+          if (table->versioned_write())
           {
             if (table->versioned(VERS_TIMESTAMP))
             {

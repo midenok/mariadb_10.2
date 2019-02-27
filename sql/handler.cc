@@ -6319,6 +6319,23 @@ int handler::ha_update_row(const uchar *old_data, const uchar *new_data)
     rows_changed++;
     error= binlog_log_row(table, old_data, new_data, log_func);
   }
+
+#if 0
+  if (has_vers_fields && table->versioned())
+  {
+    if (table->versioned(VERS_TIMESTAMP))
+    {
+      store_record(table, record[2]);
+      error= vers_insert_history_row(table);
+      restore_record(table, record[2]);
+    }
+    if (likely(!error))
+      updated_sys_ver++;
+  }
+  if (likely(!error))
+    updated++;
+#endif
+
   return error;
 }
 
