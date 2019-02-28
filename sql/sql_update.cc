@@ -180,23 +180,6 @@ static bool check_fields(THD *thd, List<Item> &items, bool update_view)
   return FALSE;
 }
 
-static bool check_has_vers_fields(TABLE *table, List<Item> &items)
-{
-  List_iterator<Item> it(items);
-  if (!table->versioned())
-    return false;
-
-  while (Item *item= it++)
-  {
-    if (Item_field *item_field= item->field_for_view_update())
-    {
-      Field *field= item_field->field;
-      if (field->table == table && !field->vers_update_unversioned())
-        return true;
-    }
-  }
-  return false;
-}
 
 /**
   Re-read record if more columns are needed for error message.
@@ -409,7 +392,6 @@ int mysql_update(THD *thd,
   {
     DBUG_RETURN(1);
   }
-//   const bool has_vers_fields= table->versioned(); //check_has_vers_fields(table, fields);
   if (check_key_in_view(thd, table_list))
   {
     my_error(ER_NON_UPDATABLE_TABLE, MYF(0), table_list->alias.str, "UPDATE");
@@ -2103,7 +2085,6 @@ multi_update::initialize_tables(JOIN *join)
       if (safe_update_on_fly(thd, join->join_tab, table_ref, all_tables))
       {
 	table_to_update= table;			// Update table on the fly
-        has_vers_fields= check_has_vers_fields(table, *fields);
 	continue;
       }
     }
@@ -2401,7 +2382,7 @@ int multi_update::send_data(List<Item> &not_used_values)
             error= 0;
             updated--;
           }
-          else if (has_vers_fields && table->versioned())
+          else if (table->versioned_write())
           {
             if (table->versioned(VERS_TIMESTAMP))
             {
@@ -2576,8 +2557,6 @@ int multi_update::do_updates()
     if (table->vfield)
       empty_record(table);
 
-    has_vers_fields= check_has_vers_fields(table, *fields);
-
     check_opt_it.rewind();
     while(TABLE *tbl= check_opt_it++)
     {
@@ -2688,7 +2667,7 @@ int multi_update::do_updates()
             goto err2;
           }
         }
-        if (has_vers_fields && table->versioned())
+        if (table->versioned_write())
           table->vers_update_fields();
 
         if (unlikely((local_error=
@@ -2707,7 +2686,7 @@ int multi_update::do_updates()
         {
           updated++;
 
-          if (has_vers_fields && table->versioned())
+          if (table->versioned_write())
           {
             if (table->versioned(VERS_TIMESTAMP))
             {
