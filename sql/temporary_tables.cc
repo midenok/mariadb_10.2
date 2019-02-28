@@ -1117,6 +1117,7 @@ TABLE *THD::open_temporary_table(TMP_TABLE_SHARE *share,
 
   table->pos_in_table_list= 0;
   table->query_id= query_id;
+  table->vers_write= share->versioned;
 
   /* Add table to the head of table list. */
   share->all_tmp_tables.push_front(table);

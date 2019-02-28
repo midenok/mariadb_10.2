@@ -10230,7 +10230,7 @@ copy_data_between_tables(THD *thd, TABLE *from, TABLE *to,
   sql_mode_t save_sql_mode= thd->variables.sql_mode;
   ulonglong prev_insert_id, time_to_report_progress;
   Field **dfield_ptr= to->default_field;
-  bool make_versioned= !from->versioned() && to->versioned();
+  bool make_versioned= !from->versioned() && to->versioned(VERS_TIMESTAMP);
   bool make_unversioned= from->versioned() && !to->versioned();
   bool keep_versioned= from->versioned() && to->versioned();
   bool drop_history= false; // XXX
