@@ -16,16 +16,12 @@ add column e bigint unsigned as row end,
 add period for system_time(s, e),
 add system versioning,
 algorithm=inplace;
-select s from t1 into @trx_start;
-Warnings:
-Warning	1287	'<select expression> INTO <destination>;' is deprecated and will be removed in a future release. Please use 'SELECT <select list> INTO <destination> FROM...' instead
-select count(*) = 1 from mysql.transaction_registry where transaction_id = @trx_start;
-count(*) = 1
+select s into @trx_start from t1;
+select count(*) from mysql.transaction_registry where transaction_id = @trx_start;
+count(*)
 1
 create or replace table t1 (x int);
-select count(*) from mysql.transaction_registry into @tmp;
-Warnings:
-Warning	1287	'<select expression> INTO <destination>;' is deprecated and will be removed in a future release. Please use 'SELECT <select list> INTO <destination> FROM...' instead
+select count(*) into @tmp from mysql.transaction_registry;
 alter table t1
 add column s bigint unsigned as row start,
 add column e bigint unsigned as row end,
@@ -43,16 +39,12 @@ add column e bigint unsigned as row end,
 add period for system_time(s, e),
 add system versioning,
 algorithm=copy;
-select s from t1 into @trx_start;
-Warnings:
-Warning	1287	'<select expression> INTO <destination>;' is deprecated and will be removed in a future release. Please use 'SELECT <select list> INTO <destination> FROM...' instead
-select count(*) = 1 from mysql.transaction_registry where transaction_id = @trx_start;
-count(*) = 1
+select s into @trx_start from t1;
+select count(*) from mysql.transaction_registry where transaction_id = @trx_start;
+count(*)
 1
 create or replace table t1 (x int);
-select count(*) from mysql.transaction_registry into @tmp;
-Warnings:
-Warning	1287	'<select expression> INTO <destination>;' is deprecated and will be removed in a future release. Please use 'SELECT <select list> INTO <destination> FROM...' instead
+select count(*) into @tmp from mysql.transaction_registry;
 alter table t1
 add column s bigint unsigned as row start,
 add column e bigint unsigned as row end,

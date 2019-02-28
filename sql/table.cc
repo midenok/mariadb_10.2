@@ -3217,8 +3217,6 @@ enum open_frm_error open_table_from_share(THD *thd, TABLE_SHARE *share,
 
   DEBUG_SYNC(thd, "TABLE_after_field_clone");
 
-  outparam->vers_write= share->versioned;
-
   if (share->found_next_number_field)
     outparam->found_next_number_field=
       outparam->field[(uint) (share->found_next_number_field - share->field)];
@@ -4608,6 +4606,16 @@ void TABLE::init(THD *thd, TABLE_LIST *tl)
 
   /* Tables may be reused in a sub statement. */
   DBUG_ASSERT(!file->extra(HA_EXTRA_IS_ATTACHED_CHILDREN));
+
+  switch (thd->lex->sql_command)
+  {
+  case SQLCOM_UPDATE:
+  case SQLCOM_UPDATE_MULTI:
+    vers_write= false;
+    break;
+  default:
+    vers_write= s->versioned;
+  }
 }
 
 
