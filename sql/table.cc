@@ -4610,6 +4610,7 @@ void TABLE::init(THD *thd, TABLE_LIST *tl)
   switch (thd->lex->sql_command)
   {
   case SQLCOM_UPDATE:
+  case SQLCOM_UPDATE_MULTI:
     vers_write= false;
     break;
   default:
