@@ -1861,22 +1861,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
           {
             info->updated++;
             if (table->versioned())
-            {
-              if (table->versioned(VERS_TIMESTAMP))
-              {
-                store_record(table, record[2]);
-                if ((error= vers_insert_history_row(table)))
-                {
-                  info->last_errno= error;
-                  table->file->print_error(error, MYF(0));
-                  trg_error= 1;
-                  restore_record(table, record[2]);
-                  goto ok_or_after_trg_err;
-                }
-                restore_record(table, record[2]);
-              }
               info->copied++;
-            }
           }
           else
             error= 0;
@@ -1946,17 +1931,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
               error != HA_ERR_RECORD_IS_THE_SAME)
             goto err;
           if (likely(!error))
-          {
             info->deleted++;
-            if (table->versioned(VERS_TIMESTAMP))
-            {
-              store_record(table, record[2]);
-              error= vers_insert_history_row(table);
-              restore_record(table, record[2]);
-              if (unlikely(error))
-                goto err;
-            }
-          }
           else
             error= 0;   // error was HA_ERR_RECORD_IS_THE_SAME
           thd->record_first_successful_insert_id_in_cur_stmt(table->file->insert_id_for_cur_row);

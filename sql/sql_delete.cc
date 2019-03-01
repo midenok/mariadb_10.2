@@ -238,23 +238,6 @@ static bool record_should_be_deleted(THD *thd, TABLE *table, SQL_SELECT *sel,
 }
 
 
-inline
-int TABLE::delete_row()
-{
-  if (!versioned(VERS_TIMESTAMP) || !vers_end_field()->is_max())
-    return file->ha_delete_row(record[0]);
-
-  store_record(this, record[1]);
-  vers_update_end();
-  int res;
-  if ((res= file->extra(HA_EXTRA_REMEMBER_POS)))
-    return res;
-  if ((res= file->ha_update_row(record[1], record[0])))
-    return res;
-  return file->extra(HA_EXTRA_RESTORE_POS);
-}
-
-
 /**
   Implement DELETE SQL word.
 
@@ -719,7 +702,7 @@ bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *conds,
         break;
       }
 
-      error= table->delete_row();
+      error= table->file->ha_delete_row(table->record[0]);
       if (likely(!error))
       {
 	deleted++;
@@ -1233,7 +1216,7 @@ int multi_delete::send_data(List<Item> &values)
         DBUG_RETURN(1);
       table->status|= STATUS_DELETED;
 
-      error= table->delete_row();
+      error= table->file->ha_delete_row(table->record[0]);
       if (likely(!error))
       {
         deleted++;
@@ -1410,7 +1393,7 @@ int multi_delete::do_table_deletes(TABLE *table, SORT_INFO *sort_info,
       break;
     }
 
-    local_error= table->delete_row();
+    local_error= table->file->ha_delete_row(table->record[0]);
     if (unlikely(local_error) && !ignore)
     {
       table->file->print_error(local_error, MYF(0));
