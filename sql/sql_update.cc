@@ -323,9 +323,6 @@ int mysql_update(THD *thd,
   if (open_tables(thd, &table_list, &table_count, 0))
     DBUG_RETURN(1);
 
-  if (select_lex->vers_setup_conds(thd, table_list))
-    DBUG_RETURN(1);
-
   COND *conds= select_lex->where;
 
   /* Prepare views so they are handled correctly */
@@ -938,18 +935,8 @@ update_begin:
         else if (likely(!error))
         {
           if (table->versioned_write())
-          {
-            if (table->versioned(VERS_TIMESTAMP))
-            {
-              store_record(table, record[2]);
-              error= vers_insert_history_row(table);
-              restore_record(table, record[2]);
-            }
-            if (likely(!error))
               updated_sys_ver++;
-          }
-          if (likely(!error))
-            updated++;
+          updated++;
         }
 
         if (unlikely(error) &&
@@ -1241,6 +1228,11 @@ bool mysql_prepare_update(THD *thd, TABLE_LIST *table_list,
 #endif
 
   thd->lex->allow_sum_func.clear_all();
+
+  if (select_lex->vers_setup_conds(thd, table_list))
+    DBUG_RETURN(1);
+
+  *conds= select_lex->where;
 
   /*
     We do not call DT_MERGE_FOR_INSERT because it has no sense for simple
@@ -2384,17 +2376,6 @@ int multi_update::send_data(List<Item> &not_used_values)
           }
           else if (table->versioned_write())
           {
-            if (table->versioned(VERS_TIMESTAMP))
-            {
-              store_record(table, record[2]);
-              if (vers_insert_history_row(table))
-              {
-                restore_record(table, record[2]);
-                error= 1;
-                break;
-              }
-              restore_record(table, record[2]);
-            }
             updated_sys_ver++;
           }
           /* non-transactional or transactional table got modified   */
@@ -2687,20 +2668,7 @@ int multi_update::do_updates()
           updated++;
 
           if (table->versioned_write())
-          {
-            if (table->versioned(VERS_TIMESTAMP))
-            {
-              store_record(table, record[2]);
-              if ((local_error= vers_insert_history_row(table)))
-              {
-                restore_record(table, record[2]);
-                err_table = table;
-                goto err;
-              }
-              restore_record(table, record[2]);
-            }
             updated_sys_ver++;
-          }
         }
         else
           local_error= 0;

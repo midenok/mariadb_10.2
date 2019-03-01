@@ -6292,6 +6292,8 @@ int handler::ha_write_row(uchar *buf)
 }
 
 
+int vers_insert_history_row(TABLE *table);
+
 int handler::ha_update_row(const uchar *old_data, const uchar *new_data)
 {
   int error;
@@ -6319,6 +6321,23 @@ int handler::ha_update_row(const uchar *old_data, const uchar *new_data)
     rows_changed++;
     error= binlog_log_row(table, old_data, new_data, log_func);
   }
+
+  if (unlikely(error))
+    return error;
+
+  const THD *thd= table->in_use;
+
+  if (!is_partition() &&
+      // FIXME: History for RBR is currently done on master
+      !(thd->slave_thread && thd->is_current_stmt_binlog_format_row()) &&
+      table->versioned_write(VERS_TIMESTAMP) &&
+      table->vers_end_field()->is_max())
+  {
+    store_record(table, record[2]);
+    error= vers_insert_history_row(table);
+    restore_record(table, record[2]);
+  }
+
   return error;
 }
 
