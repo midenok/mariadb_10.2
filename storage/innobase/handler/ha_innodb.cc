@@ -259,7 +259,7 @@ static uint omits_virtual_cols(const TABLE_SHARE &share)
 @return pointer to the end of the table name part of the file name, or NULL */
 static
 char*
-is_partition(
+partition_name(
 /*=========*/
 	char*		file_name)
 {
@@ -6088,7 +6088,7 @@ ha_innobase::open(const char* name, int, uint)
 	m_upd_buf = NULL;
 	m_upd_buf_size = 0;
 
-	char*	is_part = is_partition(norm_name);
+	char*	is_part = partition_name(norm_name);
 	THD*	thd = ha_thd();
 
 	/* Check whether FOREIGN_KEY_CHECKS is set to 0. If so, the table
@@ -12834,7 +12834,7 @@ inline int ha_innobase::delete_table(const char* name, enum_sql_command sqlcom)
 
 	if (err == DB_TABLE_NOT_FOUND
 	    && innobase_get_lower_case_table_names() == 1) {
-		char*	is_part = is_partition(norm_name);
+		char*	is_part = partition_name(norm_name);
 
 		if (is_part) {
 			char	par_case_name[FN_REFLEN];
@@ -12897,7 +12897,7 @@ inline int ha_innobase::delete_table(const char* name, enum_sql_command sqlcom)
 	native innodb partitioning is completed */
 	if (err == DB_TABLE_NOT_FOUND
 	    && innobase_get_lower_case_table_names() == 1) {
-		char*	is_part = is_partition(norm_name);
+		char*	is_part = partition_name(norm_name);
 
 		if (is_part != NULL) {
 			char	par_case_name[FN_REFLEN];
@@ -13108,7 +13108,7 @@ innobase_rename_table(
 	if (error != DB_SUCCESS) {
 		if (error == DB_TABLE_NOT_FOUND
 		    && innobase_get_lower_case_table_names() == 1) {
-			char*	is_part = is_partition(norm_from);
+			char*	is_part = partition_name(norm_from);
 
 			if (is_part) {
 				char	par_case_name[FN_REFLEN];
@@ -20553,7 +20553,7 @@ innobase_rename_vc_templ(
 
 	/* For partition table, remove the partition name and use the
 	"main" table name to build the template */
-	char*	is_part = is_partition(tbname);
+	char*	is_part = partition_name(tbname);
 
 	if (is_part != NULL) {
 		*is_part = '\0';
