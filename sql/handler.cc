@@ -6980,6 +6980,11 @@ static bool vers_create_sys_field(THD *thd, const char *field_name,
   return false;
 }
 
+bool handler::is_partition() const
+{
+  return table->part_info && table->file->ht != ht;
+}
+
 const Lex_ident Vers_parse_info::default_start= "row_start";
 const Lex_ident Vers_parse_info::default_end= "row_end";
 

@@ -4687,8 +4687,7 @@ public:
 
   bool native_versioned() const
   { DBUG_ASSERT(ht); return partition_ht()->flags & HTON_NATIVE_SYS_VERSIONING; }
-  virtual void update_partition(uint	part_id)
-  {}
+  bool is_partition() const;
 
 protected:
   Handler_share *get_ha_share_ptr();
