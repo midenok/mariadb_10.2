@@ -13175,9 +13175,12 @@ Rows_log_event::write_row(rpl_group_info *rgi,
   {
     ulong sec_part;
     bitmap_set_bit(table->read_set, table->vers_start_field()->field_index);
-    // Check whether a row came from unversioned table and fix vers fields.
+    // Check whether a row came from unversioned table and fix vers fields
     if (table->vers_start_field()->get_timestamp(&sec_part) == 0 && sec_part == 0)
       table->vers_update_fields();
+    // Skip history records
+    else if (!table->vers_end_field()->is_max())
+      DBUG_RETURN(0);
   }
 
   /* 
@@ -14098,19 +14101,7 @@ int Delete_rows_log_event::do_exec_row(rpl_group_info *rgi)
     if (likely(!error))
     {
       m_table->mark_columns_per_binlog_row_image();
-      if (m_vers_from_plain && m_table->versioned(VERS_TIMESTAMP))
-      {
-        Field *end= m_table->vers_end_field();
-        bitmap_set_bit(m_table->write_set, end->field_index);
-        store_record(m_table, record[1]);
-        end->set_time();
-        error= m_table->file->ha_update_row(m_table->record[1],
-                                            m_table->record[0]);
-      }
-      else
-      {
-        error= m_table->file->ha_delete_row(m_table->record[0]);
-      }
+      error= m_table->file->ha_delete_row(m_table->record[0]);
       m_table->default_column_bitmaps();
     }
     if (invoke_triggers && likely(!error) &&
@@ -14373,17 +14364,9 @@ Update_rows_log_event::do_exec_row(rpl_group_info *rgi)
   memcpy(m_table->write_set->bitmap, m_cols_ai.bitmap, (m_table->write_set->n_bits + 7) / 8);
 
   m_table->mark_columns_per_binlog_row_image();
-  if (m_vers_from_plain && m_table->versioned(VERS_TIMESTAMP))
-    m_table->vers_update_fields();
   error= m_table->file->ha_update_row(m_table->record[1], m_table->record[0]);
   if (unlikely(error == HA_ERR_RECORD_IS_THE_SAME))
     error= 0;
-  if (m_vers_from_plain && m_table->versioned(VERS_TIMESTAMP))
-  {
-    store_record(m_table, record[2]);
-    error= vers_insert_history_row(m_table);
-    restore_record(m_table, record[2]);
-  }
   m_table->default_column_bitmaps();
 
   if (invoke_triggers && likely(!error) &&

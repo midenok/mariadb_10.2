@@ -6295,10 +6295,7 @@ int handler::ha_write_row(uchar *buf)
 inline
 bool handler::versioned_write()
 {
-  const THD *thd= table->in_use;
   return !is_partition() &&
-            // FIXME: History for RBR is currently done on master
-            !(thd->slave_thread && thd->is_current_stmt_binlog_format_row()) &&
             table->versioned_write(VERS_TIMESTAMP) &&
             table->vers_end_field()->is_max();
 }
