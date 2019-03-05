@@ -6372,6 +6372,24 @@ int handler::update_first_row(uchar *new_data)
 int handler::ha_delete_row(const uchar *buf)
 {
   int error;
+  const THD *thd= table->in_use;
+
+  if (!is_partition() &&
+      // FIXME: History for RBR is currently done on master
+      !(thd->slave_thread && thd->is_current_stmt_binlog_format_row()) &&
+      table->versioned_write(VERS_TIMESTAMP) &&
+      table->vers_end_field()->is_max())
+  {
+    store_record(table, record[1]);
+    table->vers_update_end();
+    if ((error= extra(HA_EXTRA_REMEMBER_POS)))
+      return error;
+    if ((error= ha_update_row(table->record[1], table->record[0])))
+      return error;
+    error= extra(HA_EXTRA_RESTORE_POS);
+    return error;
+  }
+
   Log_func *log_func= Delete_rows_log_event::binlog_row_logging_function;
   DBUG_ASSERT(table_share->tmp_table != NO_TMP_TABLE ||
               m_lock_type == F_WRLCK);

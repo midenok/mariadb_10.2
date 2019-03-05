@@ -1533,7 +1533,6 @@ public:
   ulonglong vers_start_id() const;
   ulonglong vers_end_id() const;
 
-  int delete_row();
   void vers_update_fields();
   void vers_update_end();
 
