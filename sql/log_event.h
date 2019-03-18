@@ -172,7 +172,7 @@ class String;
 
  ****************************************************************************/
 
-#define LOG_EVENT_HEADER_LEN 23     /* the fixed header length */
+#define LOG_EVENT_HEADER_LEN 19     /* the fixed header length */
 #define OLD_HEADER_LEN       13     /* the fixed header length in 3.23 */
 /*
    Fixed header length, where 4.x and 5.0 agree. That is, 5.0 may have a longer
@@ -259,7 +259,6 @@ class String;
 #define EVENT_LEN_OFFSET     9
 #define LOG_POS_OFFSET       13
 #define FLAGS_OFFSET         17
-#define SEC_PART_OFFSET      19
 
 /* start event post-header (for v3 and v4) */
 
@@ -494,9 +493,6 @@ class String;
    values to reduce risk of conflict with new MySQL flags.
 */
 #define LOG_EVENT_SKIP_REPLICATION_F 0x8000
-
-
-#define LOG_EVENT_HAS_SEC_PART 0x100
 
 
 /**
