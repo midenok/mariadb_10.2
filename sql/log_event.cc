@@ -1386,7 +1386,10 @@ Log_event::Log_event(const char* buf,
     */
     return;
   }
-  /* otherwise, go on with reading the header from buf (nothing now) */
+  /* otherwise, go on with reading the header from buf */
+  if (flags & LOG_EVENT_HAS_SEC_PART) {
+    when_sec_part= uint4korr(buf + SEC_PART_OFFSET);
+  }
 }
 
 #ifndef MYSQL_CLIENT
@@ -1755,6 +1758,7 @@ bool Log_event::write_header(size_t event_data_length)
   }
 
   now= get_time();                               // Query start time
+  flags|= LOG_EVENT_HAS_SEC_PART;
 
   /*
     Header will be of size LOG_EVENT_HEADER_LEN for all events, except for
@@ -1769,6 +1773,7 @@ bool Log_event::write_header(size_t event_data_length)
   int4store(header+ EVENT_LEN_OFFSET, data_written);
   int4store(header+ LOG_POS_OFFSET, log_pos);
   int2store(header + FLAGS_OFFSET, flags);
+  int4store(header + SEC_PART_OFFSET, when_sec_part);
 
   bool ret= writer->write_header(header, sizeof(header));
   DBUG_RETURN(ret);
