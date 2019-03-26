@@ -302,7 +302,7 @@ bool mysql_delete(THD *thd, TABLE_LIST *table_list, COND *conds,
 
   THD_STAGE_INFO(thd, stage_init_update);
 
-  bool truncate_history= table_list->vers_conditions.is_set();
+  const bool truncate_history= table_list->vers_conditions.delete_history;
 
   if (mysql_handle_list_of_derived(thd->lex, table_list, DT_MERGE_FOR_INSERT))
     DBUG_RETURN(TRUE);
