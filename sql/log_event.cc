@@ -13716,7 +13716,7 @@ int Rows_log_event::find_row(rpl_group_info *rgi)
   prepare_record(table, m_width, FALSE);
   error= unpack_current_row(rgi);
 
-  m_vers_from_plain= false;
+  m_master_unversioned= false;
   if (table->versioned())
   {
     Field *row_end= table->vers_end_field();
@@ -13730,7 +13730,7 @@ int Rows_log_event::find_row(rpl_group_info *rgi)
       // a part of PRIMARY KEY. Set it to max value for engine to find it in
       // index. Needed for an UPDATE/DELETE cases.
       table->vers_end_field()->set_max();
-      m_vers_from_plain= true;
+      m_master_unversioned= true;
     }
   }
 

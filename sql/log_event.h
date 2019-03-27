@@ -4639,7 +4639,8 @@ protected:
   uchar    *m_extra_row_data;   /* Pointer to extra row data if any */
                                 /* If non null, first byte is length */
 
-  bool m_vers_from_plain;
+  bool m_master_unversioned;    /* Master table is unversioned while slave
+                                   table is versioned */
 
 
   /* helper functions */
@@ -4664,8 +4665,14 @@ protected:
     DBUG_ASSERT(m_table);
 
     ASSERT_OR_RETURN_ERROR(m_curr_row <= m_rows_end, HA_ERR_CORRUPT_EVENT);
-    return ::unpack_row(rgi, m_table, m_width, m_curr_row, cols,
+    const int result= ::unpack_row(rgi, m_table, m_width, m_curr_row, cols,
                                    &m_curr_row_end, &m_master_reclength, m_rows_end);
+    if (!result && !m_master_unversioned && m_table->versioned(VERS_TIMESTAMP))
+    {
+      when= m_table->vers_start_field()->get_timestamp(&when_sec_part);
+      thd->set_time(when, when_sec_part);
+    }
+    return result;
   }
 
   // Unpack the current row into m_table->record[0]
