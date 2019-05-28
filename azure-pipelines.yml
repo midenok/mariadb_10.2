@@ -1,0 +1,366 @@
+# C/C++ with GCC
+# Build your C/C++ project with GCC using make.
+# Add steps that publish test results, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/apps/c-cpp/gcc
+
+resources:
+    containers:
+    - container: centos6
+      image: ratzpo/mariadb-build:centos-6
+      options: --shm-size 12G
+    - container: centos7
+      image: ratzpo/mariadb-build:centos-7
+      options: --shm-size 12G
+    - container: ubuntu-1604
+      image: ratzpo/mariadb-build:ubuntu-1604
+      options: --shm-size 12G
+    - container: ubuntu-1804
+      image: ratzpo/mariadb-build:ubuntu-1804
+      options: --shm-size 12G
+    - container: debian-9
+      image: ratzpo/mariadb-build:debian-9
+      options: --shm-size 12G
+
+variables:
+  configuration: RelWithDebInfo
+  platform: x64
+  WSREP_PROVIDER: /usr/lib/libgalera_enterprise_smm.so
+
+jobs:
+- job: Source
+
+  pool:
+    vmImage: 'ubuntu-16.04'
+
+  strategy:
+    matrix:
+      ubuntu-1804:
+        containerImage: ubuntu-1804
+
+  container: $[variables['containerImage']]
+
+  steps:
+  # linux
+  - script: |
+      whoami
+      pwd
+      mkdir dist && cd dist
+      cmake ..
+      make dist
+      cp *.tar.gz $BUILD_ARTIFACTSTAGINGDIRECTORY
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: source
+
+- job: Bintar
+  timeoutInMinutes: 240
+
+  pool:
+    vmImage: 'ubuntu-16.04'
+
+  strategy:
+    matrix:
+      ubuntu-1604:
+        containerImage: ubuntu-1604
+      ubuntu-1804:
+        containerImage: ubuntu-1804
+      debian-9:
+        containerImage: debian-9
+      centos6:
+        containerImage: centos6
+      centos7:
+        containerImage: centos7
+
+  container: $[variables['containerImage']]
+
+  steps:
+  - script: |
+      df -h
+      ls -la
+  - script: |
+      mkdir build && cd build
+      cmake .. -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
+        -DBUILD_CONFIG=enterprise
+      make -j5 package VERBOSE=1
+    displayName: 'build - release - centos6'
+    condition: eq(variables['containerImage'], 'centos6')
+  - script: |
+      mkdir build && cd build
+      cmake .. -DBUILD_CONFIG=enterprise 
+      make -j5 package VERBOSE=1
+    displayName: 'build - release'
+    condition: ne(variables['containerImage'], 'centos6')
+  - script: |
+      cd build/mysql-test
+      exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
+          --mem --parallel=5
+    displayName: 'mtr tests - release'
+    condition: ne(variables['containerImage'], 'ubuntu-1604')
+  - script: |
+      export WSREP_PROVIDER=/usr/lib/libgalera_enterprise_smm.so
+      echo $WSREP_PROVIDER
+      echo $(WSREP_PROVIDER)
+      echo $(Build.SourceBranch)
+      ls -la /usr/lib/libgalera_enterprise_smm.so
+      cd build/mysql-test
+      ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
+    displayName: 'mtr tests - galera'
+    condition: in(variables['containerImage'], 'ubuntu-1604', 'centos7')
+  - task: CopyFiles@2
+    inputs:
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
+      sourceFolder: '$(Build.SourcesDirectory)/build'
+      contents: '?(*.tar.gz)'
+    condition: succeededOrFailed()
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: $(containerImage)
+    condition: succeededOrFailed()
+      
+
+- job: ASan
+  timeoutInMinutes: 240
+
+  pool:
+    vmImage: 'ubuntu-16.04'
+
+  strategy:
+    matrix:
+      ubuntu-1604:
+        containerImage: ubuntu-1604
+
+  container: $[variables['containerImage']]
+
+  steps:
+  - script: |
+      mkdir build && cd build
+      cmake .. -DBUILD_CONFIG=enterprise -DWITH_ASAN=1
+      make -j5 package
+    displayName: 'build - release, asan'
+    failOnStderr: false
+  - script: |
+      cd build/mysql-test
+      exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
+          --mem --parallel=5
+      exit 0
+    displayName: 'mtr tests'
+    failOnStderr: false
+  - task: CopyFiles@2
+    inputs:
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
+      sourceFolder: '$(Build.SourcesDirectory)'
+      contents: '?(*.tar.gz)'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: $(containerImage)
+
+- job: Debug
+  timeoutInMinutes: 240
+
+  pool:
+    vmImage: 'ubuntu-16.04'
+
+  strategy:
+    matrix:
+      centos7:
+        containerImage: centos7
+
+  container: $[variables['containerImage']]
+
+  steps:
+  - script: |
+      cmake . -DBUILD_CONFIG=enterprise -DCMAKE_BUILD_TYPE=Debug
+      make -j5 package
+    displayName: 'build - debug'
+    failOnStderr: false
+  - script: |
+      cd mysql-test
+      exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 \
+          --mem --max-test-fail=20 --debug-server --parallel=5
+    displayName: 'mtr tests - debug'
+    failOnStderr: false
+  - task: CopyFiles@2
+    inputs:
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
+      sourceFolder: '$(Build.SourcesDirectory)'
+      contents: '?(*.tar.gz)'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: $(containerImage)
+
+- job: DEB
+  timeoutInMinutes: 240
+  dependsOn:
+  - Bintar
+
+  pool:
+    vmImage: 'ubuntu-16.04'
+
+  strategy:
+    matrix:
+      ubuntu-1604:
+        containerImage: ubuntu-1604
+      ubuntu-1804:
+        containerImage: ubuntu-1804
+      debian-9:
+        containerImage: debian-9
+
+  container: $[variables['containerImage']]
+
+  steps:
+  # linux
+  - script: |
+      whoami
+      debian/autobake-deb.sh
+    condition: eq( variables['Agent.OS'], 'Linux' )
+    displayName: 'build'
+  - script: |
+      pwd
+      find .. -type f -name "*.deb"
+      echo $BUILD_SOURCESDIRECTORY
+      echo $BUILD_ARTIFACTSTAGINGDIRECTORY
+      cp ../*.deb $BUILD_ARTIFACTSTAGINGDIRECTORY
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: $(containerImage)
+
+- job: RPM
+  timeoutInMinutes: 240
+  dependsOn:
+  - Bintar
+
+  pool:
+    vmImage: 'ubuntu-16.04'
+
+  strategy:
+    matrix:
+      centos6:
+        containerImage: centos6
+      centos7:
+        containerImage: centos7
+
+  container: $[variables['containerImage']]
+
+  steps:
+  - script: |
+      whoami
+      pwd
+    displayName: 'show info'
+  - script: |
+      cmake . -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
+      make -j5 package
+    displayName: 'cmake centos 6'
+    condition: eq(variables['containerImage'], 'centos6')
+  - script: |
+      cmake . -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
+      make -j5 package
+    displayName: 'cmake centos 7'
+    condition: eq(variables['containerImage'], 'centos7')
+  - script: |
+      pwd
+      find . -type f -name "*.rpm"
+      echo $BUILD_SOURCESDIRECTORY
+      echo $BUILD_ARTIFACTSTAGINGDIRECTORY
+      cp *.rpm $BUILD_ARTIFACTSTAGINGDIRECTORY
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: $(containerImage)
+
+- job: MacOS
+  condition: false #exclude MacOS for now
+
+  pool:
+    vmImage: 'macOS-10.13'
+  steps:
+  # - script: cmake . -DBUILD_CONFIG=mysql_release -DWITH_SSL=bundled -DTOKUDB_OK=0 -DWITH_JEMALLOC=no -DMYSQL_UNIX_ADDR=/usr/local/mariadb/data/mariadb.sock -DCMAKE_INSTALL_PREFIX=/usr/local/mariadb/server -DINSTALL_MYSQLDATADIR=/usr/local/mariadb/data -DDEFAULT_SYSCONFDIR=/usr/local/mariadb/etc -DWITH_EMBEDDED_SERVER=OFF -DWITH_UNIT_TESTS=OFF -DINSTALL_MYSQLTESTDIR= -DWITH_WSREP=OFF
+  - script: brew install jemalloc mhash curl gnutls
+  - script: cmake . -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/ -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib -DBUILD_CONFIG=enterprise
+    displayName: 'cmake'
+    failOnStderr: false
+  - script: sed -i '' s/SIZEOF_CHARP/"sizeof(char *)"/g libmariadb/libmariadb/ma_dtoa.c
+  - script: make -j5 package
+    displayName: 'make'
+    failOnStderr: false
+  #- script: cd support-files/macOSpkg && ./mkpkg ../../mariadb*tar.gz && mv -vi *.pkg ../../
+  - task: CopyFiles@2
+    inputs:
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
+      sourceFolder: '$(Build.SourcesDirectory)'
+      contents: '?(*.tar.gz|*.pkg)'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: macOS-10.13
+
+- job: Windows
+
+  pool:
+    vmImage: 'windows-2019'
+  steps:
+  - powershell: |
+      Import-Module BitsTransfer
+      Start-BitsTransfer -Source https://cygwin.com/setup-x86_64.exe -Destination setup-x86_64.exe
+      # Start-FileDownload https://cygwin.com/setup-x86_64.exe -FileName setup-x86_64.exe -Timeout 900000
+      dir
+      .\setup-x86_64.exe -B --packages "bison" -q -R C:\cygwin64 -s http://cygwin.mirror.constant.com -a x86_64 -v
+    displayName: 'install cygwin - bison'
+    failOnStderr: false
+    ignoreLASTEXITCODE: true
+
+  - script: |
+      md win_build
+      cd win_build
+      cmake .. -Wno-deprecated -DBUILD_CONFIG=enterprise -DPLUGIN_AWS_KEY_MANAGEMENT=NO -DBISON_EXECUTABLE=C:\cygwin64\bin\bison -DWITH_EMBEDDED_SERVER=0 -DSIGNCODE=OFF -DWITH_UNIT_TESTS=0 -DMYSQL_MAINTAINER_MODE=ERR
+    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+    displayName: 'CMake'
+    failOnStderr: false
+
+#  - task: MSBuild@1
+#    inputs:
+#      solution: win_build\MySQL.sln
+#      configuration: $(configuration) # Use the variable
+#      platform: $(platform)
+#    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+#    displayName: 'Windows build'
+
+  - script: |
+      pwd
+      cd win_build
+      cmake --build . --config RelWithDebInfo -- -m -v:diag
+    displayName: 'build binaries'
+
+  - script: |
+      pwd
+      cd win_build
+      cmake --build . --config RelWithDebInfo --target MSI
+    displayName: 'build package'
+
+  - script: |
+      cd mysql-test
+      C:\Strawberry\perl\bin\perl.exe mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 --mem --parallel=5
+    displayName: 'mtr tests'
+
+  - task: CopyFiles@2
+    inputs:
+      sourceFolder: '$(Build.SourcesDirectory)'
+      contents: 'win_build\?(*.msi)'
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
+
+  - task: CopyFiles@2
+    inputs:
+      sourceFolder: '$(Build.SourcesDirectory)'
+      contents: '**\RelWithDebInfo\**\?(*.exe|*.dll|*.pdb)'
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
+    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: Windows
+    condition: eq( variables['Agent.OS'], 'Windows_NT' )
