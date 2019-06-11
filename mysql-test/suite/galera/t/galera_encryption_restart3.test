@@ -1,6 +1,7 @@
 # Galera cache encryption
-# Restart test 3: start both nodes encryption enabled
-# and restart node_2 with different key file
+# Restart test #3: start both nodes encryption enabled
+# and restart node_2 with different key file and finally
+# restart node_2 with original key file.
 
 --source include/galera_cluster.inc
 --source include/have_innodb.inc

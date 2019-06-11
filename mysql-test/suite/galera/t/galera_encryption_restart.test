@@ -1,6 +1,6 @@
 # Galera cache encryption
-# When node uses encryption, search for pattern in galera cache should fail
-
+# Restart test #1: Start both nodes encryption enabled and
+# restart node_2 and verify that galera cache remains encrypted
 
 --source include/galera_cluster.inc
 --source include/have_innodb.inc
