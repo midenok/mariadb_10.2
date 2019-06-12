@@ -1011,9 +1011,8 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
     vers_select_conds_t &vers_conditions= table->vers_conditions;
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-    Vers_part_info *vers_info;
     if (is_select && table->table->part_info &&
-        (vers_info= table->table->part_info->vers_info))
+        table->table->part_info->vers_info)
     {
       if (table->partition_names)
       {
@@ -1030,7 +1029,8 @@ int SELECT_LEX::vers_setup_conds(THD *thd, TABLE_LIST *tables)
       else if (!vers_conditions.is_set())
       {
         table->partition_names= newx List<String>;
-        String *s= newx String(vers_info->now_part->partition_name,
+        String *s= newx String(table->table->part_info->
+                               vers_info->now_part->partition_name,
                                system_charset_info);
         table->partition_names->push_back(s);
         table->table->file->change_partitions_to_open(table->partition_names);
