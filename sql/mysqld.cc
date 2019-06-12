@@ -5607,6 +5607,7 @@ int mysqld_main(int argc, char **argv)
   if (Events::init((THD*) 0, opt_noacl || opt_bootstrap))
     unireg_abort(1);
 
+#ifdef WITH_WSREP
   if (WSREP_ON)
   {
     wsrep_init_globals();
@@ -5622,6 +5623,7 @@ int mysqld_main(int argc, char **argv)
                 wsrep_slave_threads - 1, wsrep_running_applier_threads);
     wsrep_create_appliers(wsrep_slave_threads - 1);
   }
+#endif /* WITH_WSREP */
 
   if (opt_bootstrap)
   {
