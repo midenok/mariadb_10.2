@@ -4880,18 +4880,6 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
 
   partition_info *saved_part_info= NULL;
 
-  if (!(alter_info->partition_flags & ALTER_PARTITION_DROP))
-  {
-    partition_info *part_info= table->part_info;
-    if (part_info && part_info->part_field_array)
-    {
-      for (Field **part_field= part_info->part_field_array; *part_field; ++part_field)
-      {
-      }
-  //           my_error(ER_MORE_THAN_ONE_PERIOD, MYF(0));
-    }
-  }
-
   if (alter_info->partition_flags &
       (ALTER_PARTITION_ADD |
        ALTER_PARTITION_DROP |
@@ -5915,6 +5903,10 @@ the generated partition syntax in a correct manner.
           *partition_changed= TRUE;
         }
       }
+      /*
+        Prohibit inplace when key takes part in partitioning expression
+        and is altered (dropped).
+      */
       if (!*partition_changed && tab_part_info->part_field_array)
       {
         KEY *key_info= table->key_info;
