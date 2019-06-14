@@ -36,6 +36,7 @@ galera_kill_largechanges : MDEV-18179 Galera test failure on galera.galera_kill_
 galera_kill_nochanges : MDEV-18280 Galera test failure on galera_split_brain and galera_kill_nochanges
 galera_many_tables_nopk : MDEV-18182 Galera test failure on galera.galera_many_tables_nopk
 galera_migrate : MariaDB does not support START SLAVE USER
+galera_parallel_autoinc_manytrx : MDEV-19746 Galera test failures because of wsrep_slave_threads identification
 galera_split_brain : MDEV-18280 Galera test failure on galera_split_brain and galera_kill_nochanges
 galera_ssl_upgrade : MDEV-19950 Galera test failure on galera_ssl_upgrade
 galera_var_node_address : MDEV-20485 Galera test failure
