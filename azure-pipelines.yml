@@ -98,10 +98,10 @@ jobs:
     displayName: 'mtr tests - release'
     condition: ne(variables['containerImage'], 'ubuntu-1604')
   - script: |
-      sudo sh -c "echo 'deb [arch=amd64] http://downloads.mariadb.com/galera-test/repo/deb xenial main' > /etc/apt/sources.list.d/galera-test-repo.list"
+      sudo apt-add-repository http://downloads.mariadb.com/galera-test/repo/deb
       sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xCE1A3DD5E3C94F49
       sudo apt update
-      sudo apt install -y galera-4 galera-arbitrator-4
+      sudo apt install -y galera-enterprise-4 galera-arbitrator-4
       export WSREP_PROVIDER=/usr/lib/galera/libgalera_enterprise_smm.so
       echo $WSREP_PROVIDER
       echo $(WSREP_PROVIDER)
@@ -109,8 +109,8 @@ jobs:
       ls -la /usr/lib/galera/libgalera_enterprise_smm.so
       cd build/mysql-test
       ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
-    displayName: 'mtr tests - galera'
-    condition: in(variables['containerImage'], 'ubuntu-1604', 'centos7')
+    displayName: 'mtr tests - deb - galera'
+    condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804')
   - task: CopyFiles@2
     inputs:
       targetFolder: '$(Build.ArtifactStagingDirectory)'
