@@ -112,8 +112,26 @@ jobs:
       ls -la /usr/lib/galera/libgalera_enterprise_smm.so
       cd build/mysql-test
       ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
-    displayName: 'mtr tests - deb - galera'
+    displayName: 'mtr tests - galera - deb'
     condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-9')
+  - script: |
+      set -x
+      sudo sh -c "echo '[galera]
+name=galera
+baseurl=http://downloads.mariadb.com/galera-test/repo/rpm/$releasever/$basearch/
+gpgkey=https://downloads.mariadb.com/MariaDB/RPM-GPG-KEY-MariaDB-Ent
+gpgcheck=1' > /etc/yum.repos.d/galera.repo"
+      sudo cat /etc/yum.repos.d/galera.repo
+      sudo yum install -y galera-enterprise-4
+      export WSREP_PROVIDER=/usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
+      echo $WSREP_PROVIDER
+      echo $(WSREP_PROVIDER)
+      echo $(Build.SourceBranch)
+      ls -la /usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
+      cd build/mysql-test
+      ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
+    displayName: 'mtr tests - galera - rpm'
+    condition: in(variables['containerImage'], 'centos7', 'centos6')
   - task: CopyFiles@2
     inputs:
       targetFolder: '$(Build.ArtifactStagingDirectory)'
