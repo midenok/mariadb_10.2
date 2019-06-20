@@ -118,7 +118,7 @@ jobs:
       set -x
       sudo sh -c "echo '[galera]' > /etc/yum.repos.d/galera.repo"
       sudo sh -c "echo 'name=galera' >> /etc/yum.repos.d/galera.repo"
-      sudo sh -c "echo 'baseurl=http://downloads.mariadb.com/galera-test/repo/rpm/\$releasever/\$basearch/' >> /etc/yum.repos.d/galera.repo"
+      sudo sh -c "echo 'baseurl=http://downloads.mariadb.com/galera-test/repo/rpm/rhel/\$releasever/\$basearch/' >> /etc/yum.repos.d/galera.repo"
       sudo sh -c "echo 'gpgkey=https://downloads.mariadb.com/MariaDB/RPM-GPG-KEY-MariaDB-Ent' >> /etc/yum.repos.d/galera.repo"
       sudo sh -c "echo 'gpgcheck=1' >> /etc/yum.repos.d/galera.repo"
       sudo cat /etc/yum.repos.d/galera.repo
