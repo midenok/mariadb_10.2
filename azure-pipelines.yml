@@ -127,16 +127,21 @@ jobs:
   container: $[variables['containerImage']]
 
   steps:
-  - download: current
-    artifact: $[variables['containerImage']]
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: 'current'
+      specificBuildWithTriggering: true
+      downloadType: 'single'
+      artifactName: $(containerImage)
+      downloadPath: '$(System.ArtifactsDirectory)'
   - script: |
       set -x
       whoami
       df -h
       pwd
       ls -la
-      ls $(Pipeline.Workspace)
-      cd $(Pipeline.Workspace)
+      ls $(System.ArtifactsDirectory)
+      cd $(System.ArtifactsDirectory)
       pwd
       ls -la
       tar -zxvf mariadb-enterprise*tar.gz
