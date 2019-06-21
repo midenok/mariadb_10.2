@@ -128,7 +128,7 @@ jobs:
 
   steps:
   - download: current
-    artifact: $(containerImage)
+    artifact: $[variables['containerImage']]
   - script: |
       set -x
       whoami
