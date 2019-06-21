@@ -303,6 +303,13 @@ jobs:
   pool:
     vmImage: 'windows-2019'
   steps:
+
+  - script: |
+      git config --global core.autocrlf input
+      set
+
+  - checkout: self
+
   - powershell: |
       Import-Module BitsTransfer
       Start-BitsTransfer -Source https://cygwin.com/setup-x86_64.exe -Destination setup-x86_64.exe
@@ -316,23 +323,15 @@ jobs:
   - script: |
       md win_build
       cd win_build
-      cmake .. -Wno-deprecated -DBUILD_CONFIG=enterprise -DPLUGIN_AWS_KEY_MANAGEMENT=NO -DBISON_EXECUTABLE=C:\cygwin64\bin\bison -DWITH_EMBEDDED_SERVER=0 -DSIGNCODE=OFF -DWITH_UNIT_TESTS=0 -DMYSQL_MAINTAINER_MODE=ERR
+      cmake .. -Wno-deprecated -Wno-dev -DBUILD_CONFIG=enterprise -DPLUGIN_AWS_KEY_MANAGEMENT=NO -DBISON_EXECUTABLE=C:\cygwin64\bin\bison -DWITH_EMBEDDED_SERVER=0 -DSIGNCODE=OFF -DWITH_UNIT_TESTS=0 -DMYSQL_MAINTAINER_MODE=ERR
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: 'CMake'
     failOnStderr: false
 
-#  - task: MSBuild@1
-#    inputs:
-#      solution: win_build\MySQL.sln
-#      configuration: $(configuration) # Use the variable
-#      platform: $(platform)
-#    condition: eq( variables['Agent.OS'], 'Windows_NT' )
-#    displayName: 'Windows build'
-
   - script: |
       pwd
       cd win_build
-      cmake --build . --config RelWithDebInfo -- -m -v:diag
+      cmake --build . --config RelWithDebInfo --verbose --parallel 5
     displayName: 'build binaries'
 
   - script: |
@@ -342,8 +341,8 @@ jobs:
     displayName: 'build package'
 
   - script: |
-      cd mysql-test
-      C:\Strawberry\perl\bin\perl.exe mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 --mem --parallel=5
+      cd win_build\mysql-test
+      C:\Strawberry\perl\bin\perl.exe mysql-test-run.pl --suite=main,innodb,mariabackup,rocksdb --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20  --parallel=5
     displayName: 'mtr tests'
 
   - task: CopyFiles@2
