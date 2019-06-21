@@ -127,14 +127,25 @@ jobs:
   container: $[variables['containerImage']]
 
   steps:
+  - download: current
+    artifact: $(containerImage)
   - script: |
+      set -x
       whoami
+      df -h
       pwd
+      ls -la
+      ls $(Pipeline.Workspace)
+      cd $(Pipeline.Workspace)
+      pwd
+      ls -la
+      tar -zxvf mariadb-enterprise*tar.gz
+      mv -vi mariadb-enterprise*/ build/
     displayName: 'show info'
   - script: |
-      df -h
-      ls -la
-  - script: |
+      set -x
+      ls
+      pwd
       cd build/mysql-test
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
           --mem --parallel=5
