@@ -96,6 +96,8 @@ jobs:
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
           --mem --parallel=5
     displayName: 'mtr tests - release'
+    
+    #This has been added to 10.4 because of Galera 4 and thus it's not present in the 10.2 and 10.3 pipeline scripts
     condition: ne(variables['containerImage'], 'ubuntu-1604')
   - script: |
       set -x
@@ -132,6 +134,7 @@ jobs:
       ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
     displayName: 'mtr tests - galera - rpm'
     condition: in(variables['containerImage'], 'centos7', 'centos6')
+    
   - task: CopyFiles@2
     inputs:
       targetFolder: '$(Build.ArtifactStagingDirectory)'
