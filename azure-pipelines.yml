@@ -143,6 +143,7 @@ jobs:
       ls -lah $(System.ArtifactsDirectory)
       ls -lah $(System.ArtifactsDirectory)/$(containerImage)
       cd /opt/
+      sudo chown -c $USER /opt
       pwd
       ls -lah
       tar -zxf $(System.ArtifactsDirectory)/$(containerImage)/mariadb-enterprise*tar.gz
