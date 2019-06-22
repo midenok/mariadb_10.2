@@ -141,7 +141,7 @@ jobs:
       pwd
       ls -la
       ls $(System.ArtifactsDirectory)
-      cd $(System.ArtifactsDirectory)
+      cd $(System.ArtifactsDirectory)/$(containerImage)
       pwd
       ls -la
       tar -zxvf mariadb-enterprise*tar.gz
@@ -149,7 +149,7 @@ jobs:
     displayName: 'show info'
   - script: |
       set -x
-      ls
+      ls -la
       pwd
       cd build/mysql-test
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
