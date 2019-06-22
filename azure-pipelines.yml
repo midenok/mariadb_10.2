@@ -301,11 +301,21 @@ jobs:
     condition: eq( variables['Agent.OS'], 'Linux' )
     displayName: 'build'
   - script: |
+      set -x
       pwd
+      mkdir -vp $BUILD_ARTIFACTSTAGINGDIRECTORY/binary
+      mkdir -vp $BUILD_ARTIFACTSTAGINGDIRECTORY/source
       find .. -type f -name "*.deb"
+      find .. -type f -name "*.changes"
+      ls -lah ..
       echo $BUILD_SOURCESDIRECTORY
       echo $BUILD_ARTIFACTSTAGINGDIRECTORY
-      cp ../*.deb $BUILD_ARTIFACTSTAGINGDIRECTORY
+      cp -v ../*.deb $BUILD_ARTIFACTSTAGINGDIRECTORY/binary/
+      cp -v ../*.changes $BUILD_ARTIFACTSTAGINGDIRECTORY/binary/
+      cd $BUILD_ARTIFACTSTAGINGDIRECTORY
+      dpkg-scanpackages binary /dev/null | gzip -9c > binary/Packages.gz
+      dpkg-scansources source /dev/null | gzip -9c > source/Sources.gz
+    displayName: 'publish'
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: '$(Build.ArtifactStagingDirectory)'
