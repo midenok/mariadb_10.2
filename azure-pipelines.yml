@@ -139,19 +139,20 @@ jobs:
       whoami
       df -h
       pwd
-      ls -la
-      ls $(System.ArtifactsDirectory)
-      cd $(System.ArtifactsDirectory)/$(containerImage)
+      ls -lah
+      ls -lah $(System.ArtifactsDirectory)
+      ls -lah $(System.ArtifactsDirectory)/$(containerImage)
+      cd /opt/
       pwd
-      ls -la
-      tar -zxvf mariadb-enterprise*tar.gz
+      ls -lah
+      tar -zxf $(System.ArtifactsDirectory)/$(containerImage)/mariadb-enterprise*tar.gz
       mv -vi mariadb-enterprise*/ build/
-    displayName: 'show info'
+    displayName: 'untar and show info'
   - script: |
       set -x
-      ls -la
+      cd /opt/build/mysql-test
       pwd
-      cd build/mysql-test
+      ls -lah
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
           --mem --parallel=5
     displayName: 'mtr tests - release'
@@ -169,11 +170,11 @@ jobs:
       echo $WSREP_PROVIDER
       echo $(WSREP_PROVIDER)
       echo $(Build.SourceBranch)
-      ls -la /usr/lib/galera/libgalera_enterprise_smm.so
-      cd build/mysql-test
+      ls -lah /usr/lib/galera/libgalera_enterprise_smm.so
+      cd /opt/build/mysql-test
       ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
     displayName: 'mtr tests - galera - deb'
-    condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-9')
+    condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-8', 'debian-9')
   - script: |
       # This script section tests Galera 4 rpms and thus it's not present in the 10.2 and 10.3 pipeline scripts
       set -x
@@ -188,8 +189,8 @@ jobs:
       echo $WSREP_PROVIDER
       echo $(WSREP_PROVIDER)
       echo $(Build.SourceBranch)
-      ls -la /usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
-      cd build/mysql-test
+      ls -lah /usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
+      cd /opt/build/mysql-test
       ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
     displayName: 'mtr tests - galera - rpm'
     condition: in(variables['containerImage'], 'centos7', 'centos6')
