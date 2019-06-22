@@ -17,6 +17,9 @@ resources:
     - container: ubuntu-1804
       image: ratzpo/mariadb-build:ubuntu-1804
       options: --shm-size 12G
+    - container: debian-8
+      image: ratzpo/mariadb-build:debian-8
+      options: --shm-size 12G
     - container: debian-9
       image: ratzpo/mariadb-build:debian-9
       options: --shm-size 12G
@@ -65,6 +68,8 @@ jobs:
         containerImage: ubuntu-1604
       ubuntu-1804:
         containerImage: ubuntu-1804
+      debian-8:
+        containerImage: debian-8
       debian-9:
         containerImage: debian-9
       centos6:
@@ -117,6 +122,8 @@ jobs:
         containerImage: ubuntu-1604
       ubuntu-1804:
         containerImage: ubuntu-1804
+      debian-8:
+        containerImage: debian-8
       debian-9:
         containerImage: debian-9
       centos6:
@@ -279,6 +286,8 @@ jobs:
         containerImage: ubuntu-1604
       ubuntu-1804:
         containerImage: ubuntu-1804
+      debian-8:
+        containerImage: debian-8
       debian-9:
         containerImage: debian-9
 
