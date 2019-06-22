@@ -319,7 +319,7 @@ jobs:
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: $(containerImage)
+      artifactName: $(containerImage)-deb
 
 - job: RPM
   timeoutInMinutes: 240
@@ -360,7 +360,7 @@ jobs:
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: $(containerImage)
+      artifactName: $(containerImage)-rpm
 
 - job: MacOS
   condition: false #exclude MacOS for now
