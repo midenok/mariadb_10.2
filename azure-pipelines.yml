@@ -268,8 +268,6 @@ jobs:
 
 - job: DEB
   timeoutInMinutes: 240
-  dependsOn:
-  - Bintar
 
   pool:
     vmImage: 'ubuntu-16.04'
@@ -305,8 +303,6 @@ jobs:
 
 - job: RPM
   timeoutInMinutes: 240
-  dependsOn:
-  - Bintar
 
   pool:
     vmImage: 'ubuntu-16.04'
