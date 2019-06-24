@@ -51,5 +51,6 @@ include/my_config\\\\.h$
 /autom4te\\\\.cache/
 errmsg\\\\.sys$
 \\\\.rpm$
+azure-pipelines.yml$
 #
 )
