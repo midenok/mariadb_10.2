@@ -87,13 +87,13 @@ jobs:
       mkdir build && cd build
       cmake .. -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
         -DBUILD_CONFIG=enterprise
-      make -j5 package VERBOSE=1
+      make -j`grep -c processor /proc/cpuinfo` package VERBOSE=1
     displayName: 'build - release - centos6'
     condition: eq(variables['containerImage'], 'centos6')
   - script: |
       mkdir build && cd build
       cmake .. -DBUILD_CONFIG=enterprise 
-      make -j5 package VERBOSE=1
+      make -j`grep -c processor /proc/cpuinfo` package VERBOSE=1
     displayName: 'build - release'
     condition: ne(variables['containerImage'], 'centos6')
   - task: CopyFiles@2
@@ -161,7 +161,7 @@ jobs:
       pwd
       ls -lah
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
-          --mem --parallel=5
+          --mem --parallel=auto
     displayName: 'mtr tests - release'
     condition: ne(variables['containerImage'], 'ubuntu-1604')
   - script: |
@@ -219,13 +219,13 @@ jobs:
   - script: |
       mkdir build && cd build
       cmake .. -DBUILD_CONFIG=enterprise -DWITH_ASAN=1
-      make -j5 package
+      make -j`grep -c processor /proc/cpuinfo` package
     displayName: 'build - release, asan'
     failOnStderr: false
   - script: |
       cd build/mysql-test
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
-          --mem --parallel=5
+          --mem --parallel=auto
       exit 0
     displayName: 'mtr tests'
     failOnStderr: false
@@ -255,13 +255,13 @@ jobs:
   steps:
   - script: |
       cmake . -DBUILD_CONFIG=enterprise -DCMAKE_BUILD_TYPE=Debug
-      make -j5 package
+      make -j`grep -c processor /proc/cpuinfo` package
     displayName: 'build - debug'
     failOnStderr: false
   - script: |
       cd mysql-test
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 \
-          --mem --max-test-fail=20 --debug-server --parallel=5
+          --mem --max-test-fail=20 --debug-server --parallel=auto
     displayName: 'mtr tests - debug'
     failOnStderr: false
   - task: CopyFiles@2
@@ -348,12 +348,12 @@ jobs:
     displayName: 'show info'
   - script: |
       cmake . -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
-      make -j5 package
+      make -j`grep -c processor /proc/cpuinfo` package
     displayName: 'cmake centos 6'
     condition: eq(variables['containerImage'], 'centos6')
   - script: |
       cmake . -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
-      make -j5 package
+      make -j`grep -c processor /proc/cpuinfo` package
     displayName: 'cmake centos 7'
     condition: eq(variables['containerImage'], 'centos7')
   - script: |
