@@ -382,6 +382,7 @@ jobs:
       artifactName: macOS-10.13
 
 - job: Windows
+  timeoutInMinutes: 180
 
   pool:
     vmImage: 'windows-2019'
