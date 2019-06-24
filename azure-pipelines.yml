@@ -45,6 +45,7 @@ jobs:
   steps:
   # linux
   - script: |
+      set -x
       whoami
       pwd
       mkdir dist && cd dist
@@ -84,6 +85,7 @@ jobs:
       df -h
       ls -la
   - script: |
+      set -x
       sudo yum install -y Judy-devel cracklib-devel pam-devel
       mkdir build && cd build
       cmake .. -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
@@ -92,6 +94,7 @@ jobs:
     displayName: 'build - release - centos6'
     condition: eq(variables['containerImage'], 'centos6')
   - script: |
+      set -x
       sudo yum install -y systemd-devel cracklib-devel Judy-devel
       mkdir build && cd build
       cmake .. -DBUILD_CONFIG=enterprise 
@@ -219,12 +222,14 @@ jobs:
 
   steps:
   - script: |
+      set -x
       mkdir build && cd build
       cmake .. -DBUILD_CONFIG=enterprise -DWITH_ASAN=1
       make -j`grep -c processor /proc/cpuinfo` package
     displayName: 'build - release, asan'
     failOnStderr: false
   - script: |
+      set -x
       cd build/mysql-test
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
           --mem --parallel=auto
@@ -256,11 +261,13 @@ jobs:
 
   steps:
   - script: |
+      set -x
       cmake . -DBUILD_CONFIG=enterprise -DCMAKE_BUILD_TYPE=Debug
       make -j`grep -c processor /proc/cpuinfo` package
     displayName: 'build - debug'
     failOnStderr: false
   - script: |
+      set -x
       cd mysql-test
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 \
           --mem --max-test-fail=20 --debug-server --parallel=auto
@@ -298,10 +305,12 @@ jobs:
   steps:
   # linux
   - script: |
+      set -x
       sed s/"dch -b"/"dch -b --force-distribution"/g -i debian/autobake-deb.sh
     condition: eq(variables['containerImage'], 'debian-8')
     displayName: 'Fix for Debian 8'
   - script: |
+      set -x
       debian/autobake-deb.sh
     condition: eq( variables['Agent.OS'], 'Linux' )
     displayName: 'build'
@@ -345,10 +354,12 @@ jobs:
 
   steps:
   - script: |
+      set -x
       whoami
       pwd
     displayName: 'show info'
   - script: |
+      set -x
       sudo yum install -y Judy-devel cracklib-devel pam-devel
       curl -o ../MariaDB-shared-5.3.x.rpm http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
       curl -o ../MariaDB-shared-10.1.x.rpm http://yum.mariadb.org/10.1/centos6-amd64/rpms/MariaDB-10.1.40-centos6-x86_64-compat.rpm
@@ -357,6 +368,7 @@ jobs:
     displayName: 'cmake centos 6'
     condition: eq(variables['containerImage'], 'centos6')
   - script: |
+      set -x
       sudo yum install -y systemd-devel cracklib-devel Judy-devel
       curl -o ../MariaDB-shared-5.3.x.rpm http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
       curl -o ../MariaDB-shared-10.1.x.rpm http://yum.mariadb.org/10.1/centos7-amd64/rpms/MariaDB-shared-10.1.40-1.el7.centos.x86_64.rpm
@@ -365,6 +377,7 @@ jobs:
     displayName: 'cmake centos 7'
     condition: eq(variables['containerImage'], 'centos7')
   - script: |
+      set -x
       pwd
       find . -type f -name "*.rpm"
       echo $BUILD_SOURCESDIRECTORY
