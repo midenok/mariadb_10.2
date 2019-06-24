@@ -84,6 +84,7 @@ jobs:
       df -h
       ls -la
   - script: |
+      sudo yum install -y Judy-devel cracklib-devel pam-devel
       mkdir build && cd build
       cmake .. -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
         -DBUILD_CONFIG=enterprise
@@ -91,6 +92,7 @@ jobs:
     displayName: 'build - release - centos6'
     condition: eq(variables['containerImage'], 'centos6')
   - script: |
+      sudo yum install -y systemd-devel cracklib-devel Judy-devel
       mkdir build && cd build
       cmake .. -DBUILD_CONFIG=enterprise 
       make -j`grep -c processor /proc/cpuinfo` package VERBOSE=1
@@ -347,6 +349,7 @@ jobs:
       pwd
     displayName: 'show info'
   - script: |
+      sudo yum install -y Judy-devel cracklib-devel pam-devel
       curl -o ../MariaDB-shared-5.3.x.rpm http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
       curl -o ../MariaDB-shared-10.1.x.rpm http://yum.mariadb.org/10.1/centos6-amd64/rpms/MariaDB-10.1.40-centos6-x86_64-compat.rpm
       cmake . -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
@@ -354,6 +357,7 @@ jobs:
     displayName: 'cmake centos 6'
     condition: eq(variables['containerImage'], 'centos6')
   - script: |
+      sudo yum install -y systemd-devel cracklib-devel Judy-devel
       curl -o ../MariaDB-shared-5.3.x.rpm http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
       curl -o ../MariaDB-shared-10.1.x.rpm http://yum.mariadb.org/10.1/centos7-amd64/rpms/MariaDB-shared-10.1.40-1.el7.centos.x86_64.rpm
       cmake . -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
