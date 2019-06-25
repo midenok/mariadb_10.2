@@ -17,6 +17,9 @@ resources:
     - container: ubuntu-1804
       image: ratzpo/mariadb-build:ubuntu-1804
       options: --shm-size 12G
+    - container: debian-8
+      image: ratzpo/mariadb-build:debian-8
+      options: --shm-size 12G
     - container: debian-9
       image: ratzpo/mariadb-build:debian-9
       options: --shm-size 12G
@@ -65,6 +68,8 @@ jobs:
         containerImage: ubuntu-1604
       ubuntu-1804:
         containerImage: ubuntu-1804
+      debian-8:
+        containerImage: debian-8
       debian-9:
         containerImage: debian-9
       centos6:
@@ -117,6 +122,8 @@ jobs:
         containerImage: ubuntu-1604
       ubuntu-1804:
         containerImage: ubuntu-1804
+      debian-8:
+        containerImage: debian-8
       debian-9:
         containerImage: debian-9
       centos6:
@@ -174,7 +181,7 @@ jobs:
       cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
       ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
     displayName: 'mtr tests - galera - deb'
-    condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-9')
+    condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-8', 'debian-9')
   - script: |
       # This script section tests Galera 4 rpms and thus it's not present in the 10.2 and 10.3 pipeline scripts
       set -x
@@ -279,6 +286,8 @@ jobs:
         containerImage: ubuntu-1604
       ubuntu-1804:
         containerImage: ubuntu-1804
+      debian-8:
+        containerImage: debian-8
       debian-9:
         containerImage: debian-9
 
@@ -287,7 +296,10 @@ jobs:
   steps:
   # linux
   - script: |
-      whoami
+      sed s/"dch -b"/"dch -b --force-distribution"/g -i debian/autobake-deb.sh
+    condition: eq(variables['containerImage'], 'debian-8')
+    displayName: 'Fix for Debian 8'
+  - script: |
       debian/autobake-deb.sh
     condition: eq( variables['Agent.OS'], 'Linux' )
     displayName: 'build'
