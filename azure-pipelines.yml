@@ -224,7 +224,7 @@ jobs:
   - script: |
       set -x
       mkdir build && cd build
-      cmake .. -DBUILD_CONFIG=enterprise -DWITH_ASAN=1
+      cmake .. -DCMAKE_BUILD_TYPE=Debug -DWITH_ASAN=1
       make -j`grep -c processor /proc/cpuinfo` package
     displayName: 'build - release, asan'
     failOnStderr: false
