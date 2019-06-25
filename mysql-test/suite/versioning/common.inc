@@ -3,6 +3,10 @@ if (`SELECT $CURSOR_PROTOCOL > 0`)
 {
    --skip Incompatible with cursor-protocol
 }
+if (!$TEST_VERSIONING_SO)
+{
+  --skip needs test_versioning plugin
+}
 source include/have_innodb.inc;
 
 set @@session.time_zone='+00:00';
