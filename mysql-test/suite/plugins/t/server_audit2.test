@@ -1,25 +1,32 @@
 
 --source include/not_embedded.inc
 
-if (!$SERVER_AUDIT_V1_SO) {
-  skip No SERVER_AUDIT_V1 plugin;
+if (!$SERVER_AUDIT_SO) {
+  skip No SERVER_AUDIT plugin;
 }
 
-install plugin server_audit soname 'server_audit_v1';
+--disable_warnings
+CREATE TABLE IF NOT EXISTS mysql.server_audit_filters (
+    filtername char(80) COLLATE utf8_bin NOT NULL DEFAULT '',
+    rule longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT 'true' CHECK (json_valid(rule)),
+    CONSTRAINT c_filtername UNIQUE (filtername)
+) ENGINE=Aria;
+
+CREATE TABLE IF NOT EXISTS mysql.server_audit_users (host char(60) COLLATE utf8_bin NOT NULL DEFAULT '',
+    user char(80) COLLATE utf8_bin NOT NULL DEFAULT '',
+    filtername char(80) NOT NULL DEFAULT '',
+    CONSTRAINT c_host_user UNIQUE (host, user)
+) ENGINE=Aria;
+--enable_warnings
+
+install plugin server_audit soname 'server_audit';
 
 show variables like 'server_audit%';
 set global server_audit_file_path=null;
-set global server_audit_incl_users=null;
 set global server_audit_file_path='server_audit.log';
 set global server_audit_output_type=file;
 set global server_audit_logging=on;
-
---error ER_WRONG_VALUE_FOR_VAR
-set global server_audit_incl_users= repeat("'root',", 10000);
-show variables like 'server_audit_incl_users';
---error ER_WRONG_VALUE_FOR_VAR
-set global server_audit_excl_users= repeat("'root',", 10000);
-show variables like 'server_audit_excl_users';
+SHOW GLOBAL STATUS LIKE "server_audit%";
 
 --sleep 2
 connect (con1,localhost,root,,mysql);
@@ -32,18 +39,14 @@ disconnect con1;
 connect (con1,localhost,no_such_user,,mysql);
 connection default;
 --sleep 2
-set global server_audit_incl_users='odin, dva, tri';
+
 create table t1 (id int);
-set global server_audit_incl_users='odin, root, dva, tri';
 create table t2 (id int);
-set global server_audit_excl_users='odin, dva, tri';
 insert into t1 values (1), (2);
 select * from t1;
-set global server_audit_incl_users='odin, root, dva, tri';
 insert into t2 values (1), (2);
 select * from t2;
 alter table t1 rename renamed_t1;
-set global server_audit_events='connect,query';
 select 1,
         2,
 # comment
@@ -58,8 +61,7 @@ select * from t_doesnt_exist;
 syntax_error_query;
 drop table renamed_t1, t2;
 show variables like 'server_audit%';
-set global server_audit_mode=1;
-set global server_audit_events='';
+
 create database sa_db;
 --sleep 2
 connect (con1,localhost,root,,test);
@@ -87,7 +89,15 @@ SET PASSWORD FOR u1 = PASSWORD('pwd 098');
 CREATE USER u3 IDENTIFIED BY '';
 drop user u1, u2, u3;
 
-set global server_audit_events='query_ddl';
+INSERT INTO mysql.server_audit_filters VALUES ('log_all','{}');
+INSERT INTO mysql.server_audit_filters VALUES ('query_ddl','{"query_event" : "DDL"}');
+INSERT INTO mysql.server_audit_filters VALUES ('query_dcl','{"query_event" : "DCL"}');
+INSERT INTO mysql.server_audit_filters VALUES ('query_dml','{"query_event" : "DML"}');
+INSERT INTO mysql.server_audit_filters VALUES ('dml_no_select','{"query_event" : "DML_NO_SELECT"}');
+INSERT INTO mysql.server_audit_filters VALUES ('ddl_dml','{"query_event" : ["DDL", "DML"]}');
+INSERT INTO mysql.server_audit_users VALUES ('%','root','query_ddl');
+SET GLOBAL server_audit_reload_filters=ON;
+
 create table t1(id int);
 insert into t1 values (1), (2);
 select * from t1;
@@ -96,13 +106,18 @@ select 2;
 /*! select 2*/;
 /*comment*/ select 2;
 drop table t1;
-set global server_audit_events='query_ddl,query_dml';
+UPDATE mysql.server_audit_users SET filtername= 'ddl_dml' where host='%' and user='root';
+SET GLOBAL server_audit_reload_filters=ON;
+
 create table t1(id int);
 insert into t1 values (1), (2);
 select * from t1;
 select 2;
 drop table t1;
-set global server_audit_events='query_dml';
+
+UPDATE mysql.server_audit_users SET filtername= 'query_dml' where host='%' and user='root';
+SET GLOBAL server_audit_reload_filters=ON;
+
 create table t1(id int);
 insert into t1 values (1), (2);
 select * from t1;
@@ -111,7 +126,10 @@ select 2;
 /*! select 2*/;
 /*comment*/ select 2;
 drop table t1;
-set global server_audit_events='query_dcl';
+
+UPDATE mysql.server_audit_users SET filtername= 'query_dcl' where host='%' and user='root';
+SET GLOBAL server_audit_reload_filters=ON;
+
 create table t1(id int);
 insert into t1 values (1), (2);
 select * from t1;
@@ -129,42 +147,52 @@ select 2;
 /*! select 2*/;
 /*comment*/ select 2;
 drop table t1;
-set global server_audit_events='query_dml_no_select';
+
+UPDATE mysql.server_audit_users SET filtername= 'dml_no_select' where host='%' and user='root';
+SET GLOBAL server_audit_reload_filters=ON;
+
 create table t1(id int);
 insert into t1 values (1), (2);
 select * from t1;
 select 2;
 drop table t1;
 
-set global server_audit_events='table';
-set global server_audit_incl_users='user1';
-
-create user user1@localhost;
-grant all on sa_db.* to user1@localhost;
-
-connect (cn1,localhost,user1,,sa_db);
-connection cn1;
-
-create table t1(id int) engine=myisam;
-insert delayed into t1 values (1), (2);
-connection default;
---echo # Waiting until INSERT DELAYED thread does the insert.
-let $wait_condition= SELECT COUNT(*) = 2 FROM t1;
---source include/wait_condition.inc
-drop table t1;
-
 set global server_audit_logging= off;
-set global server_audit_incl_users='root';
 set global server_audit_logging= on;
-disconnect cn1;
-drop user user1@localhost;
 
-set global server_audit_events='';
+UPDATE mysql.server_audit_users SET filtername= 'log_all' where host='%' and user='root';
+SET GLOBAL server_audit_reload_filters=ON;
 
 set global server_audit_query_log_limit= 15;
 select (1), (2), (3), (4);
 select 'A', 'B', 'C', 'D';
 set global server_audit_query_log_limit= 1024;
+
+#
+# MENT-178 ASAN heap-use-after-free in filter_query_type
+#
+
+CREATE  TABLE t1 (a INT, b VARCHAR(10));
+DELIMITER $$;
+CREATE  PROCEDURE p1()
+BEGIN
+  DECLARE rec ROW TYPE OF t1;
+  SELECT rec.c;
+END;$$
+       
+DELIMITER ;$$
+--error 4082
+CALL p1();
+DROP PROCEDURE p1;
+
+#
+# MENT-ASAN heap-use-after-free on update_connection_info after EXECUTE IMMEDIATE
+#
+execute immediate "SELECT * FROM t1;";
+execute immediate "SELECT * FROM t1;";
+
+DROP TABLE t1;
+
 drop database sa_db;
 
 set global server_audit_file_path='.';
@@ -178,6 +206,8 @@ set global server_audit_file_path='nonexisting_dir/';
 show status like 'server_audit_current_log';
 show variables like 'server_audit%';
 uninstall plugin server_audit;
+truncate mysql.server_audit_filters;
+truncate mysql.server_audit_users;
 
 let $MYSQLD_DATADIR= `SELECT @@datadir`;
 # replace the timestamp and the hostname with constant values
