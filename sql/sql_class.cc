@@ -4907,6 +4907,13 @@ void thd_clear_error(MYSQL_THD thd)
   thd->clear_error();
 }
 
+
+extern "C" unsigned long long thd_query_id(const MYSQL_THD thd)
+{
+  return((unsigned long long)thd->query_id);
+}
+
+
 extern "C" const struct charset_info_st *thd_charset(MYSQL_THD thd)
 {
   return(thd->charset());
@@ -4950,6 +4957,55 @@ extern "C" size_t thd_query_safe(MYSQL_THD thd, char *buf, size_t buflen)
   mysql_mutex_unlock(&thd->LOCK_thd_data);
   buf[len]= '\0';
   return len;
+}
+
+
+extern "C" const char *thd_user_name(MYSQL_THD thd)
+{
+  if (!thd->security_ctx)
+    return 0;
+
+  return thd->security_ctx->user;
+}
+
+
+extern "C" const char *thd_client_host(MYSQL_THD thd)
+{
+  if (!thd->security_ctx)
+    return 0;
+
+  return thd->security_ctx->host;
+}
+
+
+extern "C" const char *thd_client_ip(MYSQL_THD thd)
+{
+  if (!thd->security_ctx)
+    return 0;
+
+  return thd->security_ctx->ip;
+}
+
+
+extern "C" LEX_CSTRING *thd_current_db(MYSQL_THD thd)
+{
+  return &thd->db;
+}
+
+
+extern "C" int thd_current_status(MYSQL_THD thd)
+{
+  Diagnostics_area *da= thd->get_stmt_da();
+  if (!da)
+    return 0;
+
+  return da->is_error() ? da->sql_errno() : 0;
+}
+
+
+extern "C" enum enum_server_command thd_current_command(MYSQL_THD thd)
+{
+  return thd->get_command();
 }
 
 
