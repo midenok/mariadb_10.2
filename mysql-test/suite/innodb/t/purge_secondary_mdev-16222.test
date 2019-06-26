@@ -1,7 +1,8 @@
---source include/have_innodb.inc
---disable_query_log
---disable_warnings
+--echo #
+--echo # MDEV-16222 Assertion `0' failed in row_purge_remove_sec_if_poss_leaf on table with virtual columns and indexes
+--echo #
 
+--source include/have_innodb.inc
 --let $datadir= `select @@datadir`
 set @saved_frequency = @@global.innodb_purge_rseg_truncate_frequency;
 set global innodb_purge_rseg_truncate_frequency = 1;
@@ -55,4 +56,3 @@ drop table t1;
 
 set global innodb_purge_rseg_truncate_frequency = @saved_frequency;
 set global debug_dbug="";
---echo ok
