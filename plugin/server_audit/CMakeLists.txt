@@ -15,4 +15,4 @@
 
 SET(SOURCES server_audit.c test_audit_v4.c plugin_audit_v4.h)
 
-MYSQL_ADD_PLUGIN(server_audit_v1 ${SOURCES} MODULE_ONLY RECOMPILE_FOR_EMBEDDED)
+MYSQL_ADD_PLUGIN(server_audit ${SOURCES} MODULE_ONLY RECOMPILE_FOR_EMBEDDED)

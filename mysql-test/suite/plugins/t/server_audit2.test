@@ -1,8 +1,8 @@
 
 --source include/not_embedded.inc
 
-if (!$SERVER_AUDIT_SO) {
-  skip No SERVER_AUDIT plugin;
+if (!$SERVER_AUDIT2_SO) {
+  skip No SERVER_AUDIT2 plugin;
 }
 
 --disable_warnings
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS mysql.server_audit_users (host char(60) COLLATE utf8_
 ) ENGINE=Aria;
 --enable_warnings
 
-install plugin server_audit soname 'server_audit';
+install plugin server_audit soname 'server_audit2';
 
 show variables like 'server_audit%';
 set global server_audit_file_path=null;

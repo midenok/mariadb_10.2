@@ -2,8 +2,8 @@
 
 --source include/not_embedded.inc
  
-if (!$SERVER_AUDIT_SO) {
-  skip No SERVER_AUDIT plugin;
+if (!$SERVER_AUDIT2_SO) {
+  skip No SERVER_AUDIT2 plugin;
 }
 
 --source server_audit2_init.inc

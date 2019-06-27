@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS mysql.server_audit_users (host char(60) COLLATE utf8_
 --enable_warnings
 
 # load plugin
-install plugin server_audit soname 'server_audit';
+install plugin server_audit soname 'server_audit2';
 
 # show audit plugin variables
 show variables like 'server_audit%';
