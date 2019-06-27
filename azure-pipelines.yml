@@ -208,6 +208,7 @@ jobs:
     condition: in(variables['containerImage'], 'centos7', 'centos6')
 
 - job: ASan
+  condition: 'false' #exclude ASan for now (Julien on the 27/06/2019 - task to rebuild it is https://jira.mariadb.org/browse/MENT-198)
   timeoutInMinutes: 240
 
   pool:
