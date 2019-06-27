@@ -2569,9 +2569,6 @@ static void do_reload_filters(MYSQL_THD thd  __attribute__((unused)),
                               void *var_ptr  __attribute__((unused)),
                               const void *save  __attribute__((unused)))
 {
-  if (!logging)
-    return;
-
   ADD_ATOMIC(internal_stop_logging, 1);
   flogger_mutex_lock(&lock_operations);
 
