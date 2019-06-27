@@ -423,6 +423,7 @@ jobs:
   steps:
 
   - script: |
+      @echo on
       git config --global core.autocrlf input
       set
 
@@ -439,6 +440,7 @@ jobs:
     ignoreLASTEXITCODE: true
 
   - script: |
+      @echo on
       md win_build
       cd win_build
       cmake .. -Wno-deprecated -Wno-dev -DBUILD_CONFIG=enterprise -DPLUGIN_AWS_KEY_MANAGEMENT=NO -DBISON_EXECUTABLE=C:\cygwin64\bin\bison -DWITH_EMBEDDED_SERVER=0 -DSIGNCODE=OFF -DWITH_UNIT_TESTS=0 -DMYSQL_MAINTAINER_MODE=ERR
@@ -447,18 +449,22 @@ jobs:
     failOnStderr: false
 
   - script: |
+      @echo on
       pwd
       cd win_build
       cmake --build . --config RelWithDebInfo --verbose --parallel 5
     displayName: 'build binaries'
 
   - script: |
+      @echo on
       pwd
       cd win_build
+      cmake --build . --config RelWithDebInfo --target win_package
       cmake --build . --config RelWithDebInfo --target MSI
     displayName: 'build package'
 
   - script: |
+      @echo on
       cd win_build\mysql-test
       C:\Strawberry\perl\bin\perl.exe mysql-test-run.pl --suite=main,innodb,mariabackup,rocksdb --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20  --parallel=5
     displayName: 'mtr tests'
@@ -466,7 +472,7 @@ jobs:
   - task: CopyFiles@2
     inputs:
       sourceFolder: '$(Build.SourcesDirectory)'
-      contents: 'win_build\?(*.msi)'
+      contents: 'win_build\?(*.msi|*.zip)'
       targetFolder: '$(Build.ArtifactStagingDirectory)'
 
   - task: CopyFiles@2
