@@ -475,13 +475,6 @@ jobs:
       contents: 'win_build\?(*.msi|*.zip)'
       targetFolder: '$(Build.ArtifactStagingDirectory)'
 
-  - task: CopyFiles@2
-    inputs:
-      sourceFolder: '$(Build.SourcesDirectory)'
-      contents: '**\RelWithDebInfo\**\?(*.exe|*.dll|*.pdb)'
-      targetFolder: '$(Build.ArtifactStagingDirectory)'
-    condition: eq( variables['Agent.OS'], 'Windows_NT' )
-
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: '$(Build.ArtifactStagingDirectory)'
