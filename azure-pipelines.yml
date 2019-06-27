@@ -86,6 +86,14 @@ jobs:
       ls -la
   - script: |
       set -x
+      cd /tmp
+      curl -O ftp://ftp.askmonty.org/public/azure/gnutlsa-$(containerImage)-amd64.tar.bz2
+      sudo tar xvf gnutlsa*tar.bz2 -C /
+      sudo yum erase -y gnutls
+    displayName: 'prepare gnutls'
+    condition: in(variables['containerImage'], 'centos6', 'centos7')
+  - script: |
+      set -x
       sudo yum install -y Judy-devel cracklib-devel pam-devel
       mkdir build && cd build
       cmake .. -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
