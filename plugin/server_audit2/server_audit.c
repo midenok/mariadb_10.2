@@ -102,6 +102,11 @@ LEX_CSTRING *thd_current_db(MYSQL_THD thd);
 int thd_current_status(MYSQL_THD thd);
 enum enum_server_command thd_current_command(MYSQL_THD thd);
 
+int maria_compare_hostname(const char *wild_host, long wild_ip, long ip_mask,
+                         const char *host, const char *ip);
+void maria_update_hostname(const char **wild_host, long *wild_ip, long *ip_mask,
+                         const char *host);
+
 #ifndef MARIADB_ONLY
 #undef MYSQL_SERVICE_LOGGER_INCLUDED
 #undef MYSQL_DYNAMIC_PLUGIN
@@ -1305,21 +1310,14 @@ static int user_fits(const char *def, const char *name)
 }
 
 
-static int host_fits(const char *def, const char *host)
+static int host_fits(const char *def, const char *host, const char *ip)
 {
-  if (*def == '%')
-    return 1;
+  const char *whost;
+  long wip, ip_mask;
 
-  return strcmp(def, host) == 0;
-}
+  maria_update_hostname(&whost, &wip, &ip_mask, def);
 
-
-static int ip_fits(const char *def, const char *host)
-{
-  if (*def == '%')
-    return 1;
-
-  return strcmp(def, host) == 0;
+  return maria_compare_hostname(whost, wip, ip_mask, host, ip);
 }
 
 
@@ -1330,8 +1328,7 @@ static struct filter_def *find_user_filter(const struct connection_info *ci)
   for (cu= user_list; cu; cu= cu->next)
   {
     if (user_fits(cu->name, ci->user) &&
-        (host_fits(cu->host, ci->host) ||
-         ip_fits(cu->host, ci->ip)))
+        host_fits(cu->host, ci->host, ci->ip))
       return cu->filter;
   }
 
