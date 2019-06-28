@@ -176,7 +176,6 @@ jobs:
       exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
           --mem --parallel=auto
     displayName: 'mtr tests - release'
-    condition: ne(variables['containerImage'], 'ubuntu-1604')
   - script: |
       # This script section tests Galera 4 debs and thus it's not present in the 10.2 and 10.3 pipeline scripts
       set -x
