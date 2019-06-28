@@ -12,6 +12,8 @@ set -e
 # building the deb packages here.
 export DEB_BUILD_OPTIONS="nocheck $DEB_BUILD_OPTIONS"
 
+sed '/Package: mariadb-plugin-tokudb/,/^$/d' -i debian/control
+
 # Travis-CI optimizations
 if [[ $TRAVIS ]]
 then
