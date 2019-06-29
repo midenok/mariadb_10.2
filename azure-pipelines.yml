@@ -479,7 +479,7 @@ jobs:
   - script: |
       @echo on
       cd win_build\mysql-test
-      C:\Strawberry\perl\bin\perl.exe mysql-test-run.pl --suite=main,innodb,mariabackup,rocksdb --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20  --parallel=5
+      C:\Strawberry\perl\bin\perl.exe mysql-test-run.pl --suite=main,innodb,mariabackup,rocksdb,plugins --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20  --parallel=5
     displayName: 'mtr tests'
 
   - task: PublishBuildArtifacts@1
