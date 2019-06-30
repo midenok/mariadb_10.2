@@ -446,7 +446,15 @@ bool partition_info::set_up_default_partitions(THD *thd, handler *file,
   bool result= TRUE;
   DBUG_ENTER("partition_info::set_up_default_partitions");
 
-  if (part_type != HASH_PARTITION)
+  if (part_type == VERSIONING_PARTITION)
+  {
+    if (use_default_num_partitions)
+    {
+      num_parts= 2;
+      use_default_num_partitions= false;
+    }
+  }
+  else if (part_type != HASH_PARTITION)
   {
     const char *error_string;
     if (part_type == RANGE_PARTITION)
@@ -483,6 +491,10 @@ bool partition_info::set_up_default_partitions(THD *thd, handler *file,
       part_elem->engine_type= default_engine_type;
       part_elem->partition_name= default_name;
       default_name+=MAX_PART_NAME_SIZE;
+      if (part_type == VERSIONING_PARTITION)
+        part_elem->type(i < num_parts - 1 ?
+                        partition_element::HISTORY :
+                        partition_element::CURRENT);
     }
     else
       goto end;
@@ -1254,7 +1266,7 @@ bool partition_info::check_partition_info(THD *thd, handlerton **eng_type,
   if (part_type == VERSIONING_PARTITION)
   {
     DBUG_ASSERT(vers_info);
-    if (num_parts < 2 || !vers_info->now_part)
+    if (num_parts < 2 || !(use_default_partitions || vers_info->now_part))
     {
       DBUG_ASSERT(info);
       DBUG_ASSERT(info->alias.str);
