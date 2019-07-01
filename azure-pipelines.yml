@@ -25,9 +25,13 @@ resources:
       options: --shm-size 12G
 
 variables:
-  configuration: RelWithDebInfo
-  platform: x64
-  WSREP_PROVIDER: /usr/lib/galera/libgalera_enterprise_smm.so
+  - group: enterprise-server-variables
+  - name: configuration
+    value: RelWithDebInfo
+  - name: platform
+    value: x64
+  - name: WSREP_PROVIDER
+    value: /usr/lib/galera/libgalera_enterprise_smm.so
 
 jobs:
 - job: Source
@@ -446,11 +450,20 @@ jobs:
     failOnStderr: false
     ignoreLASTEXITCODE: true
 
+  - task: DownloadSecureFile@1
+    inputs:
+      secureFile: win-signing.p12
+
+  - powershell: |
+      Import-PfxCertificate -FilePath $(DownloadSecureFile.secureFilePath) -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String $(win-signkey-password) -AsPlainText -Force)
+    displayName: 'import signing certificate'
+
   - script: |
       @echo on
+      SET PATH=%PATH%;C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64
       md win_build
       cd win_build
-      cmake .. -Wno-deprecated -Wno-dev -DBUILD_CONFIG=enterprise -DPLUGIN_AWS_KEY_MANAGEMENT=NO -DBISON_EXECUTABLE=C:\cygwin64\bin\bison -DWITH_EMBEDDED_SERVER=0 -DSIGNCODE=OFF -DWITH_UNIT_TESTS=0 -DMYSQL_MAINTAINER_MODE=ERR
+      cmake .. -Wno-deprecated -Wno-dev -DBUILD_CONFIG=enterprise -DPLUGIN_AWS_KEY_MANAGEMENT=NO -DBISON_EXECUTABLE=C:\cygwin64\bin\bison -DWITH_EMBEDDED_SERVER=0 -DSIGNCODE=ON -DWITH_UNIT_TESTS=0 -DMYSQL_MAINTAINER_MODE=ERR
     condition: eq( variables['Agent.OS'], 'Windows_NT' )
     displayName: 'CMake'
     failOnStderr: false
