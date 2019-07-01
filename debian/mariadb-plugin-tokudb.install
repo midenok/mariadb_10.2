@@ -1,6 +1,6 @@
 usr/bin/tokuft_logprint
 usr/bin/tokuftdump
 usr/lib/mysql/plugin/ha_tokudb.so
-usr/share/doc/mariadb-server-10.5/README.md usr/share/doc/mariadb-plugin-tokudb/README.md
+usr/share/doc/mariadb-server-10.5/README.md usr/share/doc/mariadb-plugin-tokudb
 usr/share/man/man1/tokuft_logprint.1
 usr/share/man/man1/tokuftdump.1
