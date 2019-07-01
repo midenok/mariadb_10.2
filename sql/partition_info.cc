@@ -490,11 +490,17 @@ bool partition_info::set_up_default_partitions(THD *thd, handler *file,
     {
       part_elem->engine_type= default_engine_type;
       part_elem->partition_name= default_name;
+      part_elem->id= i;
       default_name+=MAX_PART_NAME_SIZE;
       if (part_type == VERSIONING_PARTITION)
-        part_elem->type(i < num_parts - 1 ?
-                        partition_element::HISTORY :
-                        partition_element::CURRENT);
+      {
+        if (i < num_parts - 1) {
+          part_elem->type(partition_element::HISTORY);
+        } else {
+          part_elem->type(partition_element::CURRENT);
+          part_elem->partition_name= "pn";
+        }
+      }
     }
     else
       goto end;
@@ -599,8 +605,9 @@ bool partition_info::set_up_defaults_for_partitioning(THD *thd, handler *file,
   if (!default_partitions_setup)
   {
     default_partitions_setup= TRUE;
-    if (use_default_partitions)
-      DBUG_RETURN(set_up_default_partitions(thd, file, info, start_no));
+    if (use_default_partitions &&
+        set_up_default_partitions(thd, file, info, start_no))
+      DBUG_RETURN(TRUE);
     if (is_sub_partitioned() && 
         use_default_subpartitions)
       DBUG_RETURN(set_up_default_subpartitions(thd, file, info));
@@ -1202,7 +1209,7 @@ bool partition_info::check_partition_info(THD *thd, handlerton **eng_type,
                  part_type == LIST_PARTITION ||
                  part_type == VERSIONING_PARTITION))))
   {
-    /* Only RANGE and LIST partitioning can be subpartitioned */
+    /* Only RANGE, LIST and SYSTEM_TIME partitioning can be subpartitioned */
     my_error(ER_SUBPARTITION_ERROR, MYF(0));
     goto end;
   }
