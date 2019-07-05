@@ -117,6 +117,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 extern "C" void thd_mark_transaction_to_rollback(MYSQL_THD thd, bool all);
 unsigned long long thd_get_query_id(const MYSQL_THD thd);
+void thd_clear_error(MYSQL_THD thd);
+
 TABLE *find_fk_open_table(THD *thd, const char *db, size_t db_len,
 			  const char *table, size_t table_len);
 MYSQL_THD create_thd();
@@ -20363,6 +20365,9 @@ retry_mdl:
 
 	TABLE*	mariadb_table = open_purge_table(thd, db_buf, db_buf_len,
 						 tbl_buf, tbl_buf_len);
+	if (!mariadb_table)
+		thd_clear_error(thd);
+
 	DEBUG_SYNC(thd, "ib_purge_virtual_got_no_such_table");
 
 	table = dict_table_open_on_id(table_id, false, DICT_TABLE_OP_NORMAL);

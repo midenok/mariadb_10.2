@@ -4762,10 +4762,7 @@ TABLE *open_purge_table(THD *thd, const char *db, size_t dblen,
   DBUG_ASSERT(!error || !ot_ctx.can_recover_from_failed_open());
 
   if (unlikely(error))
-  {
     close_thread_tables(thd);
-    thd->clear_error();
-  }
 
   DBUG_RETURN(error ? NULL : tl->table);
 }
@@ -4824,6 +4821,11 @@ void reset_thd(MYSQL_THD thd)
 unsigned long long thd_get_query_id(const MYSQL_THD thd)
 {
   return((unsigned long long)thd->query_id);
+}
+
+void thd_clear_error(MYSQL_THD thd)
+{
+  thd->clear_error();
 }
 
 extern "C" const struct charset_info_st *thd_charset(MYSQL_THD thd)
