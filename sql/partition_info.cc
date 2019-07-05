@@ -843,7 +843,10 @@ void partition_info::vers_set_hist_part(THD *thd)
                 vers_info->hist_part->partition_name, "LIMIT");
       }
       else
+      {
         vers_info->hist_part= next;
+        goto add_hist_part;
+      }
     }
     return;
   }
@@ -862,12 +865,75 @@ void partition_info::vers_set_hist_part(THD *thd)
     {
       vers_info->hist_part= next;
       if (next->range_value > thd->query_start())
-        return;
+        goto add_hist_part;
     }
     my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
             table->s->db.str, table->s->table_name.str,
             vers_info->hist_part->partition_name, "INTERVAL");
+    return;
   }
+
+add_hist_part:
+  if (vers_info->hist_part->id + 1 == vers_info->now_part->id)
+  {
+    String cmd("ALTER TABLE `", 300, system_charset_info);
+    cmd.append(table->s->db);
+    cmd.append(STRING_WITH_LEN("`.`"));
+    cmd.append(table->s->table_name);
+    cmd.append(" ADD PARTITION (PARTITION p1 HISTORY)");
+    LEX_CSTRING query= {cmd.c_ptr(), cmd.length()};
+    start_query(query);
+  }
+  return;
+}
+
+
+pthread_handler_t query_thread(void *arg)
+{
+  Parser_state parser_state;
+  LEX_STRING &query= *(LEX_STRING *)arg;
+  THD *thd= new THD(next_thread_id());
+  thd->thread_stack= (char*) &thd;
+  thd->store_globals();
+  thd->set_command(COM_DAEMON);
+  thd->system_thread= SYSTEM_THREAD_GENERIC;
+  thd->security_ctx->host_or_ip="";
+  server_threads.insert(thd);
+  thd_proc_info(thd, "Background query");
+  if (unlikely(parser_state.init(thd, query.str, query.length)))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_free(arg);
+    return NULL;
+  }
+  if (unlikely(parse_sql(thd, &parser_state, NULL)))
+  {
+    // FIXME: error
+    ;
+  }
+  my_free(arg);
+  return NULL;
+}
+
+
+void partition_info::start_query(LEX_CSTRING query)
+{
+  pthread_t hThread;
+  int error;
+  LEX_CSTRING *query_copy;
+  char *query_buf;
+  if (!my_multi_malloc(MYF(MY_WME), &query_copy, sizeof(*query_copy),
+                       &query_buf, query.length + 1, NULL))
+    return;
+  memcpy(query_buf, query.str, query.length);
+  query_buf[query.length]= 0;
+  query_copy->str= query_buf;
+  query_copy->length= query.length;
+  if ((error= mysql_thread_create(key_thread_query, &hThread,
+                                  &connection_attrib, query_thread, NULL)))
+    sql_print_warning("Can't create vers_add_hist_part thread (errno= %d)",
+                      error);
+  return;
 }
 
 
