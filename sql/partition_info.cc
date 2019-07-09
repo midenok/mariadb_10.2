@@ -876,11 +876,12 @@ void partition_info::vers_set_hist_part(THD *thd)
 add_hist_part:
   if (vers_info->hist_part->id + 1 == vers_info->now_part->id)
   {
-    String cmd("ALTER TABLE `", 300, system_charset_info);
+    String cmd(STRING_WITH_LEN("ALTER TABLE `"), system_charset_info);
     cmd.append(table->s->db);
     cmd.append(STRING_WITH_LEN("`.`"));
     cmd.append(table->s->table_name);
-    cmd.append(" ADD PARTITION (PARTITION p1 HISTORY)");
+    // FIXME: partition name
+    cmd.append("` ADD PARTITION (PARTITION p99 HISTORY)");
     LEX_CSTRING query= {cmd.c_ptr(), cmd.length()};
     start_query(query);
   }
@@ -891,8 +892,16 @@ add_hist_part:
 pthread_handler_t query_thread(void *arg)
 {
   Parser_state parser_state;
+  int error;
   LEX_STRING &query= *(LEX_STRING *)arg;
+  my_thread_init();
+  // initialize THD
   THD *thd= new THD(next_thread_id());
+  if (unlikely(!thd))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    goto err1;
+  }
   thd->thread_stack= (char*) &thd;
   thd->store_globals();
   thd->set_command(COM_DAEMON);
@@ -900,18 +909,32 @@ pthread_handler_t query_thread(void *arg)
   thd->security_ctx->host_or_ip="";
   server_threads.insert(thd);
   thd_proc_info(thd, "Background query");
+  // initialize LEX
+  lex_start(thd);
   if (unlikely(parser_state.init(thd, query.str, query.length)))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
-    my_free(arg);
-    return NULL;
+    goto err2;
   }
   if (unlikely(parse_sql(thd, &parser_state, NULL)))
   {
     // FIXME: error
-    ;
+    goto err2;
   }
+  thd->set_query_and_id(LEX_STRING_WITH_LEN(query), thd->charset(), next_query_id());
+  error= mysql_execute_command(thd);
+  if (unlikely(error))
+  {
+    // FIXME: error
+    goto err2;
+  }
+err2:
+  lex_end(thd->lex);
+  server_threads.erase(thd);
+  delete thd;
+err1:
   my_free(arg);
+  my_thread_end();
   return NULL;
 }
 
@@ -930,7 +953,7 @@ void partition_info::start_query(LEX_CSTRING query)
   query_copy->str= query_buf;
   query_copy->length= query.length;
   if ((error= mysql_thread_create(key_thread_query, &hThread,
-                                  &connection_attrib, query_thread, NULL)))
+                                  &connection_attrib, query_thread, query_copy)))
     sql_print_warning("Can't create vers_add_hist_part thread (errno= %d)",
                       error);
   return;
