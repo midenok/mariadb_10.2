@@ -881,7 +881,7 @@ add_hist_part:
     cmd.append(STRING_WITH_LEN("`.`"));
     cmd.append(table->s->table_name);
     // FIXME: partition name
-    cmd.append("` ADD PARTITION (PARTITION p99 HISTORY)");
+    cmd.append("` ADD PARTITION (PARTITION p1 HISTORY)");
     LEX_CSTRING query= {cmd.c_ptr(), cmd.length()};
     start_query(query);
   }
@@ -909,7 +909,7 @@ pthread_handler_t query_thread(void *arg)
   thd->security_ctx->host_or_ip="";
   server_threads.insert(thd);
   thd_proc_info(thd, "Background query");
-  // initialize LEX
+  // initialize parser
   lex_start(thd);
   if (unlikely(parser_state.init(thd, query.str, query.length)))
   {
@@ -922,13 +922,20 @@ pthread_handler_t query_thread(void *arg)
     goto err2;
   }
   thd->set_query_and_id(LEX_STRING_WITH_LEN(query), thd->charset(), next_query_id());
+  // FIXME: binlog
   error= mysql_execute_command(thd);
   if (unlikely(error))
   {
-    // FIXME: error
+    /* When multiple threads try ADD simultaneously one of them succeeds and
+       the others fail with ER_SAME_NAME_PARTITION. In such case no error
+       should be printed at all.
+    */
+    if (thd->is_error() && thd->get_stmt_da()->get_sql_errno() == ER_SAME_NAME_PARTITION)
+      thd->clear_error();
     goto err2;
   }
 err2:
+  // FIXME: log error, table is here: thd->lex->first_select_lex()->table_list.first.table
   lex_end(thd->lex);
   server_threads.erase(thd);
   delete thd;
