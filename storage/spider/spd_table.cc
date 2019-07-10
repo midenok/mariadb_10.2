@@ -1213,7 +1213,7 @@ int spider_create_string_list(
       string_length_list, sizeof(int) * (*list_length),
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -1259,7 +1259,7 @@ int spider_create_string_list(
     if (!((*string_list)[roop_count] = spider_create_string(
       tmp_ptr3, (*string_length_list)[roop_count]))
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       DBUG_RETURN(HA_ERR_OUT_OF_MEM);
     }
     DBUG_PRINT("info",("spider string_list[%d]=%s", roop_count,
@@ -1270,7 +1270,7 @@ int spider_create_string_list(
   if (!((*string_list)[roop_count] = spider_create_string(
     tmp_ptr3, (*string_length_list)[roop_count]))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -1331,7 +1331,7 @@ int spider_create_long_list(
       long_list, sizeof(long) * (*list_length),
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -1415,7 +1415,7 @@ int spider_create_longlong_list(
       longlong_list, sizeof(longlong) * (*list_length),
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -1487,7 +1487,7 @@ int spider_increase_string_list(
       &tmp_length_list, sizeof(uint) * link_count,
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -1526,7 +1526,7 @@ error:
   }
   if (tmp_str_list)
     spider_free(spider_current_trx, tmp_str_list, MYF(0));
-  my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+  my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
   DBUG_RETURN(HA_ERR_OUT_OF_MEM);
 }
 
@@ -1550,7 +1550,7 @@ int spider_increase_null_string_list(
       &tmp_length_list, sizeof(uint) * link_count,
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -1607,7 +1607,7 @@ int spider_increase_long_list(
       &tmp_long_list, sizeof(long) * link_count,
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -1652,7 +1652,7 @@ int spider_increase_longlong_list(
       &tmp_longlong_list, sizeof(longlong) * link_count,
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -3577,7 +3577,7 @@ int spider_set_connect_info_default(
             *spd_defaults_extra_file,
             share->tgt_default_files_lengths[roop_count]))
         ) {
-          my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+          my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
           DBUG_RETURN(HA_ERR_OUT_OF_MEM);
         }
       } else {
@@ -3588,7 +3588,7 @@ int spider_set_connect_info_default(
             *spd_defaults_file,
             share->tgt_default_files_lengths[roop_count]))
         ) {
-          my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+          my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
           DBUG_RETURN(HA_ERR_OUT_OF_MEM);
         }
       }

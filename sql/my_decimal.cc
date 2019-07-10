@@ -68,7 +68,7 @@ int decimal_operation_results(int result, const char *value, const char *type)
 			value, type);
     break;
   case E_DEC_OOM:
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     break;
   default:
     DBUG_ASSERT(0);

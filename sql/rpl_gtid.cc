@@ -130,7 +130,7 @@ rpl_slave_state::check_duplicate_gtid(rpl_gtid *gtid, rpl_group_info *rgi)
   mysql_mutex_lock(&LOCK_slave_state);
   if (!(elem= get_element(domain_id)))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     res= -1;
     goto err;
   }
@@ -718,7 +718,7 @@ rpl_slave_state::record_gtid(THD *thd, const rpl_gtid *gtid, uint64 sub_id,
      (err= mysql_bin_log.bump_seq_no_counter_if_needed(gtid->domain_id,
                                                        gtid->seq_no)))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     goto end;
   }
 end:
@@ -1606,7 +1606,7 @@ rpl_binlog_state::update_nolock(const struct rpl_gtid *gtid, bool strict)
   else if (!alloc_element_nolock(gtid))
     return 0;
 
-  my_error(ER_OUT_OF_RESOURCES, MYF(0));
+  my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
   return 1;
 }
 
@@ -1650,7 +1650,7 @@ rpl_binlog_state::update_with_next_gtid(uint32 domain_id, uint32 server_id,
       goto end;
   }
 
-  my_error(ER_OUT_OF_RESOURCES, MYF(0));
+  my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
   res= 1;
 end:
   mysql_mutex_unlock(&LOCK_binlog_state);
@@ -2316,7 +2316,7 @@ slave_connection_state::load(const char *slave_request, size_t len)
     if (my_hash_insert(&hash, rec))
     {
       my_free(rec);
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       return 1;
     }
     if (p == end)
@@ -2711,7 +2711,7 @@ gtid_waiting::wait_for_gtid(THD *thd, rpl_gtid *wait_gtid,
           thd->EXIT_COND(&old_stage);
         else
           mysql_mutex_unlock(&LOCK_gtid_waiting);
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
         return 1;
       }
 
@@ -2916,14 +2916,14 @@ gtid_waiting::get_entry(uint32 domain_id)
   if (init_queue(&e->queue, 8, offsetof(queue_element, wait_seq_no), 0,
                  cmp_queue_elem, NULL, 1+offsetof(queue_element, queue_idx), 1))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     my_free(e);
     return NULL;
   }
   e->domain_id= domain_id;
   if (my_hash_insert(&hash, (uchar *)e))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     delete_queue(&e->queue);
     my_free(e);
     return NULL;
@@ -2941,7 +2941,7 @@ gtid_waiting::register_in_wait_queue(THD *thd, rpl_gtid *wait_gtid,
 
   if (queue_insert_safe(&he->queue, (uchar *)elem))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return 1;
   }
 

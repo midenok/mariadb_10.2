@@ -1521,7 +1521,7 @@ int QUICK_RANGE_SELECT::init_ror_merged_scan(bool reuse_handler,
       the storage engine calls in question happen to never fail with the 
       existing storage engines. 
     */
-    my_error(ER_OUT_OF_RESOURCES, MYF(0)); /* purecov: inspected */
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG)); /* purecov: inspected */
     /* Caller will free the memory */
     goto failure;  /* purecov: inspected */
   }

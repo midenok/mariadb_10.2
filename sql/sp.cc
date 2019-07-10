@@ -1459,7 +1459,7 @@ log:
                        thd->lex->create_info,
                        saved_mode))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       goto done;
     }
     /* restore sql_mode when binloging */

@@ -943,7 +943,7 @@ do_retry:
     if (!qev)
     {
       delete ev;
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       err= 1;
       goto err;
     }
@@ -1537,7 +1537,7 @@ rpl_parallel_change_thread_count(rpl_parallel_thread_pool *pool,
     if (mysql_thread_create(key_rpl_parallel_thread, &th, &connection_attrib,
                             handle_rpl_parallel_thread, new_list[i]))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       goto err;
     }
     new_list[i]->next= new_free_list;
@@ -1860,7 +1860,7 @@ rpl_parallel_thread::get_rgi(Relay_log_info *rli, Gtid_log_event *gtid_ev,
   if (event_group_new_gtid(rgi, gtid_ev))
   {
     free_rgi(rgi);
-    my_error(ER_OUT_OF_RESOURCES, MYF(MY_WME));
+    my_error(ER_OUT_OF_RESOURCES, MYF(MY_WME|ME_ERROR_LOG));
     return NULL;
   }
   rgi->parallel_entry= e;
@@ -2635,7 +2635,7 @@ rpl_parallel::do_event(rpl_group_info *serial_rgi, Log_event *ev,
                        0 : gtid_ev->domain_id);
     if (!(e= find(domain_id)))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(MY_WME));
+      my_error(ER_OUT_OF_RESOURCES, MYF(MY_WME|ME_ERROR_LOG));
       delete ev;
       return 1;
     }

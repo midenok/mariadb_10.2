@@ -7119,7 +7119,7 @@ Item_param *LEX::add_placeholder(THD *thd, const LEX_CSTRING *name,
                                                    pos.pos(), pos.length());
   if (unlikely(!item) || unlikely(param_push_or_clone(thd, this, item)))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return NULL;
   }
   return item;
@@ -8231,7 +8231,7 @@ int set_statement_var_if_exists(THD *thd, const char *var_name,
     if (unlikely(!item) || unlikely(!var) ||
         unlikely(thd->lex->stmt_var_list.push_back(var, thd->mem_root)))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       return 1;
     }
   }

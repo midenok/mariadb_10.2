@@ -488,7 +488,7 @@ int mysql_create_function(THD *thd,udf_func *udf)
                "UDFs are unavailable with the --skip-grant-tables option");
     else
       my_message(ER_OUT_OF_RESOURCES, ER_THD(thd, ER_OUT_OF_RESOURCES),
-                 MYF(0));
+                 MYF(ME_ERROR_LOG));
     DBUG_RETURN(1);
   }
 
@@ -620,7 +620,7 @@ int mysql_drop_function(THD *thd, const LEX_CSTRING *udf_name)
       my_error(ER_FUNCTION_NOT_DEFINED, MYF(0), udf_name->str);
     else
       my_message(ER_OUT_OF_RESOURCES, ER_THD(thd, ER_OUT_OF_RESOURCES),
-                 MYF(0));
+                 MYF(ME_ERROR_LOG));
     DBUG_RETURN(1);
   }
 

@@ -9201,7 +9201,7 @@ int dynamic_column_error_message(enum_dyncol_func_result rc)
     my_error(ER_DYN_COL_IMPLEMENTATION_LIMIT, MYF(0));
     break;
   case ER_DYNCOL_RESOURCE:
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     break;
   case ER_DYNCOL_DATA:
     my_error(ER_DYN_COL_DATA, MYF(0));

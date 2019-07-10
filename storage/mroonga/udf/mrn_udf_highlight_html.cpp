@@ -389,7 +389,7 @@ static bool highlight_html(grn_ctx *ctx,
   }
 
   if (output->reserve(GRN_TEXT_LEN(&buffer))) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     GRN_OBJ_FIN(ctx, &buffer);
     DBUG_RETURN(false);
   }

@@ -2660,7 +2660,7 @@ char *generate_partition_syntax(THD *thd, partition_info *part_info,
     default:
       DBUG_ASSERT(0);
       /* We really shouldn't get here, no use in continuing from here */
-      my_error(ER_OUT_OF_RESOURCES, MYF(ME_FATAL));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_FATAL|ME_ERROR_LOG));
       DBUG_RETURN(NULL);
   }
   if (part_info->part_type == VERSIONING_PARTITION)

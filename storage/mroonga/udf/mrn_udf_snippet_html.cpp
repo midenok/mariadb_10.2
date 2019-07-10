@@ -363,7 +363,7 @@ MRN_API char *mroonga_snippet_html(UDF_INIT *init,
       unsigned int max_length_per_snippet =
         start_tag_length + end_tag_length + max_tagged_length;
       if (result_str->reserve(max_length_per_snippet * n_results)) {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
         goto error;
       }
 

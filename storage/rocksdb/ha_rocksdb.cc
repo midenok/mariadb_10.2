@@ -12317,7 +12317,7 @@ bool ha_rocksdb::inplace_alter_table(
              altered_table, ctx->m_new_tdef,
              ha_alter_info->handler_flags &
                  ALTER_ADD_UNIQUE_INDEX))) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       DBUG_RETURN(err);
     }
 

@@ -262,7 +262,7 @@ MRN_API char *mroonga_command(UDF_INIT *init, UDF_ARGS *args, char *result,
     }
     if (buffer_length > 0) {
       if (info->result.reserve(buffer_length)) {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
         goto error;
       }
       info->result.q_append(buffer, buffer_length);

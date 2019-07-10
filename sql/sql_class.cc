@@ -3978,12 +3978,12 @@ int Statement_map::insert(THD *thd, Statement *statement)
       cases hash_delete will also delete the statement.
     */
     delete statement;
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     goto err_st_hash;
   }
   if (statement->name.str && my_hash_insert(&names_hash, (uchar*) statement))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     goto err_names_hash;
   }
   mysql_mutex_lock(&LOCK_prepared_stmt_count);

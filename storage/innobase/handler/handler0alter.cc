@@ -1189,7 +1189,7 @@ my_error_innodb(
 		my_error(ER_QUERY_INTERRUPTED, MYF(0));
 		break;
 	case DB_OUT_OF_MEMORY:
-		my_error(ER_OUT_OF_RESOURCES, MYF(0));
+		my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
 		break;
 	case DB_OUT_OF_FILE_SPACE:
 		my_error(ER_RECORD_FILE_FULL, MYF(0), table);

@@ -330,7 +330,7 @@ gtid_pos_table_creation(THD *thd, plugin_ref engine, LEX_CSTRING *table_name)
 
   if (build_gtid_pos_create_query(thd, &query, table_name, plugin_name(engine)))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return 1;
   }
 
@@ -3487,7 +3487,7 @@ bool show_all_master_info(THD* thd)
   gtid_pos.length(0);
   if (rpl_append_gtid_state(&gtid_pos, true))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     DBUG_RETURN(TRUE);
   }
 

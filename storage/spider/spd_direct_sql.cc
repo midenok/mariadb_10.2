@@ -887,7 +887,7 @@ int spider_udf_direct_sql_get_server(
       spider_create_string(server->scheme, direct_sql->tgt_wrapper_length)))
     {
       error_num = HA_ERR_OUT_OF_MEM;
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     DBUG_PRINT("info",("spider tgt_wrapper=%s", direct_sql->tgt_wrapper));
@@ -900,7 +900,7 @@ int spider_udf_direct_sql_get_server(
       spider_create_string(server->host, direct_sql->tgt_host_length)))
     {
       error_num = HA_ERR_OUT_OF_MEM;
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     DBUG_PRINT("info",("spider tgt_host=%s", direct_sql->tgt_host));
@@ -919,7 +919,7 @@ int spider_udf_direct_sql_get_server(
       spider_create_string(server->socket, direct_sql->tgt_socket_length)))
     {
       error_num = HA_ERR_OUT_OF_MEM;
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     DBUG_PRINT("info",("spider tgt_socket=%s", direct_sql->tgt_socket));
@@ -933,7 +933,7 @@ int spider_udf_direct_sql_get_server(
       spider_create_string(server->db, length)))
     {
       error_num = HA_ERR_OUT_OF_MEM;
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     DBUG_PRINT("info",("spider tgt_default_db_name=%s",
@@ -947,7 +947,7 @@ int spider_udf_direct_sql_get_server(
       spider_create_string(server->username, direct_sql->tgt_username_length)))
     {
       error_num = HA_ERR_OUT_OF_MEM;
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     DBUG_PRINT("info",("spider tgt_username=%s", direct_sql->tgt_username));
@@ -960,7 +960,7 @@ int spider_udf_direct_sql_get_server(
       spider_create_string(server->password, direct_sql->tgt_password_length)))
     {
       error_num = HA_ERR_OUT_OF_MEM;
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     DBUG_PRINT("info",("spider tgt_password=%s", direct_sql->tgt_password));
@@ -1149,7 +1149,7 @@ int spider_udf_parse_direct_sql_param(
       param_length))
   ) {
     error_num = HA_ERR_OUT_OF_MEM;
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error_alloc_param_string;
   }
   DBUG_PRINT("info",("spider param_string=%s", param_string));
@@ -1346,7 +1346,7 @@ int spider_udf_set_direct_sql_param_default(
         SPIDER_THD_db_str(trx->thd),
         direct_sql->tgt_default_db_name_length))
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       DBUG_RETURN(HA_ERR_OUT_OF_MEM);
     }
   }
@@ -1360,7 +1360,7 @@ int spider_udf_set_direct_sql_param_default(
         SPIDER_DB_WRAPPER_STR,
         direct_sql->tgt_wrapper_length))
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       DBUG_RETURN(HA_ERR_OUT_OF_MEM);
     }
   }
@@ -1374,7 +1374,7 @@ int spider_udf_set_direct_sql_param_default(
         my_localhost,
         direct_sql->tgt_host_length))
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       DBUG_RETURN(HA_ERR_OUT_OF_MEM);
     }
   }
@@ -1393,7 +1393,7 @@ int spider_udf_set_direct_sql_param_default(
           *spd_defaults_extra_file,
           direct_sql->tgt_default_file_length))
       ) {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
         DBUG_RETURN(HA_ERR_OUT_OF_MEM);
       }
     } else {
@@ -1403,7 +1403,7 @@ int spider_udf_set_direct_sql_param_default(
           *spd_defaults_file,
           direct_sql->tgt_default_file_length))
       ) {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
         DBUG_RETURN(HA_ERR_OUT_OF_MEM);
       }
     }
@@ -1447,7 +1447,7 @@ int spider_udf_set_direct_sql_param_default(
         (char *) MYSQL_UNIX_ADDR,
         direct_sql->tgt_socket_length))
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       DBUG_RETURN(HA_ERR_OUT_OF_MEM);
     }
   }
@@ -1607,7 +1607,7 @@ long long spider_direct_sql_body(
       NullS))
   ) {
     error_num = HA_ERR_OUT_OF_MEM;
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
 #ifndef WITHOUT_SPIDER_BG_SEARCH
@@ -1632,7 +1632,7 @@ long long spider_direct_sql_body(
   if (!(trx = spider_get_trx(thd, TRUE, &error_num)))
   {
     if (error_num == HA_ERR_OUT_OF_MEM)
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
   direct_sql->trx = trx;
@@ -1645,7 +1645,7 @@ long long spider_direct_sql_body(
       args->lengths[1]
     ))) {
       if (error_num == HA_ERR_OUT_OF_MEM)
-        my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
   } else {
@@ -1655,7 +1655,7 @@ long long spider_direct_sql_body(
       0
     ))) {
       if (error_num == HA_ERR_OUT_OF_MEM)
-        my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
   }
@@ -1768,13 +1768,13 @@ long long spider_direct_sql_body(
   if ((error_num = spider_udf_direct_sql_create_conn_key(direct_sql)))
   {
     if (error_num == HA_ERR_OUT_OF_MEM)
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
   if (!(conn = spider_udf_direct_sql_get_conn(direct_sql, trx, &error_num)))
   {
     if (error_num == HA_ERR_OUT_OF_MEM)
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
   conn->error_mode = 0;
@@ -1782,7 +1782,7 @@ long long spider_direct_sql_body(
   if ((error_num = spider_db_udf_check_and_set_set_names(trx)))
   {
     if (error_num == HA_ERR_OUT_OF_MEM)
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
   if (args->args[0])
@@ -1799,7 +1799,7 @@ long long spider_direct_sql_body(
     if ((error_num = spider_udf_bg_direct_sql(direct_sql)))
     {
       if (error_num == HA_ERR_OUT_OF_MEM)
-        my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
   } else {
@@ -1813,7 +1813,7 @@ long long spider_direct_sql_body(
       if (direct_sql->modified_non_trans_table)
         thd->transaction.stmt.modified_non_trans_table = TRUE;
       if (error_num == HA_ERR_OUT_OF_MEM)
-        my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     if (conn->bg_init)

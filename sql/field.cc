@@ -4549,7 +4549,7 @@ String *Field_float::val_str(String *val_buffer,
 
   if (Float(ptr).to_string(val_buffer, dec))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return val_buffer;
   }
 
@@ -4876,7 +4876,7 @@ String *Field_double::val_str(String *val_buffer,
   uint to_length= DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE;
   if (val_buffer->alloc(to_length))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return val_buffer;
   }
 

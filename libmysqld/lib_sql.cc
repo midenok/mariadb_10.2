@@ -1120,7 +1120,7 @@ bool Protocol::send_result_set_metadata(List<Item> *list, uint flags)
 
   DBUG_RETURN(prepare_for_send(list->elements));
  err:
-  my_error(ER_OUT_OF_RESOURCES, MYF(0));        /* purecov: inspected */
+  my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));        /* purecov: inspected */
   DBUG_RETURN(1);				/* purecov: inspected */
 }
 
@@ -1168,7 +1168,7 @@ bool Protocol::send_list_fields(List<Field> *list, const TABLE_LIST *table_list)
 
   DBUG_RETURN(prepare_for_send(list->elements));
 err:
-  my_error(ER_OUT_OF_RESOURCES, MYF(0));
+  my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
   DBUG_RETURN(1);
 }
 

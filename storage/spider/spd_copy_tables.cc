@@ -59,7 +59,7 @@ int spider_udf_set_copy_tables_param_default(
         SPIDER_THD_db_str(copy_tables->trx->thd),
         copy_tables->database_length))
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       DBUG_RETURN(HA_ERR_OUT_OF_MEM);
     }
   }
@@ -238,7 +238,7 @@ int spider_udf_parse_copy_tables_param(
       param_length))
   ) {
     error_num = HA_ERR_OUT_OF_MEM;
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error_alloc_param_string;
   }
   DBUG_PRINT("info",("spider param_string=%s", param_string));
@@ -714,7 +714,7 @@ int spider_udf_copy_tables_create_table_list(
       ),
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
   }
 
@@ -909,12 +909,12 @@ long long spider_copy_tables_body(
       &copy_tables, sizeof(SPIDER_COPY_TABLES),
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
   if (!(copy_tables->trx = spider_get_trx(thd, TRUE, &error_num)))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
 
@@ -1050,7 +1050,7 @@ long long spider_copy_tables_body(
       select_ct->append_select_str() ||
       select_ct->append_table_columns(table_share)
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
 
@@ -1058,7 +1058,7 @@ long long spider_copy_tables_body(
       select_ct->append_from_str() ||
       select_ct->append_table_name(0)
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
 
@@ -1068,7 +1068,7 @@ long long spider_copy_tables_body(
       select_ct->append_key_order_str(key_info, 0, FALSE) ||
       select_ct->append_limit(0, bulk_insert_rows)
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
 
@@ -1076,7 +1076,7 @@ long long spider_copy_tables_body(
       copy_tables->use_transaction &&
       select_ct->append_select_lock_str(SPIDER_LOCK_MODE_SHARED)
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
   }
@@ -1095,7 +1095,7 @@ long long spider_copy_tables_body(
       insert_ct->append_table_columns(table_share) ||
       insert_ct->append_values_str()
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
 
@@ -1108,7 +1108,7 @@ long long spider_copy_tables_body(
     !(tmp_sql = new spider_string[all_link_cnt]) ||
     !(spider = new ha_spider[all_link_cnt])
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
   for (roop_count = 0; roop_count < all_link_cnt; roop_count++)
@@ -1127,7 +1127,7 @@ long long spider_copy_tables_body(
           sizeof(spider_db_handler *) * SPIDER_DBTON_SIZE,
         NullS))
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     tmp_spider->share = table_conn->share;
@@ -1135,7 +1135,7 @@ long long spider_copy_tables_body(
 /*
     if (spider_db_append_set_names(table_conn->share))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error_append_set_names;
     }
 */
@@ -1151,7 +1151,7 @@ long long spider_copy_tables_body(
       spider_dbton[dbton_id].create_db_handler(tmp_spider,
       tmp_spider->share->dbton_share[dbton_id])))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error_create_dbton_handler;
     }
     if ((error_num = tmp_spider->dbton_handler[dbton_id]->init()))
@@ -1171,7 +1171,7 @@ long long spider_copy_tables_body(
           sizeof(spider_db_handler *) * SPIDER_DBTON_SIZE,
         NullS))
     ) {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error;
     }
     tmp_spider->share = table_conn->share;
@@ -1179,7 +1179,7 @@ long long spider_copy_tables_body(
 /*
     if (spider_db_append_set_names(table_conn->share))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error_append_set_names;
     }
 */
@@ -1195,7 +1195,7 @@ long long spider_copy_tables_body(
       spider_dbton[dbton_id].create_db_handler(tmp_spider,
       tmp_spider->share->dbton_share[dbton_id])))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
       goto error_create_dbton_handler;
     }
     if ((error_num = tmp_spider->dbton_handler[dbton_id]->init()))

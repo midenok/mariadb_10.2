@@ -557,7 +557,7 @@ bool trans_savepoint(THD *thd, LEX_CSTRING name)
   else if ((newsv= (SAVEPOINT *) alloc_root(&thd->transaction.mem_root,
                                             savepoint_alloc_size)) == NULL)
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     DBUG_RETURN(TRUE);
   }
 

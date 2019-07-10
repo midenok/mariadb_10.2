@@ -1453,7 +1453,7 @@ Relay_log_info::alloc_inuse_relaylog(const char *name)
     my_free(gtid_list);
     my_free(ir);
     DBUG_ASSERT(0 /* Should not be possible as we allocated correct length */);
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return 1;
   }
   ir->rli= this;
@@ -1572,7 +1572,7 @@ scan_one_gtid_slave_pos_table(THD *thd, HASH *hash, DYNAMIC_ARRAY *array,
     tmp_entry.hton= table->s->db_type();
     if ((err= insert_dynamic(array, (uchar *)&tmp_entry)))
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       goto end;
     }
 
@@ -1604,7 +1604,7 @@ scan_one_gtid_slave_pos_table(THD *thd, HASH *hash, DYNAMIC_ARRAY *array,
       if ((err= my_hash_insert(hash, (uchar *)entry)))
       {
         my_free(entry);
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
         goto end;
       }
     }
@@ -1882,7 +1882,7 @@ rpl_load_gtid_slave_state(THD *thd)
                                                   NULL)))
     {
       mysql_mutex_unlock(&rpl_global_gtid_slave_state->LOCK_slave_state);
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       goto end;
     }
   }
@@ -1895,7 +1895,7 @@ rpl_load_gtid_slave_state(THD *thd)
                                                     entry->gtid.seq_no))
     {
       mysql_mutex_unlock(&rpl_global_gtid_slave_state->LOCK_slave_state);
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       goto end;
     }
   }

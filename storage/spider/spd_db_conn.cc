@@ -10917,7 +10917,7 @@ int spider_db_udf_copy_tables(
       &last_lengths, sizeof(ulong) * table->s->fields,
       NullS))
   ) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
   while (!end_of_file)
@@ -10986,7 +10986,7 @@ int spider_db_udf_copy_tables(
         ) {
           tmp_conn->table_lock = 0;
           if (error_num == HA_ERR_OUT_OF_MEM)
-            my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+            my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
           goto error_lock_tables;
         }
         tmp_conn->table_lock = 1;
@@ -11026,7 +11026,7 @@ int spider_db_udf_copy_tables(
             &last_row_pos, &last_lengths)))
           {
             if (error_num == HA_ERR_OUT_OF_MEM)
-              my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+              my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
             result->free_result();
             delete result;
             SPIDER_CLEAR_FILE_POS(&tmp_conn->mta_conn_mutex_file_pos);
@@ -11041,7 +11041,7 @@ int spider_db_udf_copy_tables(
             if ((error_num = insert_ct->copy_rows(table, row)))
             {
               if (error_num == HA_ERR_OUT_OF_MEM)
-                my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+                my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
               result->free_result();
               delete result;
               SPIDER_CLEAR_FILE_POS(&tmp_conn->mta_conn_mutex_file_pos);
@@ -11067,7 +11067,7 @@ int spider_db_udf_copy_tables(
             if (error_num)
             {
               if (error_num == HA_ERR_OUT_OF_MEM)
-                my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+                my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
               result->free_result();
               delete result;
               SPIDER_CLEAR_FILE_POS(&tmp_conn->mta_conn_mutex_file_pos);
@@ -11084,7 +11084,7 @@ int spider_db_udf_copy_tables(
                 select_ct->append_select_lock_str(SPIDER_LOCK_MODE_SHARED)
               )
             ) {
-              my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+              my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
               result->free_result();
               delete result;
               SPIDER_CLEAR_FILE_POS(&tmp_conn->mta_conn_mutex_file_pos);
@@ -11096,7 +11096,7 @@ int spider_db_udf_copy_tables(
           }
         } else {
           if (error_num == HA_ERR_OUT_OF_MEM)
-            my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+            my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
           result->free_result();
           delete result;
           SPIDER_CLEAR_FILE_POS(&tmp_conn->mta_conn_mutex_file_pos);
@@ -11114,7 +11114,7 @@ int spider_db_udf_copy_tables(
           if ((error_num = insert_ct->append_insert_terminator()))
           {
             if (error_num == HA_ERR_OUT_OF_MEM)
-              my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+              my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
             goto error_db_query;
           }
         }
@@ -11148,7 +11148,7 @@ int spider_db_udf_copy_tables(
         insert_ct = dst_tbl_conn->copy_table;
         if (insert_ct->copy_insert_values(source_ct))
         {
-          my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+          my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
           error_num = ER_OUT_OF_RESOURCES;
           goto error_db_query;
         }
@@ -11162,7 +11162,7 @@ int spider_db_udf_copy_tables(
         {
           if (spider_udf_bg_copy_exec_sql(dst_tbl_conn))
           {
-            my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+            my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
             error_num = ER_OUT_OF_RESOURCES;
             goto error_db_query;
           }

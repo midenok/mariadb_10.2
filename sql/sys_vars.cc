@@ -1793,7 +1793,7 @@ Sys_var_gtid_binlog_pos::global_value_ptr(THD *thd, const LEX_CSTRING *base)
   if ((opt_bin_log && mysql_bin_log.append_state_pos(&str)) ||
       !(p= thd->strmake(str.ptr(), str.length())))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return NULL;
   }
 
@@ -1820,7 +1820,7 @@ Sys_var_gtid_current_pos::global_value_ptr(THD *thd, const LEX_CSTRING *base)
   if (rpl_append_gtid_state(&str, true) ||
       !(p= thd->strmake(str.ptr(), str.length())))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return NULL;
   }
 
@@ -1857,7 +1857,7 @@ Sys_var_gtid_slave_pos::do_check(THD *thd, set_var *var)
   if (!(var->save_result.string_value.str=
         thd->strmake(res->ptr(), res->length())))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return true;
   }
   var->save_result.string_value.length= res->length();
@@ -1910,7 +1910,7 @@ Sys_var_gtid_slave_pos::global_value_ptr(THD *thd, const LEX_CSTRING *base)
        rpl_append_gtid_state(&str, false)) ||
       !(p= thd->strmake(str.ptr(), str.length())))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return NULL;
   }
 
@@ -1978,7 +1978,7 @@ Sys_var_gtid_binlog_state::do_check(THD *thd, set_var *var)
   if (!(data= (gtid_binlog_state_data *)my_malloc(sizeof(*data), MYF(0))))
   {
     my_free(list);
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return true;
   }
   data->list= list;
@@ -2023,7 +2023,7 @@ Sys_var_gtid_binlog_state::global_value_ptr(THD *thd, const LEX_CSTRING *base)
   if ((opt_bin_log && mysql_bin_log.append_state(&str)) ||
       !(p= thd->strmake(str.ptr(), str.length())))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return NULL;
   }
 
@@ -2061,7 +2061,7 @@ Sys_var_last_gtid::session_value_ptr(THD *thd, const LEX_CSTRING *base)
        rpl_slave_state_tostring_helper(&str, &gtid, &first)) ||
       !(p= thd->strmake(str.ptr(), str.length())))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return NULL;
   }
 

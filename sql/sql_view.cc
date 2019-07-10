@@ -945,7 +945,7 @@ static int mysql_register_view(THD *thd, TABLE_LIST *view,
   if (!thd->make_lex_string(&view->select_stmt, view_query.ptr(),
                             view_query.length()))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     error= -1;
     goto err;   
   }
@@ -959,7 +959,7 @@ static int mysql_register_view(THD *thd, TABLE_LIST *view,
   view->calc_md5(md5);
   if (!(view->md5.str= (char*) thd->memdup(md5, 32)))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     error= -1;
     goto err;   
   }
@@ -980,7 +980,7 @@ static int mysql_register_view(THD *thd, TABLE_LIST *view,
 
   DBUG_EXECUTE_IF("simulate_register_view_failure",
                   {
-                    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+                    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
                     error= -1;
                     goto err;
                   });
@@ -1092,7 +1092,7 @@ loop_out:
   if (!thd->make_lex_string(&view->view_body_utf8, is_query.ptr(),
                             is_query.length()))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     error= -1;
     goto err;   
   }

@@ -285,7 +285,7 @@ MRN_API char *mroonga_snippet(UDF_INIT *init, UDF_ARGS *args, char *result,
   result_str->length(0);
   if (result_str->reserve((args->lengths[6] + args->lengths[7] +
                           max_tagged_length) * n_results)) {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0), HA_ERR_OUT_OF_MEM);
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG), HA_ERR_OUT_OF_MEM);
     goto error;
   }
   for (i = 0; i < n_results; i++) {

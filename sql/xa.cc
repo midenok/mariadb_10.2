@@ -529,7 +529,7 @@ bool trans_xa_commit(THD *thd)
   {
     if (thd->fix_xid_hash_pins())
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       DBUG_RETURN(TRUE);
     }
 
@@ -623,7 +623,7 @@ bool trans_xa_rollback(THD *thd)
   {
     if (thd->fix_xid_hash_pins())
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
       DBUG_RETURN(TRUE);
     }
 

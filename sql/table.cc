@@ -9111,7 +9111,7 @@ bool TR_table::open()
   open_tables_backup= new Open_tables_backup;
   if (!open_tables_backup)
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return true;
   }
 
@@ -9194,7 +9194,7 @@ bool TR_table::query(ulonglong trx_id)
   select= make_select(table, 0, 0, conds, NULL, 0, &error);
   if (unlikely(error || !select))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return false;
   }
   // FIXME: (performance) force index 'transaction_id'
