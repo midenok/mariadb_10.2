@@ -834,7 +834,7 @@ void partition_info::vers_set_hist_part(THD *thd)
       vers_info->hist_part= next;
       records= next_records;
     }
-    if (records > vers_info->limit)
+    if (records >= vers_info->limit)
     {
       if (next == vers_info->now_part)
       {
@@ -843,10 +843,8 @@ void partition_info::vers_set_hist_part(THD *thd)
                 vers_info->hist_part->partition_name, "LIMIT");
       }
       else
-      {
         vers_info->hist_part= next;
-        goto add_hist_part;
-      }
+      goto add_hist_part;
     }
     return;
   }

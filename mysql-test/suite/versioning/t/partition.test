@@ -214,7 +214,9 @@ prepare stmt from @str; execute stmt; drop prepare stmt;
 select @ts0 = @ts1;
 select @ts2 = @ts3;
 
---echo ## rotation by LIMIT
+--echo #
+--echo # Rotation by LIMIT
+--echo #
 --error ER_PART_WRONG_VALUE
 create or replace table t1 (x int)
 with system versioning
@@ -243,7 +245,9 @@ delete from t1;
 select * from t1 partition (p1) order by x;
 
 
---echo ## rotation by INTERVAL
+--echo #
+--echo # Rotation by INTERVAL
+--echo #
 --error ER_PART_WRONG_VALUE
 create or replace table t1 (x int)
 with system versioning
@@ -482,9 +486,9 @@ insert into t1 (x) values (1), (2), (3), (4), (5);
 select * from t1 partition (pnsp0);
 select * from t1 partition (pnsp1);
 
---echo ### warn about full partition
 delete from t1 where x < 3;
 delete from t1;
+--echo ### warn about full partition
 delete from t1;
 select * from t1 partition (p0sp0);
 select * from t1 partition (p0sp1);
