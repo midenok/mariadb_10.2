@@ -244,6 +244,14 @@ insert into t1 values (7), (8);
 delete from t1;
 select * from t1 partition (p1) order by x;
 
+--echo # Auto-add history partitions
+create or replace table t1 (x int) with system versioning
+partition by system_time limit 1;
+insert into t1 values (1);
+update t1 set x= x + 1;
+update t1 set x= x + 1;
+--real_sleep 3
+show create table t1;
 
 --echo #
 --echo # Rotation by INTERVAL

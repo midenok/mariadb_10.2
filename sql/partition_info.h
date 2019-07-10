@@ -403,7 +403,7 @@ public:
     return !limit;
   }
   void vers_set_hist_part(THD *thd);
-  void start_query(LEX_CSTRING query);
+  void start_query();
   bool vers_fix_field_list(THD *thd);
   void vers_update_el_ids();
   partition_element *get_partition(uint part_id)

@@ -874,30 +874,48 @@ void partition_info::vers_set_hist_part(THD *thd)
 add_hist_part:
   if (vers_info->hist_part->id + 1 == vers_info->now_part->id)
   {
-    String cmd(STRING_WITH_LEN("ALTER TABLE `"), system_charset_info);
-    cmd.append(table->s->db);
-    cmd.append(STRING_WITH_LEN("`.`"));
-    cmd.append(table->s->table_name);
-    // FIXME: partition name
-    cmd.append("` ADD PARTITION (PARTITION p1 HISTORY)");
-    LEX_CSTRING query= {cmd.c_ptr(), cmd.length()};
-    start_query(query);
+    start_query();
   }
   return;
 }
 
 
+struct vers_add_hist_part_data
+{
+  LEX_STRING query;
+  LEX_STRING table_name;
+  LEX_STRING part_name;
+  void assign(String &q, LEX_CSTRING &t, String &p)
+  {
+    memcpy(query.str, q.c_ptr_quick(), q.length());
+    query.str[q.length()]= 0;
+    query.length= q.length();
+
+    table_name.length= t.length;
+    memcpy(table_name.str, t.str, table_name.length);
+    table_name.str[table_name.length]= 0;
+
+    memcpy(part_name.str, p.c_ptr_quick(), p.length());
+    part_name.str[p.length()]= 0;
+    part_name.length= p.length();
+  }
+};
+
 pthread_handler_t query_thread(void *arg)
 {
   Parser_state parser_state;
   int error;
-  LEX_STRING &query= *(LEX_STRING *)arg;
+  DBUG_ASSERT(arg);
+  vers_add_hist_part_data &d= *(vers_add_hist_part_data *)arg;
+  sql_print_information("Adding history partition `%s` for table `%s`",
+                        d.part_name.str,
+                        d.table_name.str);
   my_thread_init();
   // initialize THD
   THD *thd= new THD(next_thread_id());
   if (unlikely(!thd))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     goto err1;
   }
   thd->thread_stack= (char*) &thd;
@@ -905,21 +923,19 @@ pthread_handler_t query_thread(void *arg)
   thd->set_command(COM_DAEMON);
   thd->system_thread= SYSTEM_THREAD_GENERIC;
   thd->security_ctx->host_or_ip="";
+  thd->log_all_errors= true;
   server_threads.insert(thd);
   thd_proc_info(thd, "Background query");
   // initialize parser
   lex_start(thd);
-  if (unlikely(parser_state.init(thd, query.str, query.length)))
+  if (unlikely(parser_state.init(thd, d.query.str, d.query.length)))
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     goto err2;
   }
   if (unlikely(parse_sql(thd, &parser_state, NULL)))
-  {
-    // FIXME: error
     goto err2;
-  }
-  thd->set_query_and_id(LEX_STRING_WITH_LEN(query), thd->charset(), next_query_id());
+  thd->set_query_and_id(LEX_STRING_WITH_LEN(d.query), thd->charset(), next_query_id());
   // FIXME: binlog
   error= mysql_execute_command(thd);
   if (unlikely(error))
@@ -930,7 +946,6 @@ pthread_handler_t query_thread(void *arg)
     */
     if (thd->is_error() && thd->get_stmt_da()->get_sql_errno() == ER_SAME_NAME_PARTITION)
       thd->clear_error();
-    goto err2;
   }
 err2:
   // FIXME: log error, table is here: thd->lex->first_select_lex()->table_list.first.table
@@ -944,21 +959,40 @@ err1:
 }
 
 
-void partition_info::start_query(LEX_CSTRING query)
+void partition_info::start_query()
 {
   pthread_t hThread;
   int error;
-  LEX_CSTRING *query_copy;
-  char *query_buf;
-  if (!my_multi_malloc(MYF(MY_WME), &query_copy, sizeof(*query_copy),
-                       &query_buf, query.length + 1, NULL))
+  String part_name(STRING_WITH_LEN("p"), system_charset_info);
+  if (part_name.append_ulonglong(vers_info->hist_part->id + 1))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return;
-  memcpy(query_buf, query.str, query.length);
-  query_buf[query.length]= 0;
-  query_copy->str= query_buf;
-  query_copy->length= query.length;
+  }
+  String q(STRING_WITH_LEN("ALTER TABLE `"), system_charset_info);
+  if (q.append(table->s->db) ||
+      q.append(STRING_WITH_LEN("`.`")) ||
+      q.append(table->s->table_name) ||
+      q.append("` ADD PARTITION (PARTITION `") ||
+      q.append(part_name) ||
+      q.append("` HISTORY)"))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
+    return;
+  }
+  vers_add_hist_part_data *data;
+  vers_add_hist_part_data bufs;
+  if (!my_multi_malloc(MYF(MY_WME|ME_ERROR_LOG), &data, sizeof(*data),
+                       &bufs.query.str, q.length() + 1,
+                       &bufs.table_name.str, table->s->table_name.length + 1,
+                       &bufs.part_name.str, part_name.length() + 1,
+                       NULL))
+    return;
+  bufs.assign(q, table->s->table_name, part_name);
+  *data= bufs;
+
   if ((error= mysql_thread_create(key_thread_query, &hThread,
-                                  &connection_attrib, query_thread, query_copy)))
+                                  &connection_attrib, query_thread, data)))
     sql_print_warning("Can't create vers_add_hist_part thread (errno= %d)",
                       error);
   return;
