@@ -868,13 +868,20 @@ void partition_info::vers_set_hist_part(THD *thd)
     my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
             table->s->db.str, table->s->table_name.str,
             vers_info->hist_part->partition_name, "INTERVAL");
-    return;
   }
 
 add_hist_part:
+  time_t &timeout= table->s->vers_hist_part_timeout;
   if (vers_info->hist_part->id + 1 == vers_info->now_part->id)
   {
-    start_query();
+    if (!timeout || timeout < thd->query_start())
+      vers_add_hist_part();
+    else if (table->s->vers_hist_part_error)
+    {
+      my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING),
+              table->s->db.str, table->s->table_name.str,
+              table->s->vers_hist_part_error);
+    }
   }
   return;
 }
@@ -901,10 +908,11 @@ struct vers_add_hist_part_data
   }
 };
 
-pthread_handler_t query_thread(void *arg)
+pthread_handler_t vers_add_hist_part_thread(void *arg)
 {
   Parser_state parser_state;
-  int error;
+  uint error;
+  TABLE *table;
   DBUG_ASSERT(arg);
   vers_add_hist_part_data &d= *(vers_add_hist_part_data *)arg;
   sql_print_information("Adding history partition `%s` for table `%s`",
@@ -937,18 +945,35 @@ pthread_handler_t query_thread(void *arg)
     goto err2;
   thd->set_query_and_id(LEX_STRING_WITH_LEN(d.query), thd->charset(), next_query_id());
   // FIXME: binlog
-  error= mysql_execute_command(thd);
+  error= (uint) mysql_execute_command(thd);
+  table= thd->lex->first_select_lex()->table_list.first->table;
   if (unlikely(error))
   {
+    error= thd->get_stmt_da()->get_sql_errno();
+    if (table)
+    {
+      // Timeout new ALTER for 5 minutes in case of error
+      table->s->vers_hist_part_timeout= thd->query_start() + 300;
+      table->s->vers_hist_part_error= error;
+    }
     /* When multiple threads try ADD simultaneously one of them succeeds and
        the others fail with ER_SAME_NAME_PARTITION. In such case no error
        should be printed at all.
     */
-    if (thd->is_error() && thd->get_stmt_da()->get_sql_errno() == ER_SAME_NAME_PARTITION)
+    if (thd->is_error() && error == ER_SAME_NAME_PARTITION)
+    {
       thd->clear_error();
+      if (table)
+        table->s->vers_hist_part_error= 0;
+    }
+  }
+  else
+  {
+    DBUG_ASSERT(table);
+    table->s->vers_hist_part_error= 0;
+    table->s->vers_hist_part_timeout= 0;
   }
 err2:
-  // FIXME: log error, table is here: thd->lex->first_select_lex()->table_list.first.table
   lex_end(thd->lex);
   server_threads.erase(thd);
   delete thd;
@@ -959,7 +984,7 @@ err1:
 }
 
 
-void partition_info::start_query()
+void partition_info::vers_add_hist_part()
 {
   pthread_t hThread;
   int error;
@@ -992,7 +1017,7 @@ void partition_info::start_query()
   *data= bufs;
 
   if ((error= mysql_thread_create(key_thread_query, &hThread,
-                                  &connection_attrib, query_thread, data)))
+                                  &connection_attrib, vers_add_hist_part_thread, data)))
     sql_print_warning("Can't create vers_add_hist_part thread (errno= %d)",
                       error);
   return;
