@@ -844,15 +844,14 @@ void partition_info::vers_set_hist_part(THD *thd)
       }
       else
         vers_info->hist_part= next;
-      goto add_hist_part;
     }
-    return;
+    goto add_hist_part;
   }
 
   if (vers_info->interval.is_set())
   {
     if (vers_info->hist_part->range_value > thd->query_start())
-      return;
+      goto add_hist_part;
 
     partition_element *next= NULL;
     List_iterator<partition_element> it(partitions);
@@ -868,7 +867,10 @@ void partition_info::vers_set_hist_part(THD *thd)
     my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
             table->s->db.str, table->s->table_name.str,
             vers_info->hist_part->partition_name, "INTERVAL");
+    goto add_hist_part;
   }
+
+  return;
 
 add_hist_part:
   time_t &timeout= table->s->vers_hist_part_timeout;
@@ -883,24 +885,20 @@ add_hist_part:
               table->s->vers_hist_part_error);
     }
   }
-  return;
 }
 
 
 struct vers_add_hist_part_data
 {
   LEX_STRING query;
-  LEX_STRING table_name;
   LEX_STRING part_name;
-  void assign(String &q, LEX_CSTRING &t, String &p)
+  TABLE_SHARE *s;
+
+  void assign(String &q, String &p)
   {
     memcpy(query.str, q.c_ptr_quick(), q.length());
     query.str[q.length()]= 0;
     query.length= q.length();
-
-    table_name.length= t.length;
-    memcpy(table_name.str, t.str, table_name.length);
-    table_name.str[table_name.length]= 0;
 
     memcpy(part_name.str, p.c_ptr_quick(), p.length());
     part_name.str[p.length()]= 0;
@@ -912,12 +910,12 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
 {
   Parser_state parser_state;
   uint error;
-  TABLE *table;
   DBUG_ASSERT(arg);
-  vers_add_hist_part_data &d= *(vers_add_hist_part_data *)arg;
+  vers_add_hist_part_data &d= *(vers_add_hist_part_data *) arg;
+  TDC_element *element= d.s->tdc;
   sql_print_information("Adding history partition `%s` for table `%s`",
                         d.part_name.str,
-                        d.table_name.str);
+                        d.s->table_name.str);
   my_thread_init();
   // initialize THD
   THD *thd= new THD(next_thread_id());
@@ -946,16 +944,13 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   thd->set_query_and_id(LEX_STRING_WITH_LEN(d.query), thd->charset(), next_query_id());
   // FIXME: binlog
   error= (uint) mysql_execute_command(thd);
-  table= thd->lex->first_select_lex()->table_list.first->table;
   if (unlikely(error))
   {
     error= thd->get_stmt_da()->get_sql_errno();
-    if (table)
-    {
-      // Timeout new ALTER for 5 minutes in case of error
-      table->s->vers_hist_part_timeout= thd->query_start() + 300;
-      table->s->vers_hist_part_error= error;
-    }
+    // Timeout new ALTER for 5 minutes in case of error
+    mysql_mutex_lock(&element->LOCK_table_share);
+    d.s->vers_hist_part_timeout= thd->query_start() + 300;
+    d.s->vers_hist_part_error= error;
     /* When multiple threads try ADD simultaneously one of them succeeds and
        the others fail with ER_SAME_NAME_PARTITION. In such case no error
        should be printed at all.
@@ -963,21 +958,25 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
     if (thd->is_error() && error == ER_SAME_NAME_PARTITION)
     {
       thd->clear_error();
-      if (table)
-        table->s->vers_hist_part_error= 0;
+      d.s->vers_hist_part_error= 0;
     }
+    mysql_mutex_unlock(&element->LOCK_table_share);
   }
   else
   {
-    DBUG_ASSERT(table);
-    table->s->vers_hist_part_error= 0;
-    table->s->vers_hist_part_timeout= 0;
+    mysql_mutex_lock(&element->LOCK_table_share);
+    d.s->vers_hist_part_error= 0;
+    d.s->vers_hist_part_timeout= 0;
+    mysql_mutex_unlock(&element->LOCK_table_share);
   }
 err2:
   lex_end(thd->lex);
   server_threads.erase(thd);
   delete thd;
 err1:
+  mysql_mutex_lock(&element->LOCK_table_share);
+  element->ref_count--;
+  mysql_mutex_unlock(&element->LOCK_table_share);
   my_free(arg);
   my_thread_end();
   return NULL;
@@ -988,13 +987,15 @@ void partition_info::vers_add_hist_part()
 {
   pthread_t hThread;
   int error;
+  TDC_element *element= table->s->tdc;
 
   // Choose first non-occupied name suffix starting from id + 1
   uint32 suffix= vers_info->hist_part->id + 1;
   static const char *prefix= "p";
+  static const size_t prefix_len= strlen(prefix);
   List_iterator_fast<partition_element> it(partitions);
   partition_element *el;
-  String part_name(STRING_WITH_LEN(prefix), &my_charset_latin1);
+  String part_name(prefix, prefix_len, &my_charset_latin1);
   if (part_name.append_ulonglong(suffix))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
@@ -1006,7 +1007,7 @@ void partition_info::vers_add_hist_part()
     if (0 == my_strcasecmp(&my_charset_latin1, el->partition_name, part_name.c_ptr()))
     {
       ++suffix;
-      part_name.set(STRING_WITH_LEN(prefix), &my_charset_latin1);
+      part_name.set(prefix, prefix_len, &my_charset_latin1);
       if (part_name.append_ulonglong(suffix))
       {
         my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
@@ -1031,17 +1032,28 @@ void partition_info::vers_add_hist_part()
   vers_add_hist_part_data bufs;
   if (!my_multi_malloc(MYF(MY_WME|ME_ERROR_LOG), &data, sizeof(*data),
                        &bufs.query.str, q.length() + 1,
-                       &bufs.table_name.str, table->s->table_name.length + 1,
                        &bufs.part_name.str, part_name.length() + 1,
                        NULL))
     return;
-  bufs.assign(q, table->s->table_name, part_name);
+  bufs.assign(q, part_name);
   *data= bufs;
+
+  // Pass TABLE_SHARE to a thread
+  mysql_mutex_lock(&element->LOCK_table_share);
+  element->ref_count++;
+  mysql_mutex_unlock(&element->LOCK_table_share);
+  data->s= table->s;
 
   if ((error= mysql_thread_create(key_thread_query, &hThread,
                                   &connection_attrib, vers_add_hist_part_thread, data)))
+  {
+    mysql_mutex_lock(&element->LOCK_table_share);
+    element->ref_count--;
+    mysql_mutex_unlock(&element->LOCK_table_share);
+
     sql_print_warning("Can't create vers_add_hist_part thread (errno= %d)",
                       error);
+  }
   return;
 }
 
