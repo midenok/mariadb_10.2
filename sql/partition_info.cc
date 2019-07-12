@@ -988,13 +988,35 @@ void partition_info::vers_add_hist_part()
 {
   pthread_t hThread;
   int error;
-  String part_name(STRING_WITH_LEN("p"), system_charset_info);
-  if (part_name.append_ulonglong(vers_info->hist_part->id + 1))
+
+  // Choose first non-occupied name suffix starting from id + 1
+  uint32 suffix= vers_info->hist_part->id + 1;
+  static const char *prefix= "p";
+  List_iterator_fast<partition_element> it(partitions);
+  partition_element *el;
+  String part_name(STRING_WITH_LEN(prefix), &my_charset_latin1);
+  if (part_name.append_ulonglong(suffix))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
     return;
   }
-  String q(STRING_WITH_LEN("ALTER TABLE `"), system_charset_info);
+
+  while ((el= it++))
+  {
+    if (0 == my_strcasecmp(&my_charset_latin1, el->partition_name, part_name.c_ptr()))
+    {
+      ++suffix;
+      part_name.set(STRING_WITH_LEN(prefix), &my_charset_latin1);
+      if (part_name.append_ulonglong(suffix))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
+        return;
+      }
+      it.rewind();
+    }
+  }
+
+  String q(STRING_WITH_LEN("ALTER TABLE `"), &my_charset_latin1);
   if (q.append(table->s->db) ||
       q.append(STRING_WITH_LEN("`.`")) ||
       q.append(table->s->table_name) ||
