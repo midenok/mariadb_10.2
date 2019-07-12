@@ -930,7 +930,8 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   thd->store_globals();
   thd->set_command(COM_DAEMON);
   thd->system_thread= SYSTEM_THREAD_GENERIC;
-  thd->security_ctx->host_or_ip="";
+  thd->security_ctx->host_or_ip= "";
+  thd->security_ctx->master_access= ALTER_ACL|SUPER_ACL|LOCK_TABLES_ACL;
   thd->log_all_errors= true;
   server_threads.insert(thd);
   thd_proc_info(thd, "Background query");
@@ -939,13 +940,18 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   if (unlikely(parser_state.init(thd, d.query.str, d.query.length)))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(ME_ERROR_LOG));
+    lex_end(thd->lex);
     goto err2;
   }
   if (unlikely(parse_sql(thd, &parser_state, NULL)))
+  {
+    lex_end(thd->lex);
     goto err2;
+  }
   thd->set_query_and_id(LEX_STRING_WITH_LEN(d.query), thd->charset(), next_query_id());
-  // FIXME: binlog
+  MYSQL_QUERY_EXEC_START(thd->query(), thd->thread_id, "", "", "", 0);
   error= (uint) mysql_execute_command(thd);
+  MYSQL_QUERY_EXEC_DONE(error);
   if (unlikely(error))
   {
     // ALTER invalidates TABLE_SHARE, but it in case of error may keep it
@@ -968,8 +974,9 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
         table->s->vers_hist_part_error= 0;
     }
   }
+  thd->end_statement();
+  thd->cleanup_after_query();
 err2:
-  lex_end(thd->lex);
   server_threads.erase(thd);
   delete thd;
 err1:

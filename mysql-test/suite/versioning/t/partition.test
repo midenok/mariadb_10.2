@@ -251,6 +251,7 @@ insert into t1 values (1);
 update t1 set x= x + 1;
 update t1 set x= x + 1;
 --real_sleep 3
+flush tables;
 show create table t1;
 
 --echo #
