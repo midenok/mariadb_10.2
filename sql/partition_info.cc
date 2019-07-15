@@ -877,7 +877,7 @@ add_hist_part:
   if (vers_info->hist_part->id + 1 == vers_info->now_part->id)
   {
     if (!timeout || timeout < thd->query_start())
-      vers_add_hist_part();
+      vers_add_hist_part(thd);
     else if (table->s->vers_hist_part_error)
     {
       my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING),
@@ -894,10 +894,15 @@ struct vers_add_hist_part_data
   LEX_CSTRING db;
   LEX_CSTRING table_name;
   LEX_STRING part_name;
+  my_time_t  start_time;
+  ulong      start_time_sec_part;
+
   TABLE_SHARE *s;
 
-  void assign(String &q, TABLE *table, String &p)
+  void assign(THD *thd, String &q, TABLE *table, String &p)
   {
+    start_time= thd->start_time;
+    start_time_sec_part= thd->start_time_sec_part;
     s= table->s;
 
     memcpy(query.str, q.c_ptr_quick(), q.length());
@@ -944,6 +949,8 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   // FIXME: is it needed ALTER_ACL|LOCK_TABLES_ACL?
   thd->security_ctx->master_access= ALTER_ACL|SUPER_ACL|LOCK_TABLES_ACL;
   thd->log_all_errors= true;
+  thd->start_time= d.start_time;
+  thd->start_time_sec_part= d.start_time_sec_part;
   server_threads.insert(thd);
   thd_proc_info(thd, "Background query");
   // initialize parser
@@ -966,8 +973,6 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   if (unlikely(error) && thd->is_error())
   {
     error= thd->get_stmt_da()->get_sql_errno();
-    if (error != ER_SAME_NAME_PARTITION)
-      sql_print_error(thd->get_stmt_da()->message());
     thd->clear_error();
     TABLE_LIST table_list;
     table_list.init_one_table(&d.db, &d.table_name, &d.table_name, TL_UNLOCK);
@@ -985,7 +990,6 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
       else
       {
         // Timeout new ALTER for 5 minutes in case of error
-        // FIXME: query_start
         d.s->vers_hist_part_timeout= thd->query_start() + 300;
         d.s->vers_hist_part_error= error;
       }
@@ -1006,11 +1010,10 @@ err1:
 }
 
 
-void partition_info::vers_add_hist_part()
+void partition_info::vers_add_hist_part(THD *thd)
 {
   pthread_t hThread;
   int error;
-  TDC_element *element= table->s->tdc;
 
   // Choose first non-occupied name suffix starting from id + 1
   uint32 suffix= vers_info->hist_part->id + 1;
@@ -1040,9 +1043,6 @@ void partition_info::vers_add_hist_part()
     }
   }
 
-  // FIXME: remove
-  part_name.set(STRING_WITH_LEN("p0"), &my_charset_latin1);
-
   String q(STRING_WITH_LEN("ALTER TABLE `"), &my_charset_latin1);
   if (q.append(table->s->db) ||
       q.append(STRING_WITH_LEN("`.`")) ||
@@ -1063,7 +1063,7 @@ void partition_info::vers_add_hist_part()
                        &bufs.part_name.str, part_name.length() + 1,
                        NULL))
     return;
-  bufs.assign(q, table, part_name);
+  bufs.assign(thd, q, table, part_name);
   *data= bufs;
 
   if ((error= mysql_thread_create(key_thread_query, &hThread,
