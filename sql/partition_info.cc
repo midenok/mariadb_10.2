@@ -891,17 +891,14 @@ add_hist_part:
 struct vers_add_hist_part_data
 {
   LEX_STRING query;
-  LEX_STRING table_name;
   LEX_STRING part_name;
-  void assign(String &q, LEX_CSTRING &t, String &p)
+  TABLE_SHARE *s;
+
+  void assign(String &q, String &p)
   {
     memcpy(query.str, q.c_ptr_quick(), q.length());
     query.str[q.length()]= 0;
     query.length= q.length();
-
-    table_name.length= t.length;
-    memcpy(table_name.str, t.str, table_name.length);
-    table_name.str[table_name.length]= 0;
 
     memcpy(part_name.str, p.c_ptr_quick(), p.length());
     part_name.str[p.length()]= 0;
@@ -914,10 +911,12 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   Parser_state parser_state;
   uint error;
   DBUG_ASSERT(arg);
-  vers_add_hist_part_data &d= *(vers_add_hist_part_data *)arg;
+  vers_add_hist_part_data &d= *(vers_add_hist_part_data *) arg;
+  TDC_element *element= d.s->tdc;
+  TABLE *table;
   sql_print_information("Adding history partition `%s` for table `%s`",
                         d.part_name.str,
-                        d.table_name.str);
+                        d.s->table_name.str);
   my_thread_init();
   // initialize THD
   THD *thd= new THD(next_thread_id());
@@ -949,20 +948,35 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
     goto err2;
   }
   thd->set_query_and_id(LEX_STRING_WITH_LEN(d.query), thd->charset(), next_query_id());
+
+  table= (TABLE*) thd->alloc(sizeof(TABLE));
+  {
+    enum open_frm_error error;
+
+    error= open_table_from_share(thd, d.s, &d.s->table_name,
+                                 // FIXME: flags
+                                  HA_OPEN_KEYFILE | HA_TRY_READ_ONLY,
+                                  EXTRA_RECORD,
+                                  thd->open_options, table, FALSE, NULL);
+    if (unlikely(error))
+    {
+      // FIXME: error message
+      lex_end(thd->lex);
+      goto err2;
+    }
+    tc_add_table(thd, table);
+  }
+
   MYSQL_QUERY_EXEC_START(thd->query(), thd->thread_id, "", "", "", 0);
   error= (uint) mysql_execute_command(thd);
   MYSQL_QUERY_EXEC_DONE(error);
   if (unlikely(error))
   {
-    // ALTER invalidates TABLE_SHARE, but it in case of error may keep it
-    TABLE *table= thd->lex->first_select_lex()->table_list.first->table;
     error= thd->get_stmt_da()->get_sql_errno();
-    if (table)
-    {
-      // Timeout new ALTER for 5 minutes in case of error
-      table->s->vers_hist_part_timeout= thd->query_start() + 300;
-      table->s->vers_hist_part_error= error;
-    }
+    // Timeout new ALTER for 5 minutes in case of error
+    mysql_mutex_lock(&element->LOCK_table_share);
+    d.s->vers_hist_part_timeout= thd->query_start() + 300;
+    d.s->vers_hist_part_error= error;
     /* When multiple threads try ADD simultaneously one of them succeeds and
        the others fail with ER_SAME_NAME_PARTITION. In such case no error
        should be printed at all.
@@ -970,9 +984,9 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
     if (thd->is_error() && error == ER_SAME_NAME_PARTITION)
     {
       thd->clear_error();
-      if (table)
-        table->s->vers_hist_part_error= 0;
+      d.s->vers_hist_part_error= 0;
     }
+    mysql_mutex_unlock(&element->LOCK_table_share);
   }
   thd->end_statement();
   thd->cleanup_after_query();
@@ -980,6 +994,9 @@ err2:
   server_threads.erase(thd);
   delete thd;
 err1:
+  mysql_mutex_lock(&element->LOCK_table_share);
+  element->ref_count--;
+  mysql_mutex_unlock(&element->LOCK_table_share);
   my_free(arg);
   my_thread_end();
   return NULL;
@@ -990,6 +1007,7 @@ void partition_info::vers_add_hist_part()
 {
   pthread_t hThread;
   int error;
+  TDC_element *element= table->s->tdc;
 
   // Choose first non-occupied name suffix starting from id + 1
   uint32 suffix= vers_info->hist_part->id + 1;
@@ -1034,17 +1052,28 @@ void partition_info::vers_add_hist_part()
   vers_add_hist_part_data bufs;
   if (!my_multi_malloc(MYF(MY_WME|ME_ERROR_LOG), &data, sizeof(*data),
                        &bufs.query.str, q.length() + 1,
-                       &bufs.table_name.str, table->s->table_name.length + 1,
                        &bufs.part_name.str, part_name.length() + 1,
                        NULL))
     return;
-  bufs.assign(q, table->s->table_name, part_name);
+  bufs.assign(q, part_name);
   *data= bufs;
+
+  // Pass TABLE_SHARE to a thread
+  mysql_mutex_lock(&element->LOCK_table_share);
+  element->ref_count++;
+  mysql_mutex_unlock(&element->LOCK_table_share);
+  data->s= table->s;
 
   if ((error= mysql_thread_create(key_thread_query, &hThread,
                                   &connection_attrib, vers_add_hist_part_thread, data)))
+  {
+    mysql_mutex_lock(&element->LOCK_table_share);
+    element->ref_count--;
+    mysql_mutex_unlock(&element->LOCK_table_share);
+
     sql_print_warning("Can't create vers_add_hist_part thread (errno= %d)",
                       error);
+  }
   return;
 }
 
