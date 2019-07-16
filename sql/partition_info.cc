@@ -810,8 +810,9 @@ bool partition_info::has_unique_name(partition_element *element)
 
 // Auto-creation configuration
 static const uint VERS_MIN_EMPTY= 1;
-static const uint VERS_MIN_INTERVAL= 3600;
+static const uint VERS_MIN_INTERVAL= 3600; // seconds
 static const uint VERS_MIN_LIMIT= 1; // FIXME: update
+static const uint VERS_ERROR_TIMEOUT= 300; // seconds
 
 
 /**
@@ -994,20 +995,10 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
     TABLE *table= open_ltable(thd, &table_list, TL_UNLOCK, 0);
     if (table && table->s == d.s)
     {
-      if (error == ER_SAME_NAME_PARTITION)
-      {
-        /* When multiple threads try ADD simultaneously one of them succeeds and
-          the others fail with ER_SAME_NAME_PARTITION. In such case error
-          should NOT be printed at all.
-        */
-        d.s->vers_hist_part_error= 0;
-      }
-      else
-      {
-        // Timeout new ALTER for 5 minutes in case of error
-        d.s->vers_hist_part_timeout= thd->query_start() + 300;
-        d.s->vers_hist_part_error= error;
-      }
+      // Timeout new ALTER for 5 minutes in case of error
+      d.s->vers_hist_part_timeout= thd->query_start() + VERS_ERROR_TIMEOUT;
+      d.s->vers_hist_part_error= error;
+      d.s->vers_altering= false;
     }
     if (table)
       close_thread_tables(thd);
@@ -1029,6 +1020,16 @@ void partition_info::vers_add_hist_part(THD *thd)
 {
   pthread_t hThread;
   int error;
+
+  // Prevent spawning multiple instances of same task
+  bool altering;
+  mysql_mutex_lock(&table->s->LOCK_share);
+  altering= table->s->vers_altering;
+  if (!altering)
+    table->s->vers_altering= true;
+  mysql_mutex_unlock(&table->s->LOCK_share);
+  if (altering)
+    return;
 
   // Choose first non-occupied name suffix starting from id + 1
   uint32 suffix= vers_info->hist_part->id + 1;
