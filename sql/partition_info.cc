@@ -808,6 +808,12 @@ bool partition_info::has_unique_name(partition_element *element)
 }
 
 
+// Auto-creation configuration
+static const uint VERS_MIN_EMPTY= 1;
+static const uint VERS_MIN_INTERVAL= 3600;
+static const uint VERS_MIN_LIMIT= 1; // FIXME: update
+
+
 /**
   @brief Switch history partition according limit or interval
 
@@ -845,36 +851,45 @@ void partition_info::vers_set_hist_part(THD *thd)
       else
         vers_info->hist_part= next;
     }
-    goto add_hist_part;
+    if (vers_info->limit >= VERS_MIN_LIMIT)
+      goto add_hist_part;
+    else
+      return;
   }
 
   if (vers_info->interval.is_set())
   {
-    if (vers_info->hist_part->range_value > thd->query_start())
-      goto add_hist_part;
-
-    partition_element *next= NULL;
-    List_iterator<partition_element> it(partitions);
-    while (next != vers_info->hist_part)
-      next= it++;
-
-    while ((next= it++) != vers_info->now_part)
+    if (vers_info->hist_part->range_value <= thd->query_start())
     {
-      vers_info->hist_part= next;
-      if (next->range_value > thd->query_start())
-        goto add_hist_part;
+      partition_element *next= NULL;
+      bool error= true;
+      List_iterator<partition_element> it(partitions);
+      while (next != vers_info->hist_part)
+        next= it++;
+
+      while ((next= it++) != vers_info->now_part)
+      {
+        vers_info->hist_part= next;
+        if (next->range_value > thd->query_start())
+        {
+          error= false;
+          break;
+        }
+      }
+      if (error)
+        my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
+                 table->s->db.str, table->s->table_name.str,
+                 vers_info->hist_part->partition_name, "INTERVAL");
     }
-    my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
-            table->s->db.str, table->s->table_name.str,
-            vers_info->hist_part->partition_name, "INTERVAL");
-    goto add_hist_part;
+    if (vers_info->interval >= VERS_MIN_INTERVAL)
+      goto add_hist_part;
   }
 
   return;
 
 add_hist_part:
   time_t &timeout= table->s->vers_hist_part_timeout;
-  if (vers_info->hist_part->id + 1 == vers_info->now_part->id)
+  if (vers_info->hist_part->id + VERS_MIN_EMPTY == vers_info->now_part->id)
   {
     if (!timeout || timeout < thd->query_start())
       vers_add_hist_part(thd);

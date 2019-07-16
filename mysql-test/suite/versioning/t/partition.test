@@ -272,7 +272,7 @@ partition by system_time interval 10 year partitions 3;
 
 --echo # INTERVAL and ALTER TABLE
 create or replace table t1 (i int) with system versioning
-partition by system_time interval 1 hour;
+partition by system_time interval 1 minute;
 
 set @ts=(select partition_description from information_schema.partitions
   where table_schema='test' and table_name='t1' and partition_name='p0');
