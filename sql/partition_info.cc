@@ -889,17 +889,32 @@ void partition_info::vers_set_hist_part(THD *thd)
   return;
 
 add_hist_part:
-  time_t &timeout= table->s->vers_hist_part_timeout;
-  if (vers_info->hist_part->id + VERS_MIN_EMPTY == vers_info->now_part->id)
+  switch (thd->lex->sql_command)
   {
-    if (!timeout || timeout < thd->query_start())
-      vers_add_hist_part(thd);
-    else if (table->s->vers_hist_part_error)
+  case SQLCOM_UPDATE:
+  case SQLCOM_INSERT:
+  case SQLCOM_INSERT_SELECT:
+  case SQLCOM_DELETE:
+  case SQLCOM_LOAD:
+  case SQLCOM_REPLACE:
+  case SQLCOM_REPLACE_SELECT:
+  case SQLCOM_DELETE_MULTI:
+  case SQLCOM_UPDATE_MULTI:
+  {
+    time_t &timeout= table->s->vers_hist_part_timeout;
+    if (vers_info->hist_part->id + VERS_MIN_EMPTY == vers_info->now_part->id)
     {
-      my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING),
-              table->s->db.str, table->s->table_name.str,
-              table->s->vers_hist_part_error);
+      if (!timeout || timeout < thd->query_start())
+        vers_add_hist_part(thd);
+      else if (table->s->vers_hist_part_error)
+      {
+        my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING),
+                table->s->db.str, table->s->table_name.str,
+                table->s->vers_hist_part_error);
+      }
     }
+  }
+  default:;
   }
 }
 
