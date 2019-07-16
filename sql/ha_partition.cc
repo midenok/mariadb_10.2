@@ -3953,8 +3953,6 @@ int ha_partition::external_lock(THD *thd, int lock_type)
   {
     if (m_part_info->part_expr)
       m_part_info->part_expr->walk(&Item::register_field_in_read_map, 1, 0);
-    if (m_part_info->part_type == VERSIONING_PARTITION)
-      m_part_info->vers_set_hist_part(thd);
   }
   DBUG_RETURN(0);
 
@@ -4260,6 +4258,9 @@ int ha_partition::write_row(uchar * buf)
   DBUG_ENTER("ha_partition::write_row");
   DBUG_PRINT("enter", ("partition this: %p", this));
 
+  if (m_part_info->part_type == VERSIONING_PARTITION)
+    m_part_info->vers_set_hist_part(table->in_use);
+
   /*
     If we have an auto_increment column and we are writing a changed row
     or a new row, then update the auto_increment value in the record.
@@ -4362,6 +4363,10 @@ int ha_partition::update_row(const uchar *old_data, const uchar *new_data)
   // Need to read partition-related columns, to locate the row's partition:
   DBUG_ASSERT(bitmap_is_subset(&m_part_info->full_part_field_set,
                                table->read_set));
+
+  if (m_part_info->part_type == VERSIONING_PARTITION)
+    m_part_info->vers_set_hist_part(table->in_use);
+
 #ifndef DBUG_OFF
   /*
     The protocol for updating a row is:
@@ -4500,6 +4505,10 @@ int ha_partition::delete_row(const uchar *buf)
 
   DBUG_ASSERT(bitmap_is_subset(&m_part_info->full_part_field_set,
                                table->read_set));
+
+  if (m_part_info->part_type == VERSIONING_PARTITION)
+    m_part_info->vers_set_hist_part(table->in_use);
+
 #ifndef DBUG_OFF
   /*
     The protocol for deleting a row is:

@@ -3507,6 +3507,8 @@ int vers_get_partition_id(partition_info *part_info, uint32 *part_id,
   Field *row_end= part_info->part_field_array[STAT_TRX_END];
   Vers_part_info *vers_info= part_info->vers_info;
 
+//   part_info->vers_set_hist_part(part_info->table->in_use);
+
   if (row_end->is_max() || row_end->is_null())
     *part_id= vers_info->now_part->id;
   else // row is historical

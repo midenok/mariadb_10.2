@@ -851,6 +851,9 @@ bool partition_info::has_unique_name(partition_element *element)
 
 void partition_info::vers_set_hist_part(THD *thd)
 {
+  bool abort_on_warning_saved= thd->abort_on_warning;
+  thd->abort_on_warning= false;
+
   if (vers_info->limit)
   {
     ha_partition *hp= (ha_partition*)(table->file);
@@ -871,20 +874,25 @@ void partition_info::vers_set_hist_part(THD *thd)
     {
       if (next == vers_info->now_part)
       {
-        my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
-                table->s->db.str, table->s->table_name.str,
-                vers_info->hist_part->partition_name, "LIMIT");
+        push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+                            WARN_VERS_PART_FULL,
+                            table->s->db.str, table->s->table_name.str,
+                            vers_info->hist_part->partition_name, "LIMIT");
       }
       else
         vers_info->hist_part= next;
     }
+    thd->abort_on_warning= abort_on_warning_saved;
     return;
   }
 
   if (vers_info->interval.is_set())
   {
     if (vers_info->hist_part->range_value > thd->query_start())
+    {
+      thd->abort_on_warning= abort_on_warning_saved;
       return;
+    }
 
     partition_element *next= NULL;
     List_iterator<partition_element> it(partitions);
@@ -895,12 +903,17 @@ void partition_info::vers_set_hist_part(THD *thd)
     {
       vers_info->hist_part= next;
       if (next->range_value > thd->query_start())
+      {
+        thd->abort_on_warning= abort_on_warning_saved;
         return;
+      }
     }
-    my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
-            table->s->db.str, table->s->table_name.str,
-            vers_info->hist_part->partition_name, "INTERVAL");
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+                        WARN_VERS_PART_FULL,
+                        table->s->db.str, table->s->table_name.str,
+                        vers_info->hist_part->partition_name, "INTERVAL");
   }
+  thd->abort_on_warning= abort_on_warning_saved;
 }
 
 
