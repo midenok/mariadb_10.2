@@ -808,7 +808,7 @@ bool partition_info::has_unique_name(partition_element *element)
 }
 
 
-// Auto-creation configuration
+/* Auto-create history partition configuration */
 static const uint VERS_MIN_EMPTY= 1;
 static const uint VERS_MIN_INTERVAL= 3600; // seconds
 static const uint VERS_MIN_LIMIT= 1000;
@@ -854,8 +854,7 @@ void partition_info::vers_set_hist_part(THD *thd)
     }
     if (vers_info->limit >= VERS_MIN_LIMIT)
       goto add_hist_part;
-    else
-      return;
+    return;
   }
 
   if (vers_info->interval.is_set())
@@ -967,7 +966,7 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
                         d.part_name.str,
                         d.s->table_name.str);
   my_thread_init();
-  // initialize THD
+  /* Initialize THD */
   THD *thd= new THD(next_thread_id());
   if (unlikely(!thd))
   {
@@ -979,14 +978,13 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   thd->set_command(COM_DAEMON);
   thd->system_thread= SYSTEM_THREAD_GENERIC;
   thd->security_ctx->host_or_ip= "";
-  // FIXME: is it needed ALTER_ACL|LOCK_TABLES_ACL?
-  thd->security_ctx->master_access= ALTER_ACL|SUPER_ACL|LOCK_TABLES_ACL;
+  thd->security_ctx->master_access= ALTER_ACL;
   thd->log_all_errors= true;
   thd->start_time= d.start_time;
   thd->start_time_sec_part= d.start_time_sec_part;
   server_threads.insert(thd);
-  thd_proc_info(thd, "Background query");
-  // initialize parser
+  thd_proc_info(thd, "Add history partition");
+  /* Initialize parser */
   lex_start(thd);
   if (unlikely(parser_state.init(thd, d.query.str, d.query.length)))
   {
@@ -1012,7 +1010,7 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
     TABLE *table= open_ltable(thd, &table_list, TL_UNLOCK, 0);
     if (table && table->s == d.s)
     {
-      // Timeout new ALTER for 5 minutes in case of error
+      /* Timeout new ALTER for 5 minutes in case of error */
       d.s->vers_hist_part_timeout= thd->query_start() + VERS_ERROR_TIMEOUT;
       d.s->vers_hist_part_error= error;
       d.s->vers_altering= false;
@@ -1020,7 +1018,7 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
     if (table)
       close_thread_tables(thd);
   }
-  // In case of success ALTER invalidates TABLE_SHARE
+  /* In case of success ALTER invalidates TABLE_SHARE */
   thd->end_statement();
   thd->cleanup_after_query();
 err2:
@@ -1038,7 +1036,7 @@ void partition_info::vers_add_hist_part(THD *thd)
   pthread_t hThread;
   int error;
 
-  // Prevent spawning multiple instances of same task
+  /* Prevent spawning multiple instances of same task */
   bool altering;
   mysql_mutex_lock(&table->s->LOCK_share);
   altering= table->s->vers_altering;
@@ -1048,7 +1046,7 @@ void partition_info::vers_add_hist_part(THD *thd)
   if (altering)
     return;
 
-  // Choose first non-occupied name suffix starting from id + 1
+  /* Choose first non-occupied name suffix starting from id + 1 */
   uint32 suffix= vers_info->hist_part->id + 1;
   static const char *prefix= "p";
   static const size_t prefix_len= strlen(prefix);
