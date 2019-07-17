@@ -811,7 +811,7 @@ bool partition_info::has_unique_name(partition_element *element)
 // Auto-creation configuration
 static const uint VERS_MIN_EMPTY= 1;
 static const uint VERS_MIN_INTERVAL= 3600; // seconds
-static const uint VERS_MIN_LIMIT= 1; // FIXME: update
+static const uint VERS_MIN_LIMIT= 1000;
 static const uint VERS_ERROR_TIMEOUT= 300; // seconds
 
 
@@ -902,12 +902,14 @@ add_hist_part:
   case SQLCOM_UPDATE_MULTI:
   {
     time_t &timeout= table->s->vers_hist_part_timeout;
-    if (vers_info->hist_part->id + VERS_MIN_EMPTY == vers_info->now_part->id)
+    if (!thd->slave_thread &&
+        vers_info->hist_part->id + VERS_MIN_EMPTY == vers_info->now_part->id)
     {
       if (!timeout || timeout < thd->query_start())
         vers_add_hist_part(thd);
       else if (table->s->vers_hist_part_error)
       {
+        // FIXME: correct error code
         my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING),
                 table->s->db.str, table->s->table_name.str,
                 table->s->vers_hist_part_error);
