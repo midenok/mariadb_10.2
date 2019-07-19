@@ -890,10 +890,12 @@ void partition_info::vers_set_hist_part(THD *thd)
 add_hist_part:
   switch (thd->lex->sql_command)
   {
+  case SQLCOM_DELETE:
+    if (thd->lex->last_table()->vers_conditions.type == SYSTEM_TIME_HISTORY)
+      break;
   case SQLCOM_UPDATE:
   case SQLCOM_INSERT:
   case SQLCOM_INSERT_SELECT:
-  case SQLCOM_DELETE:
   case SQLCOM_LOAD:
   case SQLCOM_REPLACE:
   case SQLCOM_REPLACE_SELECT:
