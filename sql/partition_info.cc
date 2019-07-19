@@ -910,8 +910,7 @@ add_hist_part:
         vers_add_hist_part(thd);
       else if (table->s->vers_hist_part_error)
       {
-        // FIXME: correct error code
-        my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING),
+        my_error(WARN_VERS_HIST_PART_ERROR, MYF(ME_WARNING),
                 table->s->db.str, table->s->table_name.str,
                 table->s->vers_hist_part_error);
       }
@@ -964,9 +963,10 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   DBUG_ASSERT(arg);
   vers_add_hist_part_data &d= *(vers_add_hist_part_data *) arg;
   TABLE *table;
-  sql_print_information("Adding history partition `%s` for table `%s`",
+  sql_print_information("Adding history partition `%s` for table `%s`.`%s`",
                         d.part_name.str,
-                        d.s->table_name.str);
+                        d.db.str,
+                        d.table_name.str);
   my_thread_init();
   /* Initialize THD */
   THD *thd= new THD(next_thread_id());
@@ -1009,16 +1009,16 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
     thd->clear_error();
     TABLE_LIST table_list;
     table_list.init_one_table(&d.db, &d.table_name, &d.table_name, TL_UNLOCK);
-    TABLE *table= open_ltable(thd, &table_list, TL_UNLOCK, 0);
-    if (table && table->s == d.s)
+    TABLE_SHARE *s= tdc_acquire_share(thd, &table_list, GTS_TABLE);
+    if (s == d.s)
     {
       /* Timeout new ALTER for 5 minutes in case of error */
-      d.s->vers_hist_part_timeout= thd->query_start() + VERS_ERROR_TIMEOUT;
-      d.s->vers_hist_part_error= error;
-      d.s->vers_altering= false;
+      s->vers_hist_part_timeout= thd->query_start() + VERS_ERROR_TIMEOUT;
+      s->vers_hist_part_error= error;
+      s->vers_altering= false;
     }
-    if (table)
-      close_thread_tables(thd);
+    if (s)
+      tdc_release_share(s);
   }
   /* In case of success ALTER invalidates TABLE_SHARE */
   thd->end_statement();

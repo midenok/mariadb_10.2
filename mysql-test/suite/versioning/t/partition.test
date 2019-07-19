@@ -263,6 +263,17 @@ unlock tables;
 --replace_result $default_engine DEFAULT_ENGINE
 show create table t1;
 
+--echo ### Test ALTER failure
+set global lock_wait_timeout= 1;
+create or replace table t1 (x int) with system versioning partition by system_time limit 1000;
+lock tables t1 write;
+insert t1 values (1);
+--real_sleep 1
+--let $wait_condition= $wait_no_alter
+--source include/wait_condition.inc
+insert t1 values (1);
+unlock tables;
+
 --echo #
 --echo # Rotation by INTERVAL
 --echo #
