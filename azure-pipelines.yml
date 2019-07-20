@@ -5,514 +5,369 @@
 
 resources:
     containers:
+
     - container: centos-6
       image: mariadbe.azurecr.io/build-es:centos-6
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
+
     - container: centos-7
       image: mariadbe.azurecr.io/build-es:centos-7
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
+
+    - container: rhel-8
+      image: mariadbe.azurecr.io/build-es:rhel-8
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: sles-12
+      image: mariadbe.azurecr.io/build-es:sles-12
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: sles-15
+      image: mariadbe.azurecr.io/build-es:sles-15
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
     - container: ubuntu-1604
       image: mariadbe.azurecr.io/build-es:ubuntu-1604
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
+
     - container: ubuntu-1804
       image: mariadbe.azurecr.io/build-es:ubuntu-1804
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
+
     - container: debian-8
       image: mariadbe.azurecr.io/build-es:debian-8
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
+
     - container: debian-9
       image: mariadbe.azurecr.io/build-es:debian-9
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
 
+    - container: debian-10
+      image: mariadbe.azurecr.io/build-es:debian-10
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
 variables:
-  - group: enterprise-server-variables
-  - name: configuration
-    value: RelWithDebInfo
-  - name: platform
-    value: x64
+  configuration: RelWithDebInfo
+  platform: x64
+  TEST_RESULTS_FILE: 'test-results.log'
+  MTR_FEEDBACK_PLUGIN: 1
+  DEBIAN_FRONTEND: noninteractive
+  MYSQL_VARDIR: '/var/tmp/mtr'
+  DEB_LOCAL_LIST: '/etc/apt/sources.list.d/localInstall.list'
+  BUILDDIR: "$(Build.SourcesDirectory)/padding_for_CPACK_RPM_BUILD_SOURCE_DIRS_PREFIX_ON_ES_BACKUP_DEBUGSOURCE"
+#
+stages:
 
-jobs:
-- job: Source
+- stage: BuildPackages_Stage0
 
-  pool:
-    vmImage: 'ubuntu-16.04'
+  jobs:
 
-  strategy:
-    matrix:
-      ubuntu-1804:
-        containerImage: ubuntu-1804
+  - template: azure/stage0/build-source-tarball.yml
 
-  container: $[variables['containerImage']]
+  - template: azure/stage0/build-binary-tarballs.yml
+    parameters:
+      BuildType: RelWithDebInfo
+      Artifact: Release
 
-  steps:
-  # linux
-  - script: |
-      set -x
-      whoami
-      pwd
-      mkdir dist && cd dist
-      cmake ..
-      make dist
-      cp *.tar.gz $BUILD_ARTIFACTSTAGINGDIRECTORY
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: source
+  - template: azure/stage0/build-binary-tarballs.yml
+    parameters:
+      BuildType: Debug
+      Artifact: Debug
 
-- job: Bintar
-  timeoutInMinutes: 240
+  - template: azure/stage0/build-binary-tarballs.yml
+    parameters:
+      BuildType: Debug
+      Artifact: ASAN
+      CMakeArgs: '-DWITH_ASAN=ON'
 
-  pool:
-    vmImage: 'ubuntu-16.04'
+  - template: azure/stage0/build-rpm-packages.yml
+  - template: azure/stage0/build-deb-packages.yml
 
-  strategy:
-    matrix:
-      ubuntu-1604:
-        containerImage: ubuntu-1604
-      ubuntu-1804:
-        containerImage: ubuntu-1804
-      debian-8:
-        containerImage: debian-8
-      debian-9:
-        containerImage: debian-9
-      centos-6:
-        containerImage: centos-6
-      centos-7:
-        containerImage: centos-7
+  - template: azure/stage0/build-windows-packages.yml
+    parameters:
+      Artifact: Release
+      BuildType: RelWithDebInfo
 
-  container: $[variables['containerImage']]
+  - template: azure/stage0/build-windows-packages.yml
+    parameters:
+      Artifact: Debug
+      BuildType: Debug
 
-  steps:
-  - script: |
-      df -h
-      ls -la
-  - script: |
-      set -x
-      cd /tmp
-      curl -O ftp://ftp.askmonty.org/public/azure/gnutlsa-$(containerImage)-amd64.tar.bz2
-      sudo tar xvf gnutlsa*tar.bz2 -C /
-      sudo yum erase -y gnutls
-    displayName: 'prepare gnutls'
-    condition: in(variables['containerImage'], 'centos-6')
-  - script: |
-      set -x
-      sudo yum install -y Judy-devel cracklib-devel pam-devel
-      mkdir build && cd build
-      cmake .. -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
-        -DBUILD_CONFIG=enterprise
-      make -j`grep -c processor /proc/cpuinfo` package VERBOSE=1
-    displayName: 'build - release - centos-6'
-    condition: eq(variables['containerImage'], 'centos-6')
-  - script: |
-      set -x
-      sudo yum install -y systemd-devel cracklib-devel Judy-devel
-      mkdir build && cd build
-      cmake .. -DBUILD_CONFIG=enterprise 
-      make -j`grep -c processor /proc/cpuinfo` package VERBOSE=1
-    displayName: 'build - release'
-    condition: ne(variables['containerImage'], 'centos-6')
-  - task: CopyFiles@2
-    inputs:
-      targetFolder: '$(Build.ArtifactStagingDirectory)'
-      sourceFolder: '$(Build.SourcesDirectory)/build'
-      contents: '?(*.tar.gz)'
-    condition: succeededOrFailed()
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: $(containerImage)
-    condition: succeededOrFailed()
 
-- job: MTR
-  timeoutInMinutes: 240
-  dependsOn:
-  - Bintar
+  - template: azure/stage0/build-macos-packages.yml
 
-  pool:
-    vmImage: 'ubuntu-16.04'
+#################################
+########## STAGE 0 END ##########
+#################################
 
-  strategy:
-    matrix:
-      ubuntu-1604:
-        containerImage: ubuntu-1604
-      ubuntu-1804:
-        containerImage: ubuntu-1804
-      debian-8:
-        containerImage: debian-8
-      debian-9:
-        containerImage: debian-9
-      centos-6:
-        containerImage: centos-6
-      centos-7:
-        containerImage: centos-7
 
-  container: $[variables['containerImage']]
+#################################
+######### STAGE 1 BEGIN #########
+#################################
 
-  steps:
-  - checkout: none
-  - task: DownloadBuildArtifacts@0
-    inputs:
-      buildType: 'current'
-      specificBuildWithTriggering: true
-      downloadType: 'single'
-      artifactName: $(containerImage)
-      downloadPath: '$(System.ArtifactsDirectory)'
-  - script: |
-      set -x
-      whoami
-      df -h
-      pwd
-      ls -lah
-      ls -lah $(System.ArtifactsDirectory)
-      ls -lah $(System.ArtifactsDirectory)/$(containerImage)
-      cd $(System.ArtifactsDirectory)/$(containerImage)/
-      pwd
-      ls -lah
-      tar -zxf mariadb-enterprise*tar.gz
-      mv -vi mariadb-enterprise*/ build/
-    displayName: 'untar and show info'
-  - script: |
-      # This script section tests Galera 4 debs and thus it's not present in the 10.2 and 10.3 pipeline scripts
-      set -x
-      sudo apt update
-      sudo apt install -y software-properties-common dirmngr
-      sudo apt-add-repository http://downloads.mariadb.com/galera-test/repo/deb
-      sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xCE1A3DD5E3C94F49
-      sudo apt update
-      sudo apt install -y galera-enterprise-4 galera-arbitrator-4 rsync netcat socat
-      export WSREP_PROVIDER=/usr/lib/galera/libgalera_enterprise_smm.so
-      echo $WSREP_PROVIDER
+- stage: TestPackages_Stage1
+  dependsOn: BuildPackages_Stage0
+  condition: succeededOrFailed()
+  jobs:
 
-      ls -lah /usr/lib/galera/libgalera_enterprise_smm.so
-    displayName: 'install galera library - deb'
-    condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-8', 'debian-9')
-  - script: |
-      # This script section tests Galera 4 rpms and thus it's not present in the 10.2 and 10.3 pipeline scripts
-      set -x
-      sudo sh -c "echo '[galera]' > /etc/yum.repos.d/galera.repo"
-      sudo sh -c "echo 'name=galera' >> /etc/yum.repos.d/galera.repo"
-      sudo sh -c "echo 'baseurl=http://downloads.mariadb.com/galera-test/repo/rpm/rhel/\$releasever/\$basearch/' >> /etc/yum.repos.d/galera.repo"
-      sudo sh -c "echo 'gpgkey=https://downloads.mariadb.com/MariaDB/RPM-GPG-KEY-MariaDB-Ent' >> /etc/yum.repos.d/galera.repo"
-      sudo sh -c "echo 'gpgcheck=1' >> /etc/yum.repos.d/galera.repo"
-      sudo cat /etc/yum.repos.d/galera.repo
-      sudo yum install -y galera-enterprise-4 rsync socat lsof
-      export WSREP_PROVIDER=/usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
-      echo $WSREP_PROVIDER
-      ls -lah /usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so  
-    displayName: 'install galera library - rpm'
-    condition: in(variables['containerImage'], 'centos-7', 'centos-6')
-  - script: |
-      set -x
-      cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
-      pwd
-      ls -lah
-      exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
-          --mem --parallel=auto
-    displayName: 'mtr tests - release'
-  - script: |
-      set -x
-      export WSREP_PROVIDER=/usr/lib/galera/libgalera_enterprise_smm.so
-      echo WSREP_PROVIDER=$WSREP_PROVIDER
-      ls -lah $WSREP_PROVIDER
-      cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
-      ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
-    displayName: 'mtr tests - galera - deb'
-    condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-8', 'debian-9')
-  - script: |
-      set -x
-      export WSREP_PROVIDER=/usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
-      echo WSREP_PROVIDER=$WSREP_PROVIDER
-      ls -lah $WSREP_PROVIDER
-      cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
-      ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
-    displayName: 'mtr tests - galera - rpm'
-    condition: in(variables['containerImage'], 'centos-7', 'centos-6')
+  - job: TestTarball_Quick
+    timeoutInMinutes: 240
+    workspace:
+      clean: all
+    pool:
+      vmImage: 'ubuntu-16.04'
+    strategy:
+      matrix:
+        centos-7:
+          containerImage: centos-7
+        ubuntu-1804:
+          containerImage: ubuntu-1804
+    container: $[variables['containerImage']]
 
-- job: ASan
-  condition: 'false' #exclude ASan for now (Julien on the 27/06/2019 - task to rebuild it is https://jira.mariadb.org/browse/MENT-198)
-  timeoutInMinutes: 240
+    steps:
 
-  pool:
-    vmImage: 'ubuntu-16.04'
+    - checkout: none
+    - template: azure/fetch-unpack-tarball.yml
+      parameters:
+        Artifact: Release
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
+        TestName: 'Quick Test'
+    # - template: azure/tests/run-mtr-test.yml
+    #   parameters:
+    #     MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 -mem --testcase-timeout=90'
+    #     TestName: 'Galera Test'
 
-  strategy:
-    matrix:
-      ubuntu-1604:
-        containerImage: ubuntu-1604
+  - job: TestRPMs_Quick
+    timeoutInMinutes: 280
+    workspace:
+      clean: all
+    strategy:
+      maxParallel: 2
+      matrix:
+        centos-6:
+          poolName: 'centos-6'
+        centos-7:
+          poolName: 'centos-7'
+    pool:
+      name: $(poolName)
 
-  container: $[variables['containerImage']]
+    steps:
 
-  steps:
-  - script: |
-      set -x
-      mkdir build && cd build
-      cmake .. -DCMAKE_BUILD_TYPE=Debug -DWITH_ASAN=1
-      make -j`grep -c processor /proc/cpuinfo` package
-    displayName: 'build - release, asan'
-    failOnStderr: false
-  - script: |
-      set -x
-      cd build/mysql-test
-      exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
-          --mem --parallel=auto
-      exit 0
-    displayName: 'mtr tests'
-    failOnStderr: false
-  - task: CopyFiles@2
-    inputs:
-      targetFolder: '$(Build.ArtifactStagingDirectory)'
-      sourceFolder: '$(Build.SourcesDirectory)'
-      contents: '?(*.tar.gz)'
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: $(containerImage)
+    - checkout: none
+    - template: azure/prepare-vm-for-installation.yml
+    - template: azure/install-galera.yml
 
-- job: Debug
-  timeoutInMinutes: 240
+    - task: DownloadBuildArtifacts@0
+      inputs:
+        buildType: 'current'
+        specificBuildWithTriggering: true
+        downloadType: 'single'
+        artifactName: '$(poolName)-RPMS'
+        downloadPath: '$(System.ArtifactsDirectory)/current'
 
-  pool:
-    vmImage: 'ubuntu-16.04'
+    - bash: |
+        set -x
+        ls -la '$(System.ArtifactsDirectory)'
+        sudo yum -y --nogpgcheck install '$(System.ArtifactsDirectory)'/current/'$(poolName)'-RPMS/*.rpm
+      displayName: "Install built RPM packages on Centos/RHEL"
+      condition: in(variables['poolName'], 'centos-6', 'centos-7', 'rhel-8')
 
-  strategy:
-    matrix:
-      centos-7:
-        containerImage: centos-7
+    #- bash: |
+        #set -x
+        #ls -la '$(System.ArtifactsDirectory)'
+        #sudo zypper -n install '$(System.ArtifactsDirectory)'/current/'$(poolName)'-RPMS/*.rpm
+      #displayName: "Install built RPM packages on SLES"
+      #condition: in(variables['poolName'], 'sles-12', 'sles-15')
 
-  container: $[variables['containerImage']]
 
-  steps:
-  - script: |
-      set -x
-      cmake . -DBUILD_CONFIG=enterprise -DCMAKE_BUILD_TYPE=Debug
-      make -j`grep -c processor /proc/cpuinfo` package
-    displayName: 'build - debug'
-    failOnStderr: false
-  - script: |
-      set -x
-      cd mysql-test
-      exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 \
-          --mem --max-test-fail=20 --debug-server --parallel=auto
-    displayName: 'mtr tests - debug'
-    failOnStderr: false
-  - task: CopyFiles@2
-    inputs:
-      targetFolder: '$(Build.ArtifactStagingDirectory)'
-      sourceFolder: '$(Build.SourcesDirectory)'
-      contents: '?(*.tar.gz)'
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: $(containerImage)
+    - template: azure/tests/select-insert-test.yml
+    - template: azure/tests/run-acceptance-tests.yml
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
+        TestName: 'RPM Quick Test'
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 -mem --testcase-timeout=90'
+        TestName: 'Galera Test'
 
-- job: DEB
-  timeoutInMinutes: 240
+  - job: TestDEBs_Quick
+    timeoutInMinutes: 280
+    workspace:
+      clean: all
+    strategy:
+      maxParallel: 1
+      matrix:
+        ubuntu-1804:
+          poolName: 'ubuntu-1804'
+        debian-10:
+          poolName: 'debian-10'
+    pool:
+      name: $(poolName)
 
-  pool:
-    vmImage: 'ubuntu-16.04'
+    steps:
 
-  strategy:
-    matrix:
-      ubuntu-1604:
-        containerImage: ubuntu-1604
-      ubuntu-1804:
-        containerImage: ubuntu-1804
-      debian-8:
-        containerImage: debian-8
-      debian-9:
-        containerImage: debian-9
+    - checkout: none
+    - template: azure/prepare-vm-for-installation.yml
+    - template: azure/install-galera.yml
 
-  container: $[variables['containerImage']]
+    - task: DownloadBuildArtifacts@0
+      inputs:
+        buildType: 'current'
+        specificBuildWithTriggering: true
+        downloadType: 'single'
+        artifactName: '$(poolName)-DEBS'
+        downloadPath: '$(System.ArtifactsDirectory)/current'
 
-  steps:
-  # linux
-  - script: |
-      set -x
-      sed s/"dch -b"/"dch -b --force-distribution"/g -i debian/autobake-deb.sh
-    condition: eq(variables['containerImage'], 'debian-8')
-    displayName: 'Fix for Debian 8'
-  - script: |
-      set -x
-      debian/autobake-deb.sh
-    condition: eq( variables['Agent.OS'], 'Linux' )
-    displayName: 'build'
-  - script: |
-      set -x
-      pwd
-      mkdir -vp $BUILD_ARTIFACTSTAGINGDIRECTORY/binary
-      mkdir -vp $BUILD_ARTIFACTSTAGINGDIRECTORY/source
-      ls -lah ..
-      echo $BUILD_SOURCESDIRECTORY
-      echo $BUILD_ARTIFACTSTAGINGDIRECTORY
-      cp -v ../*.deb $BUILD_ARTIFACTSTAGINGDIRECTORY/binary/
-      cp -v ../*.changes $BUILD_ARTIFACTSTAGINGDIRECTORY/binary/
-      cp -v ../*.ddeb $BUILD_ARTIFACTSTAGINGDIRECTORY/binary/
-      cp -v ../*.buildinfo $BUILD_ARTIFACTSTAGINGDIRECTORY/binary/
-      cp -v ../*.xz $BUILD_ARTIFACTSTAGINGDIRECTORY/binary/
-      cp -v ../*.dsc $BUILD_ARTIFACTSTAGINGDIRECTORY/binary/
-      cd $BUILD_ARTIFACTSTAGINGDIRECTORY
-      dpkg-scanpackages binary /dev/null | gzip -9c > binary/Packages.gz
-      dpkg-scansources source /dev/null | gzip -9c > source/Sources.gz
-    displayName: 'publish'
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: $(containerImage)-deb
+    - bash: |
+        set -x
+        ls -la '$(System.ArtifactsDirectory)'
 
-- job: RPM
-  timeoutInMinutes: 240
+        sudo sh -c "echo 'deb [trusted=yes] file://$(System.ArtifactsDirectory)/current/$(poolName)-DEBS binary/' > ${DEB_LOCAL_LIST}"
+        sudo apt update
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get --allow-unauthenticated -y -f install \
+          mariadb-server mariadb-test mariadb-backup mariadb-plugin-connect \
+          mariadb-plugin-cracklib-password-check mariadb-plugin-gssapi-client \
+          mariadb-plugin-gssapi-server mariadb-plugin-mroonga mariadb-plugin-oqgraph \
+          mariadb-plugin-rocksdb mariadb-plugin-spider
+        dpkg -l | grep -iE "galera|maria"
+      displayName: "Install built DEB packages"
 
-  pool:
-    vmImage: 'ubuntu-16.04'
+    - template: azure/tests/select-insert-test.yml
+    - template: azure/tests/run-acceptance-tests.yml
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
+        TestName: 'DEB Quick Test'
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 -mem --testcase-timeout=90'
+        TestName: 'Galera Test'
 
-  strategy:
-    matrix:
-      centos-6:
-        containerImage: centos-6
-      centos-7:
-        containerImage: centos-7
+  - job: TestMSI_Quick
+    timeoutInMinutes: 10
+    pool:
+      vmImage: 'windows-2019'
 
-  container: $[variables['containerImage']]
+    steps:
 
-  steps:
-  - script: |
-      set -x
-      whoami
-      pwd
-    displayName: 'show info'
-  - script: |
-      set -x
-      sudo yum install -y Judy-devel cracklib-devel pam-devel
-      curl -o ../MariaDB-shared-5.3.x.rpm http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
-      curl -o ../MariaDB-shared-10.1.x.rpm http://yum.mariadb.org/10.1/centos6-amd64/rpms/MariaDB-10.1.40-centos6-x86_64-compat.rpm
-      cmake . -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
-      make -j`grep -c processor /proc/cpuinfo` package
-    displayName: 'cmake centos 6'
-    condition: eq(variables['containerImage'], 'centos-6')
-  - script: |
-      set -x
-      sudo yum install -y systemd-devel cracklib-devel Judy-devel
-      curl -o ../MariaDB-shared-5.3.x.rpm http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
-      curl -o ../MariaDB-shared-10.1.x.rpm http://yum.mariadb.org/10.1/centos7-amd64/rpms/MariaDB-shared-10.1.40-1.el7.centos.x86_64.rpm
-      cmake . -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
-      make -j`grep -c processor /proc/cpuinfo` package
-    displayName: 'cmake centos 7'
-    condition: eq(variables['containerImage'], 'centos-7')
-  - script: |
-      set -x
-      pwd
-      find . -type f -name "*.rpm"
-      echo $BUILD_SOURCESDIRECTORY
-      echo $BUILD_ARTIFACTSTAGINGDIRECTORY
-      cp *.rpm $BUILD_ARTIFACTSTAGINGDIRECTORY
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: $(containerImage)-rpm
+    - checkout: none
+    - task: DownloadBuildArtifacts@0
+      inputs:
+        buildType: 'current'
+        specificBuildWithTriggering: true
+        downloadType: 'single'
+        artifactName: Windows-Release
+        downloadPath: '$(System.ArtifactsDirectory)'
 
-- job: MacOS
-  condition: false #exclude MacOS for now
+    - powershell: |
+        Set-PSDebug -Trace 1
+        $MSI=(Get-Childitem -Path $(System.ArtifactsDirectory)\Windows-Release -Filter *.msi).fullname
+        Start-Process msiexec.exe -Wait -ArgumentList "/I $MSI PASSWORD=tESt123%_password SERVICENAME=MariaDB-Enterprise /qn /l*v .\msi-install-log.txt"
 
-  pool:
-    vmImage: 'macOS-10.13'
-  steps:
-  # - script: cmake . -DBUILD_CONFIG=mysql_release -DWITH_SSL=bundled -DTOKUDB_OK=0 -DWITH_JEMALLOC=no -DMYSQL_UNIX_ADDR=/usr/local/mariadb/data/mariadb.sock -DCMAKE_INSTALL_PREFIX=/usr/local/mariadb/server -DINSTALL_MYSQLDATADIR=/usr/local/mariadb/data -DDEFAULT_SYSCONFDIR=/usr/local/mariadb/etc -DWITH_EMBEDDED_SERVER=OFF -DWITH_UNIT_TESTS=OFF -DINSTALL_MYSQLTESTDIR= -DWITH_WSREP=OFF
-  - script: brew install jemalloc mhash curl gnutls
-  - script: cmake . -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/ -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib -DBUILD_CONFIG=enterprise
-    displayName: 'cmake'
-    failOnStderr: false
-  - script: sed -i '' s/SIZEOF_CHARP/"sizeof(char *)"/g libmariadb/libmariadb/ma_dtoa.c
-  - script: make -j5 package
-    displayName: 'make'
-    failOnStderr: false
-  #- script: cd support-files/macOSpkg && ./mkpkg ../../mariadb*tar.gz && mv -vi *.pkg ../../
-  - task: CopyFiles@2
-    inputs:
-      targetFolder: '$(Build.ArtifactStagingDirectory)'
-      sourceFolder: '$(Build.SourcesDirectory)'
-      contents: '?(*.tar.gz|*.pkg)'
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: macOS-10.13
+        $ProgramFilesPath = [Environment]::GetEnvironmentVariable("ProgramW6432")
+        Get-Childitem -Path $ProgramFilesPath -Recurse -Filter mysql.exe
 
-- job: Windows
-  timeoutInMinutes: 180
+        Get-Content -Path .\msi-install-log.txt
+      displayName: "Install Windows MSI package"
 
-  pool:
-    vmImage: 'windows-2019'
-  steps:
+    - template: azure/tests/win-select-insert.yml
+#
+#################################
+########## STAGE 1 END ##########
+#################################
+#
 
-  - script: |
-      @echo on
-      git config --global core.autocrlf input
-      set
+#
+#################################
+######### STAGE 2 BEGIN #########
+#################################
+#
+# Run install test for RPM/DEB packages
 
-  - checkout: self
+# Run medium MTR test (?)
+# Run acceptance tests
+# Run install test on Windows
 
-  - powershell: |
-      Import-Module BitsTransfer
-      Start-BitsTransfer -Source https://cygwin.com/setup-x86_64.exe -Destination setup-x86_64.exe
-      # Start-FileDownload https://cygwin.com/setup-x86_64.exe -FileName setup-x86_64.exe -Timeout 900000
-      dir
-      .\setup-x86_64.exe -B --packages "bison" -q -R C:\cygwin64 -s http://cygwin.mirror.constant.com -a x86_64 -v
-    displayName: 'install cygwin - bison'
-    failOnStderr: false
-    ignoreLASTEXITCODE: true
+#
+# Checks if binary packages are OK on all supported platforms
+# Checks if functionality is OK
+# Checks if replication is OK
+#
+- stage: TestPackages_Stage2
+  dependsOn: BuildPackages_Stage0
+  condition: succeededOrFailed()
 
-  - task: DownloadSecureFile@1
-    inputs:
-      secureFile: win-signing.p12
+  jobs:
 
-  - powershell: |
-      Import-PfxCertificate -FilePath $(DownloadSecureFile.secureFilePath) -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String $(win-signkey-password) -AsPlainText -Force)
-    displayName: 'import signing certificate'
+  - job: TestTarball_Full
+    timeoutInMinutes: 600
+    #condition: false
 
-  - script: |
-      @echo on
-      SET PATH=%PATH%;C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64
-      md win_build
-      cd win_build
-      cmake .. -Wno-deprecated -Wno-dev -DBUILD_CONFIG=enterprise -DPLUGIN_AWS_KEY_MANAGEMENT=NO -DBISON_EXECUTABLE=C:\cygwin64\bin\bison -DWITH_EMBEDDED_SERVER=0 -DSIGNCODE=ON -DWITH_UNIT_TESTS=0 -DMYSQL_MAINTAINER_MODE=ERR
-    condition: eq( variables['Agent.OS'], 'Windows_NT' )
-    displayName: 'CMake'
-    failOnStderr: false
+    workspace:
+      clean: all
+    pool:
+      vmImage: 'ubuntu-16.04'
+    strategy:
+      matrix:
+        centos-6:
+          containerImage: centos-6
+        centos-7:
+          containerImage: centos-7
+        sles-12:
+          containerImage: sles-12
+        sles-15:
+          containerImage: sles-15
+        debian-8:
+          containerImage: debian-8
+        debian-9:
+          containerImage: debian-9
+        debian-10:
+          containerImage: debian-10
+        ubuntu-1604:
+          containerImage: ubuntu-1604
+        ubuntu-1804:
+          containerImage: ubuntu-1804
+    container: $[variables['containerImage']]
 
-  - script: |
-      @echo on
-      pwd
-      cd win_build
-      cmake --build . --config RelWithDebInfo --verbose --parallel 5
-    displayName: 'build binaries'
+    steps:
 
-  - script: |
-      @echo on
-      pwd
-      cd win_build
-      cmake --build . --config RelWithDebInfo --target win_package
-      cmake --build . --config RelWithDebInfo --target MSI
-    displayName: 'build package'
+    - checkout: none
+    - template: azure/install-galera.yml
+    - template: azure/fetch-unpack-tarball.yml
+    - template: azure/stage2-mtr-tests.yml
 
-  - task: CopyFiles@2
-    inputs:
-      sourceFolder: '$(Build.SourcesDirectory)'
-      contents: 'win_build\?(*.msi|*.zip)'
-      targetFolder: '$(Build.ArtifactStagingDirectory)'
+#
+#
+#################################
+########## STAGE 2 END ##########
+#################################
+#
+#
+#################################
+######### STAGE 3 BEGIN #########
+#################################
+#
+# Run upgrade test for RPM/DEB packages
+# Run full MTR set on packages
+#
+#################################
+########## STAGE 3 END ##########
+#################################
+#
 
-  - script: |
-      @echo on
-      cd win_build\mysql-test
-      C:\Strawberry\perl\bin\perl.exe mysql-test-run.pl --suite=main,innodb,mariabackup,rocksdb,plugins --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20  --parallel=5
-    displayName: 'mtr tests'
 
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: Windows
-    condition: eq( variables['Agent.OS'], 'Windows_NT' )
+

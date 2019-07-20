@@ -1,0 +1,28 @@
+
+jobs:
+
+- job: BuildSourceTarball
+  pool:
+    vmImage: 'ubuntu-16.04'
+  strategy:
+    matrix:
+      ubuntu-1804:
+        containerImage: ubuntu-1804
+  container: $[variables['containerImage']]
+
+  steps:
+
+  - bash: |
+      set -x
+      whoami
+      pwd
+      mkdir dist && cd dist
+      cmake ..
+      make dist
+      cp *.tar.gz $BUILD_ARTIFACTSTAGINGDIRECTORY
+    displayName: Build Source Tarball
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: source
