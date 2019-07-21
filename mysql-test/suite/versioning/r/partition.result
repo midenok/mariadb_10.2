@@ -313,6 +313,7 @@ t1	CREATE TABLE `t1` (
  PARTITION `p1` HISTORY ENGINE = DEFAULT_ENGINE,
  PARTITION `pn` CURRENT ENGINE = DEFAULT_ENGINE)
 ### Test ALTER failure
+set @lock_wait_timeout0= @@global.lock_wait_timeout;
 set global lock_wait_timeout= 1;
 create or replace table t1 (x int) with system versioning partition by system_time limit 1000;
 lock tables t1 write;
@@ -321,6 +322,7 @@ insert t1 values (1);
 Warnings:
 Warning	4164	Versioned table `test`.`t1`: adding HISTORY partition failed with error 1205, see error log for details
 unlock tables;
+set global lock_wait_timeout= @lock_wait_timeout0;
 #
 # Rotation by INTERVAL
 #
@@ -414,6 +416,16 @@ p2sp0	2001-02-06 00:00:00
 p2sp1	2001-02-06 00:00:00
 pnsp0	CURRENT
 pnsp1	CURRENT
+select * from t1 partition (p1);
+i
+1
+2
+select * from t1 partition (p0);
+i
+5
+select * from t1 partition (p2);
+i
+alter table t1 rebuild partition p0, p1, p2;
 select * from t1 partition (p1);
 i
 1
@@ -646,9 +658,9 @@ i	row_end
 select *, row_end from t1 partition (p1);
 i	row_end
 3	2000-01-04 00:00:01.000000
-set timestamp= unix_timestamp('2000-01-01 00:00:00');
 unlock tables;
 # and this is how it usually goes:
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
 create or replace table t1 (i int) with system versioning
 partition by system_time interval 1 day
 partitions 3;
@@ -667,6 +679,19 @@ update t1 set i= i + 1;
 Warnings:
 Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
 alter table t1 add partition (partition p2 history, partition p3 history);
+select *, row_end from t1 partition (p0);
+i	row_end
+0	2000-01-01 00:00:01.000000
+select *, row_end from t1 partition (p1);
+i	row_end
+1	2000-01-02 00:00:01.000000
+2	2000-01-03 00:00:01.000000
+3	2000-01-04 00:00:01.000000
+select *, row_end from t1 partition (p2);
+i	row_end
+select *, row_end from t1 partition (p3);
+i	row_end
+alter table t1 rebuild partition p0, p1, p2, p3;
 select *, row_end from t1 partition (p0);
 i	row_end
 0	2000-01-01 00:00:01.000000

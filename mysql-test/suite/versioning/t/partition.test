@@ -5,7 +5,6 @@
 set time_zone= "+00:00";
 call mtr.add_suppression("need more HISTORY partitions");
 call mtr.add_suppression("Duplicate partition name");
-# call mtr.add_suppression("Table .* doesn't exist");
 let $wait_no_alter= select count(*) = 0 from information_schema.processlist where info like 'ALTER TABLE %';
 let $wait_alter= select count(*) > 0 from information_schema.processlist where info like 'ALTER TABLE %';
 
@@ -264,6 +263,7 @@ unlock tables;
 show create table t1;
 
 --echo ### Test ALTER failure
+set @lock_wait_timeout0= @@global.lock_wait_timeout;
 set global lock_wait_timeout= 1;
 create or replace table t1 (x int) with system versioning partition by system_time limit 1000;
 lock tables t1 write;
@@ -273,6 +273,7 @@ insert t1 values (1);
 --source include/wait_condition.inc
 insert t1 values (1);
 unlock tables;
+set global lock_wait_timeout= @lock_wait_timeout0;
 
 --echo #
 --echo # Rotation by INTERVAL
@@ -334,6 +335,11 @@ set timestamp=unix_timestamp('2001-02-04 10:30:10');
 update t1 set i=6 where i=5;
 
 select subpartition_name, partition_description from information_schema.partitions where table_schema='test' and table_name='t1';
+select * from t1 partition (p1);
+select * from t1 partition (p0);
+select * from t1 partition (p2);
+
+alter table t1 rebuild partition p0, p1, p2;
 select * from t1 partition (p1);
 select * from t1 partition (p0);
 select * from t1 partition (p2);
@@ -488,12 +494,12 @@ update t1 set i= i + 1;
 select *, row_end from t1 partition (p0);
 select *, row_end from t1 partition (p1);
 
-set timestamp= unix_timestamp('2000-01-01 00:00:00');
 unlock tables;
 --let $wait_condition= $wait_no_alter
 --source include/wait_condition.inc
 
 --echo # and this is how it usually goes:
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
 create or replace table t1 (i int) with system versioning
 partition by system_time interval 1 day
 partitions 3;
@@ -510,11 +516,17 @@ set timestamp= unix_timestamp('2000-01-04 00:00:01');
 update t1 set i= i + 1;
 
 alter table t1 add partition (partition p2 history, partition p3 history);
-
 select *, row_end from t1 partition (p0);
 select *, row_end from t1 partition (p1);
 select *, row_end from t1 partition (p2);
 select *, row_end from t1 partition (p3);
+
+alter table t1 rebuild partition p0, p1, p2, p3;
+select *, row_end from t1 partition (p0);
+select *, row_end from t1 partition (p1);
+select *, row_end from t1 partition (p2);
+select *, row_end from t1 partition (p3);
+
 unlock tables;
 --let $wait_condition= $wait_no_alter
 --source include/wait_condition.inc
