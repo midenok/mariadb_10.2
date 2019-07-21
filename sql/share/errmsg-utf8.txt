@@ -7856,7 +7856,7 @@ ER_VERS_PERIOD_COLUMNS
         eng "PERIOD FOR SYSTEM_TIME must use columns %`s and %`s"
 
 ER_PART_WRONG_VALUE
-        eng "Wrong parameters for partitioned %`s: wrong value for '%s'"
+        eng "Wrong parameters for partitioned %`s: wrong value for %s"
 
 ER_VERS_WRONG_PARTS
         eng "Wrong partitions for %`s: must have at least one HISTORY and exactly one last CURRENT"
@@ -7945,3 +7945,5 @@ ER_PART_STARTS_BEYOND_INTERVAL
         eng "%`s: STARTS is later than query time, first history partition may exceed INTERVAL value"
 ER_BLACKBOX_ERROR
 	eng "%s Black Box failed: %s"
+WARN_VERS_HIST_PART_ERROR
+        eng "Versioned table %`s.%`s: adding HISTORY partition failed with error %u, see error log for details"

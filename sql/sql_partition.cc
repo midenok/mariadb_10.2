@@ -2584,11 +2584,15 @@ char *generate_partition_syntax(THD *thd, partition_info *part_info,
         err+= str.append(ctime, ctime_len);
         err+= str.append('\'');
       }
+      if (vers_info->auto_inc)
+        err+= str.append(STRING_WITH_LEN(" AUTO_INCREMENT"));
     }
-    if (vers_info->limit)
+    else if (vers_info->limit)
     {
       err+= str.append(STRING_WITH_LEN("LIMIT "));
       err+= str.append_ulonglong(vers_info->limit);
+      if (vers_info->auto_inc)
+        err+= str.append(STRING_WITH_LEN(" AUTO_INCREMENT"));
     }
   }
   else if (part_info->part_expr)
@@ -4785,7 +4789,6 @@ static void check_datadir_altered_for_innodb(THD *thd,
 
 uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
                            HA_CREATE_INFO *create_info,
-                           Alter_table_ctx *alter_ctx,
                            bool *partition_changed,
                            bool *fast_alter_table)
 {
@@ -4880,8 +4883,8 @@ uint prep_alter_part_table(THD *thd, TABLE *table, Alter_info *alter_info,
       object to allow fast_alter_partition_table to perform the changes.
     */
     DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE,
-                                               alter_ctx->db.str,
-                                               alter_ctx->table_name.str,
+                                               table->s->db.str,
+                                               table->s->table_name.str,
                                                MDL_INTENTION_EXCLUSIVE));
 
     tab_part_info= table->part_info;
@@ -5293,7 +5296,9 @@ that are reorganised.
               now_part= el;
             }
           }
-          if (*fast_alter_table && tab_part_info->vers_info->interval.is_set())
+          if (*fast_alter_table &&
+              !(alter_info->partition_flags & ALTER_PARTITION_AUTO_HIST) &&
+              tab_part_info->vers_info->interval.is_set())
           {
             partition_element *hist_part= tab_part_info->vers_info->hist_part;
             if (hist_part->range_value <= thd->query_start())
@@ -7197,9 +7202,10 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
       goto err;
     }
   }
-  else if ((alter_info->partition_flags & ALTER_PARTITION_ADD) &&
+  else if ((alter_info->partition_flags & ALTER_PARTITION_AUTO_HIST) || (
+           (alter_info->partition_flags & ALTER_PARTITION_ADD) &&
            (part_info->part_type == RANGE_PARTITION ||
-            part_info->part_type == LIST_PARTITION))
+            part_info->part_type == LIST_PARTITION)))
   {
     /*
       ADD RANGE/LIST PARTITIONS
