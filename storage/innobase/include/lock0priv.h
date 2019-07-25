@@ -71,22 +71,22 @@ ib_lock_t::type_mode_string() const
 {
 	std::ostringstream sout;
 	sout << type_string();
-	sout << " | " << lock_mode_string(mode());
+	sout << "|" << lock_mode_string(mode());
 
 	if (is_record_not_gap()) {
-		sout << " | LOCK_REC_NOT_GAP";
+		sout << "|REC_NOT_GAP";
 	}
 
 	if (is_waiting()) {
-		sout << " | LOCK_WAIT";
+		sout << "|WAIT";
 	}
 
 	if (is_gap()) {
-		sout << " | LOCK_GAP";
+		sout << "|GAP";
 	}
 
 	if (is_insert_intention()) {
-		sout << " | LOCK_INSERT_INTENTION";
+		sout << "|INSERT_INTENTION";
 	}
 	return(sout.str());
 }
@@ -95,8 +95,9 @@ inline
 std::ostream&
 ib_lock_t::print(std::ostream& out) const
 {
-	out << "[lock_t: type_mode=" << type_mode << "("
-		<< type_mode_string() << ")";
+	out << "[lock_t: trx=" << trx << " (" << trx->lock.trx_locks.count
+		<< ":" << trx->lock.table_locks.size() << "), "
+		<< "type_mode=" << type_mode << "=" << type_mode_string() << " ";
 
 	if (is_record_lock()) {
 		out << un_member.rec_lock;
@@ -527,6 +528,8 @@ inline byte lock_rec_reset_nth_bit(lock_t* lock, ulint i)
 		--lock->trx->lock.n_rec_locks;
 	}
 
+	DBUG_LOG("ib_lock", "+BIT("<< lock << ", " << i << ") " << *lock);
+
 	return(bit);
 }
 
@@ -670,6 +673,7 @@ inline void lock_set_lock_and_trx_wait(lock_t* lock, trx_t* trx)
 
 	trx->lock.wait_lock = lock;
 	lock->type_mode |= LOCK_WAIT;
+	DBUG_LOG("ib_lock", "+WAIT("<< lock << ") " << *lock);
 }
 
 /** Reset the wait status of a lock.
@@ -682,6 +686,7 @@ inline void lock_reset_lock_and_trx_wait(lock_t* lock)
 	      || lock->trx->lock.wait_lock == lock);
 	lock->trx->lock.wait_lock = NULL;
 	lock->type_mode &= ~LOCK_WAIT;
+	DBUG_LOG("ib_lock", "-WAIT("<< lock << ") " << *lock);
 }
 
 #include "lock0priv.ic"

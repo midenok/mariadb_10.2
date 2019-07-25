@@ -56,19 +56,19 @@ const char* lock_mode_string(enum lock_mode mode)
 {
 	switch (mode) {
 	case LOCK_IS:
-		return("LOCK_IS");
+		return("IS");
 	case LOCK_IX:
-		return("LOCK_IX");
+		return("IX");
 	case LOCK_S:
-		return("LOCK_S");
+		return("S");
 	case LOCK_X:
-		return("LOCK_X");
+		return("X");
 	case LOCK_AUTO_INC:
-		return("LOCK_AUTO_INC");
+		return("AUTO_INC");
 	case LOCK_NONE:
-		return("LOCK_NONE");
+		return("NONE");
 	case LOCK_NONE_UNSET:
-		return("LOCK_NONE_UNSET");
+		return("NONE_UNSET");
 	default:
 		ut_error;
 	}
@@ -254,9 +254,9 @@ struct ib_lock_t
 	{
 		switch (type_mode & LOCK_TYPE_MASK) {
 		case LOCK_REC:
-			return("LOCK_REC");
+			return("REC");
 		case LOCK_TABLE:
-			return("LOCK_TABLE");
+			return("TABLE");
 		default:
 			ut_error;
 		}

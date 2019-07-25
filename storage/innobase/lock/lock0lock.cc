@@ -1411,6 +1411,7 @@ lock_rec_create_low(
 		lock->un_member.rec_lock.n_bits = 8;
  	}
 	lock_rec_bitmap_reset(lock);
+	DBUG_LOG("ib_lock", "ADD("<< lock << ") " << *lock);
 	lock_rec_set_nth_bit(lock, heap_no);
 	index->table->n_rec_locks++;
 	ut_ad(index->table->get_ref_count() > 0 || !index->table->can_be_evicted);
@@ -3578,6 +3579,7 @@ lock_table_create(
 		lock_set_lock_and_trx_wait(lock, trx);
 	}
 
+	DBUG_LOG("ib_lock", "ADD("<< lock << ") " << *lock);
 	lock->trx->lock.table_locks.push_back(lock);
 
 	MONITOR_INC(MONITOR_TABLELOCK_CREATED);
@@ -3712,6 +3714,8 @@ lock_table_remove_low(
 
 	UT_LIST_REMOVE(trx->lock.trx_locks, lock);
 	ut_list_remove(table->locks, lock, TableLockGetNode());
+
+	DBUG_LOG("ib_lock", "DEL("<< lock << ") " << *lock);
 
 	MONITOR_INC(MONITOR_TABLELOCK_REMOVED);
 	MONITOR_DEC(MONITOR_NUM_TABLELOCK);
