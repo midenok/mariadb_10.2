@@ -266,7 +266,7 @@ lock_wait_suspend_thread(
 		was chosen as a deadlock victim: no need to suspend */
 
 		if (trx->lock.was_chosen_as_deadlock_victim) {
-
+			ut_ad(0);
 			trx->error_state = DB_DEADLOCK;
 			trx->lock.was_chosen_as_deadlock_victim = false;
 		}
@@ -449,7 +449,7 @@ lock_wait_release_thread_if_suspended(
 		trx_t*	trx = thr_get_trx(thr);
 
 		if (trx->lock.was_chosen_as_deadlock_victim) {
-
+			ut_ad(0);
 			trx->error_state = DB_DEADLOCK;
 			trx->lock.was_chosen_as_deadlock_victim = false;
 		}

@@ -1738,6 +1738,7 @@ lock_rec_enqueue_waiting(
 		ut_ad(victim == trx);
 		lock_reset_lock_and_trx_wait(lock);
 		lock_rec_reset_nth_bit(lock, heap_no);
+		ut_ad(0);
 		return DB_DEADLOCK;
 	}
 
@@ -3780,6 +3781,7 @@ lock_table_enqueue_waiting(
 		lock_table_remove_low(lock);
 		lock_reset_lock_and_trx_wait(lock);
 
+		ut_ad(0);
 		return(DB_DEADLOCK);
 
 	} else if (trx->lock.wait_lock == NULL) {
@@ -6346,6 +6348,7 @@ static inline dberr_t lock_trx_handle_wait_low(trx_t* trx)
 	ut_ad(trx_mutex_own(trx));
 
 	if (trx->lock.was_chosen_as_deadlock_victim) {
+		ut_ad(0);
 		return DB_DEADLOCK;
 	}
 	if (!trx->lock.wait_lock) {
