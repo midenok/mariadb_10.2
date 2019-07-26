@@ -1440,7 +1440,7 @@ lock_rec_create_low(
 		 */
 		trx_mutex_enter(c_lock->trx);
 		if (c_lock->trx->lock.que_state == TRX_QUE_LOCK_WAIT) {
-
+			DBUG_LOG("ib_lock", VICTIM(c_lock->trx) << *c_lock);
 			c_lock->trx->lock.was_chosen_as_deadlock_victim = TRUE;
 
 			if (wsrep_debug) {
@@ -3547,6 +3547,7 @@ lock_table_create(
 		trx_mutex_enter(c_lock->trx);
 
 		if (c_lock->trx->lock.que_state == TRX_QUE_LOCK_WAIT) {
+			DBUG_LOG("ib_lock", VICTIM(c_lock->trx) << *c_lock);
 			c_lock->trx->lock.was_chosen_as_deadlock_victim = TRUE;
 
 			if (wsrep_debug) {
@@ -3763,6 +3764,7 @@ lock_table_enqueue_waiting(
 
 #ifdef WITH_WSREP
 	if (trx->lock.was_chosen_as_deadlock_victim && wsrep_on_trx(trx)) {
+		DBUG_LOG("ib_lock", "DEADLOCK(" << trx << ") ");
 		return(DB_DEADLOCK);
 	}
 #endif /* WITH_WSREP */
@@ -3786,6 +3788,7 @@ lock_table_enqueue_waiting(
 		lock_reset_lock_and_trx_wait(lock);
 
 		ut_ad(0);
+		DBUG_LOG("ib_lock", "DEADLOCK(" << trx << ") ");
 		return(DB_DEADLOCK);
 
 	} else if (trx->lock.wait_lock == NULL) {
@@ -3798,6 +3801,7 @@ lock_table_enqueue_waiting(
 	trx->lock.que_state = TRX_QUE_LOCK_WAIT;
 
 	trx->lock.wait_started = ut_time();
+	DBUG_LOG("ib_lock", VICTIM(trx, false));
 	trx->lock.was_chosen_as_deadlock_victim = false;
 
 	ut_a(que_thr_stop(thr));
@@ -6985,6 +6989,7 @@ DeadlockChecker::trx_rollback()
 
 	trx_mutex_enter(trx);
 
+	DBUG_LOG("ib_lock", VICTIM(trx));
 	trx->lock.was_chosen_as_deadlock_victim = true;
 
 	lock_cancel_waiting_and_release(trx->lock.wait_lock);

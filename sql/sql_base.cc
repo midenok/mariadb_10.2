@@ -2201,6 +2201,7 @@ retry_share:
   table_list->updatable= 1; // It is not derived table nor non-updatable VIEW
   table_list->table= table;
 
+  // FIXME: remove this after MDEV-20186
   if (table->versioned())
     table->vers_write= true;
 

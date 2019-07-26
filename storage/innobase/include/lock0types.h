@@ -265,4 +265,22 @@ struct ib_lock_t
 
 typedef UT_LIST_BASE_NODE_T(ib_lock_t) trx_lock_list_t;
 
+/* Used to catch deadlock victims in code */
+struct VICTIM
+{
+	trx_t *trx;
+	bool set;
+	VICTIM(trx_t *trx0, bool set0 = true) : trx(trx0), set(set0)
+	{
+	}
+};
+
+inline
+std::ostream&
+operator<<(std::ostream& out, const VICTIM& v)
+{
+	out << (v.set ? '+' : '-') << "VICTIM(" << v.trx << ") ";
+	return out;
+}
+
 #endif /* lock0types_h */
