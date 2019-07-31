@@ -593,6 +593,15 @@ lock_rec_get_first(
 	ulint			heap_no);/*!< in: heap number of the record */
 
 /*********************************************************************//**
+Gets the mode from type_mode.
+@return mode */
+UNIV_INLINE
+enum lock_mode
+lock_get_mode(
+/*==========*/
+	const ib_uint32_t type_mode);
+
+/*********************************************************************//**
 Gets the mode of a lock.
 @return mode */
 UNIV_INLINE
