@@ -768,4 +768,39 @@ fatal_or_error::~fatal_or_error()
 
 } // namespace ib
 
+#ifndef DBUG_OFF
+static std::ostringstream dbug_os;
+static std::string dbug_str;
+
+static
+const char * c_str(std::ostringstream &os)
+{
+	return os.str().c_str();
+}
+
+template <class T>
+const char * dbug_print(T &obj)
+{
+	dbug_os.str("");
+	dbug_os.clear();
+	obj.print(dbug_os);
+	dbug_str = dbug_os.str();
+	return dbug_str.c_str();
+}
+
+const char * dbug_print(ib_lock_t *obj)
+{
+	return dbug_print(*obj);
+}
+
+const char * dbug_print(lock_rec_t *obj)
+{
+	return dbug_print(*obj);
+}
+
+const char * dbug_print(lock_table_t *obj)
+{
+	return dbug_print(*obj);
+}
+#endif /* !DBUG_OFF */
 #endif /* !UNIV_INNOCHECKSUM */

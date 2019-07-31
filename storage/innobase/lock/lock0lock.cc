@@ -5431,6 +5431,7 @@ lock_rec_convert_impl_to_expl_for_trx(
 
 		type_mode = (LOCK_REC | LOCK_X | LOCK_REC_NOT_GAP);
 
+		DBUG_LOG("ib_lock", "IMPL_TO_EXPL(trx=" << trx << ")");
 		lock_rec_add_to_queue(
 			type_mode, block, heap_no, index, trx, FALSE);
 	}

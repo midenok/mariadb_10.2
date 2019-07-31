@@ -279,7 +279,7 @@ inline
 std::ostream&
 operator<<(std::ostream& out, const VICTIM& v)
 {
-	out << (v.set ? '+' : '-') << "VICTIM(" << v.trx << ") ";
+	out << (v.set ? '+' : '-') << "VICTIM(trx=" << v.trx << ") ";
 	return out;
 }
 

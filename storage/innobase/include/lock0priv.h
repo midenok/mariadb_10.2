@@ -116,10 +116,6 @@ operator<<(std::ostream& out, const ib_lock_t& lock)
 	return(lock.print(out));
 }
 
-#ifdef UNIV_DEBUG
-extern ibool	lock_print_waits;
-#endif /* UNIV_DEBUG */
-
 /** Restricts the length of search we will do in the waits-for
 graph of transactions */
 static const ulint	LOCK_MAX_N_STEPS_IN_DEADLOCK_CHECK = 1000000;
