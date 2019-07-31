@@ -5614,6 +5614,13 @@ lock_wait_or_error:
 	/*-------------------------------------------------------------*/
 	if (!dict_index_is_spatial(index)) {
 		if (rec) {
+			/* Locked gap may be filled with inserted records.
+			Make sure we don't miss them. */
+			if (moves_up) {
+				btr_pcur_move_to_prev(pcur, &mtr);
+			} else {
+				btr_pcur_move_to_next(pcur, &mtr);
+			}
 			btr_pcur_store_position(pcur, &mtr);
 		}
 	}
@@ -5650,6 +5657,11 @@ lock_table_wait:
 			sel_restore_position_for_mysql(
 				&same_user_rec, BTR_SEARCH_LEAF, pcur,
 				moves_up, &mtr);
+			if (!moves_up) {
+				btr_pcur_move_to_prev(pcur, &mtr);
+			} else {
+				btr_pcur_move_to_next(pcur, &mtr);
+			}
 		}
 
 		if ((srv_locks_unsafe_for_binlog

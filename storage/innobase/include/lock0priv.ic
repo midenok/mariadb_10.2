@@ -287,6 +287,18 @@ lock_rec_get_next_on_page_const(
 }
 
 /*********************************************************************//**
+Gets the mode from type_mode.
+@return mode */
+UNIV_INLINE
+enum lock_mode
+lock_get_mode(
+/*==========*/
+	const ib_uint32_t type_mode)
+{
+	return(static_cast<enum lock_mode>(type_mode & LOCK_MODE_MASK));
+}
+
+/*********************************************************************//**
 Gets the mode of a lock.
 @return mode */
 UNIV_INLINE
@@ -297,7 +309,7 @@ lock_get_mode(
 {
 	ut_ad(lock);
 
-	return(static_cast<enum lock_mode>(lock->type_mode & LOCK_MODE_MASK));
+	return(lock_get_mode(lock->type_mode));
 }
 
 /*********************************************************************//**
@@ -416,6 +428,28 @@ lock_table_has(
 	}
 
 	return(NULL);
+}
+
+inline
+bool ib_lock_t::is_stronger(ulint precise_mode, ulint heap_no, const trx_t* t) const
+{
+	ut_ad(is_record_lock());
+	if (trx == t
+	    && !is_waiting()
+	    && !is_insert_intention()
+	    && (!is_record_not_gap()
+		|| (precise_mode & LOCK_REC_NOT_GAP)
+		|| heap_no == PAGE_HEAP_NO_SUPREMUM)
+	    && (!is_gap()
+		|| (precise_mode & LOCK_GAP)
+		|| heap_no == PAGE_HEAP_NO_SUPREMUM)
+	    && lock_mode_stronger_or_eq(
+		mode(),
+		static_cast<lock_mode>(
+			precise_mode & LOCK_MODE_MASK))) {
+		return true;
+	}
+	return false;
 }
 
 /* vim: set filetype=c: */
