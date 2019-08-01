@@ -36,8 +36,6 @@ variables:
     value: RelWithDebInfo
   - name: platform
     value: x64
-  - name: WSREP_PROVIDER
-    value: /usr/lib/galera/libgalera_enterprise_smm.so
 
 jobs:
 - job: Source
@@ -157,6 +155,7 @@ jobs:
   container: $[variables['containerImage']]
 
   steps:
+  - checkout: none
   - task: DownloadBuildArtifacts@0
     inputs:
       buildType: 'current'
@@ -179,14 +178,6 @@ jobs:
       mv -vi mariadb-enterprise*/ build/
     displayName: 'untar and show info'
   - script: |
-      set -x
-      cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
-      pwd
-      ls -lah
-      exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
-          --mem --parallel=auto
-    displayName: 'mtr tests - release'
-  - script: |
       # This script section tests Galera 4 debs and thus it's not present in the 10.2 and 10.3 pipeline scripts
       set -x
       sudo apt update
@@ -197,12 +188,9 @@ jobs:
       sudo apt install -y galera-enterprise-4 galera-arbitrator-4 rsync netcat socat
       export WSREP_PROVIDER=/usr/lib/galera/libgalera_enterprise_smm.so
       echo $WSREP_PROVIDER
-      echo $(WSREP_PROVIDER)
-      echo $(Build.SourceBranch)
+
       ls -lah /usr/lib/galera/libgalera_enterprise_smm.so
-      cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
-      ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
-    displayName: 'mtr tests - galera - deb'
+    displayName: 'install galera library - deb'
     condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-8', 'debian-9')
   - script: |
       # This script section tests Galera 4 rpms and thus it's not present in the 10.2 and 10.3 pipeline scripts
@@ -216,9 +204,31 @@ jobs:
       sudo yum install -y galera-enterprise-4 rsync socat lsof
       export WSREP_PROVIDER=/usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
       echo $WSREP_PROVIDER
-      echo $(WSREP_PROVIDER)
-      echo $(Build.SourceBranch)
-      ls -lah /usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
+      ls -lah /usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so  
+    displayName: 'install galera library - rpm'
+    condition: in(variables['containerImage'], 'centos-7', 'centos-6')
+  - script: |
+      set -x
+      cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
+      pwd
+      ls -lah
+      exec perl mysql-test-run.pl --verbose-restart --force --retry=3 --max-save-core=1 --max-save-datadir=1 --max-test-fail=20 \
+          --mem --parallel=auto
+    displayName: 'mtr tests - release'
+  - script: |
+      set -x
+      export WSREP_PROVIDER=/usr/lib/galera/libgalera_enterprise_smm.so
+      echo WSREP_PROVIDER=$WSREP_PROVIDER
+      ls -lah $WSREP_PROVIDER
+      cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
+      ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
+    displayName: 'mtr tests - galera - deb'
+    condition: in(variables['containerImage'], 'ubuntu-1604', 'ubuntu-1804', 'debian-8', 'debian-9')
+  - script: |
+      set -x
+      export WSREP_PROVIDER=/usr/lib64/galera-enterprise-4/libgalera_enterprise_smm.so
+      echo WSREP_PROVIDER=$WSREP_PROVIDER
+      ls -lah $WSREP_PROVIDER
       cd $(System.ArtifactsDirectory)/$(containerImage)/build/mysql-test
       ./mysql-test-run.pl --suite=galera,galera_sr,wsrep --force --parallel=auto --big-test --max-test-fail=0
     displayName: 'mtr tests - galera - rpm'
