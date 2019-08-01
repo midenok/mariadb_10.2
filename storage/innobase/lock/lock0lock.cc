@@ -1013,19 +1013,7 @@ lock_rec_has_expl(
 	     lock != NULL;
 	     lock = lock_rec_get_next(heap_no, lock)) {
 
-		if (lock->trx == trx
-		    && !lock_rec_get_insert_intention(lock)
-		    && lock_mode_stronger_or_eq(
-			    lock_get_mode(lock),
-			    static_cast<lock_mode>(
-				    precise_mode & LOCK_MODE_MASK))
-		    && !lock_get_wait(lock)
-		    && (!lock_rec_get_rec_not_gap(lock)
-			|| (precise_mode & LOCK_REC_NOT_GAP)
-			|| heap_no == PAGE_HEAP_NO_SUPREMUM)
-		    && (!lock_rec_get_gap(lock)
-			|| (precise_mode & LOCK_GAP)
-			|| heap_no == PAGE_HEAP_NO_SUPREMUM)) {
+		if (lock->is_stronger(precise_mode, heap_no, trx)) {
 
 			DBUG_LOG("ib_lock", WEAKER(precise_mode, lock));
 			DBUG_RETURN(lock);
@@ -1177,11 +1165,7 @@ lock_rec_other_has_conflicting(
 
 		/* If current trx already acquired a lock not weaker covering
 		same types then we don't have to wait for any locks. */
-		if (lock->trx == trx && !lock->is_waiting()
-		    && (lock->is_record_not_gap() ? mode & LOCK_REC_NOT_GAP : (
-				lock->is_gap() ? mode & LOCK_GAP : true))
-		    && lock_mode_stronger_or_eq(
-			    lock_get_mode(lock), lock_get_mode(mode))) {
+		if (lock->is_stronger(mode, heap_no, trx)) {
 
 			DBUG_LOG("ib_lock", CONFLICTS(trx, mode, NULL)
 				 << "because: " << WEAKER(mode, lock)) ;
