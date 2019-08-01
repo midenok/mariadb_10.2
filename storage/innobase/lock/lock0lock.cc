@@ -1003,6 +1003,7 @@ lock_rec_has_expl(
 {
 	lock_t*	lock;
 
+	DBUG_ENTER("lock_rec_has_expl");
 	ut_ad(lock_mutex_own());
 	ut_ad((precise_mode & LOCK_MODE_MASK) == LOCK_S
 	      || (precise_mode & LOCK_MODE_MASK) == LOCK_X);
@@ -1026,11 +1027,12 @@ lock_rec_has_expl(
 			|| (precise_mode & LOCK_GAP)
 			|| heap_no == PAGE_HEAP_NO_SUPREMUM)) {
 
-			return(lock);
+			DBUG_LOG("ib_lock", WEAKER(precise_mode, lock));
+			DBUG_RETURN(lock);
 		}
 	}
 
-	return(NULL);
+	DBUG_RETURN(NULL);
 }
 
 #ifdef UNIV_DEBUG
@@ -1164,6 +1166,7 @@ lock_rec_other_has_conflicting(
 {
 	lock_t*		res = NULL;
 
+	DBUG_ENTER("lock_rec_other_has_conflicting");
 	ut_ad(lock_mutex_own());
 
 	bool	is_supremum = (heap_no == PAGE_HEAP_NO_SUPREMUM);
@@ -1179,7 +1182,10 @@ lock_rec_other_has_conflicting(
 				lock->is_gap() ? mode & LOCK_GAP : true))
 		    && lock_mode_stronger_or_eq(
 			    lock_get_mode(lock), lock_get_mode(mode))) {
-			return(NULL);
+
+			DBUG_LOG("ib_lock", CONFLICTS(trx, mode, NULL)
+				 << "because: " << WEAKER(mode, lock)) ;
+			DBUG_RETURN(NULL);
 		}
 
 		if (!res && lock_rec_has_to_wait(true, trx, mode, lock, is_supremum)) {
@@ -1197,7 +1203,8 @@ lock_rec_other_has_conflicting(
 	}
 #endif /* WITH_WSREP */
 
-	return(res);
+	DBUG_LOG("ib_lock", CONFLICTS(trx, mode, res));
+	DBUG_RETURN(res);
 }
 
 /*********************************************************************//**

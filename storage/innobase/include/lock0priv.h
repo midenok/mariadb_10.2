@@ -63,34 +63,6 @@ operator<<(std::ostream& out, const lock_table_t& lock)
 	return(lock.print(out));
 }
 
-/** Convert the member 'type_mode' into a human readable string.
-@return human readable string */
-inline
-std::string
-ib_lock_t::type_mode_string() const
-{
-	std::ostringstream sout;
-	sout << type_string();
-	sout << "|" << lock_mode_string(mode());
-
-	if (is_record_not_gap()) {
-		sout << "|REC_NOT_GAP";
-	}
-
-	if (is_waiting()) {
-		sout << "|WAIT";
-	}
-
-	if (is_gap()) {
-		sout << "|GAP";
-	}
-
-	if (is_insert_intention()) {
-		sout << "|INSERT_INTENTION";
-	}
-	return(sout.str());
-}
-
 inline
 std::ostream&
 ib_lock_t::print(std::ostream& out) const
