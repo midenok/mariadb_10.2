@@ -772,12 +772,6 @@ fatal_or_error::~fatal_or_error()
 static std::ostringstream dbug_os;
 static std::string dbug_str;
 
-static
-const char * c_str(std::ostringstream &os)
-{
-	return os.str().c_str();
-}
-
 template <class T>
 const char * dbug_print(T &obj)
 {

@@ -962,7 +962,6 @@ pthread_handler_t vers_add_hist_part_thread(void *arg)
   uint error;
   DBUG_ASSERT(arg);
   vers_add_hist_part_data &d= *(vers_add_hist_part_data *) arg;
-  TABLE *table;
   sql_print_information("Adding history partition `%s` for table `%s`.`%s`",
                         d.part_name.str,
                         d.db.str,
