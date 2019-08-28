@@ -117,7 +117,7 @@ stages:
 
 - stage: TestPackages_Stage1
   dependsOn: BuildPackages_Stage0
-  condition: succeededOrFailed()
+  condition: and(succeededOrFailed(), eq(variables['Build.SourceBranch'], 'refs/heads/10.4-enterprise'))
   jobs:
 
   - job: TestTarball_Quick
@@ -309,7 +309,7 @@ stages:
 #
 - stage: TestPackages_Stage2
   dependsOn: BuildPackages_Stage0
-  condition: succeededOrFailed()
+  condition: and(succeededOrFailed(), eq(variables['Build.SourceBranch'], 'refs/heads/10.4-enterprise'))
 
   jobs:
 
