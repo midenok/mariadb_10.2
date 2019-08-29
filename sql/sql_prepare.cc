@@ -5165,7 +5165,7 @@ public:
 
   Protocol_local(THD *thd_arg, ulong prealloc= 0) :
     Protocol_text(thd_arg, prealloc),
-      cur_data(0), first_data(0), data_tail(&first_data)
+      cur_data(0), first_data(0), data_tail(&first_data), alloc(0)
     {}
 
 protected:
@@ -5855,11 +5855,12 @@ extern "C" int execute_sql_command(const char *command,
         }
         rows= rows->next;
       }
-      if (p.first_data)
-      {
+    }
+    if (p.first_data)
+    {
+      if (p.alloc)
         free_root(p.alloc, MYF(0));
-        my_free(p.first_data);
-      }
+      my_free(p.first_data);
     }
   }
 
