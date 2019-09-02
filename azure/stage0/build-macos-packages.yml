@@ -1,7 +1,11 @@
+parameters:
+  BuildType: ''
+  CMakeArgs: ''
+  Artifact:  ''
 
 jobs:
 
-- job: BuildMacPackages
+- job: BuildMacPackages_${{ parameters.Artifact }}
   dependsOn: BuildSourceTarball
   condition: false
   workspace:
@@ -18,7 +22,10 @@ jobs:
     displayName: "brew install dependencies"
 
   - script: |
-      cmake . -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/ -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib -DBUILD_CONFIG=enterprise
+      cmake . -DCMAKE_BUILD_TYPE=${{ parameters.BuildType }} \
+        -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/ \
+        -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib \
+        -DBUILD_CONFIG=enterprise
     displayName: 'cmake configure'
     failOnStderr: false
 

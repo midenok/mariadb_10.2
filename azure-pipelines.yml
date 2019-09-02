@@ -79,17 +79,6 @@ stages:
       BuildType: RelWithDebInfo
       Artifact: Release
 
-  - template: azure/stage0/build-binary-tarballs.yml
-    parameters:
-      BuildType: Debug
-      Artifact: Debug
-
-  - template: azure/stage0/build-binary-tarballs.yml
-    parameters:
-      BuildType: Debug
-      Artifact: ASAN
-      CMakeArgs: '-DWITH_ASAN=ON'
-
   - template: azure/stage0/build-rpm-packages.yml
   - template: azure/stage0/build-deb-packages.yml
 
@@ -98,13 +87,10 @@ stages:
       Artifact: Release
       BuildType: RelWithDebInfo
 
-  - template: azure/stage0/build-windows-packages.yml
-    parameters:
-      Artifact: Debug
-      BuildType: Debug
-
-
   - template: azure/stage0/build-macos-packages.yml
+    parameters:
+      Artifact: Release
+      BuildType: RelWithDebInfo
 
 #################################
 ########## STAGE 0 END ##########
@@ -143,7 +129,7 @@ stages:
     - template: azure/tests/run-mtr-test.yml
       parameters:
         MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
-        TestName: 'Quick Test'
+        TestName: 'Quick Test - Release'
     # - template: azure/tests/run-mtr-test.yml
     #   parameters:
     #     MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 -mem --testcase-timeout=90'
