@@ -40,16 +40,18 @@ jobs:
   - bash: |
       set -x
       cd "${BUILDDIR}"
+      PLATFORM=$(containerImage)
       cmake . -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc \
         -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
-        -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
+        -DRPM=${PLATFORM/-/} -DBUILD_CONFIG=enterprise
     displayName: 'CMake configure RPM RHEL 6'
     condition: eq(variables['containerImage'], 'rhel-6')
 
   - bash: |
       set -x
       cd "${BUILDDIR}"
-      cmake . -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
+      PLATFORM=$(containerImage)
+      cmake . -DRPM=${PLATFORM/-/} -DBUILD_CONFIG=enterprise
     displayName: 'CMake configure RPM'
     condition: ne(variables['containerImage'], 'rhel-6')
 
