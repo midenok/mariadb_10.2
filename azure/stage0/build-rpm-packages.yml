@@ -10,10 +10,10 @@ jobs:
     vmImage: 'ubuntu-16.04'
   strategy:
     matrix:
-      centos-6:
-        containerImage: centos-6
-      centos-7:
-        containerImage: centos-7
+      rhel-6:
+        containerImage: rhel-6
+      rhel-7:
+        containerImage: rhel-7
       rhel-8:
         containerImage: rhel-8
       sles-12:
@@ -43,15 +43,15 @@ jobs:
       cmake . -DCMAKE_C_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/gcc \
         -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-3/root/usr/bin/g++ \
         -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
-    displayName: 'CMake configure RPM Centos 6'
-    condition: eq(variables['containerImage'], 'centos-6')
+    displayName: 'CMake configure RPM RHEL 6'
+    condition: eq(variables['containerImage'], 'rhel-6')
 
   - bash: |
       set -x
       cd "${BUILDDIR}"
       cmake . -DRPM=$(containerImage) -DBUILD_CONFIG=enterprise
     displayName: 'CMake configure RPM'
-    condition: ne(variables['containerImage'], 'centos-6')
+    condition: ne(variables['containerImage'], 'rhel-6')
 
   - bash: |
       set -x
