@@ -6,13 +6,13 @@
 resources:
     containers:
 
-    - container: centos-6
-      image: mariadbe.azurecr.io/build-es:centos-6
+    - container: rhel-6
+      image: mariadbe.azurecr.io/build-es:rhel-6
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
 
-    - container: centos-7
-      image: mariadbe.azurecr.io/build-es:centos-7
+    - container: rhel-7
+      image: mariadbe.azurecr.io/build-es:rhel-7
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
 
@@ -109,8 +109,8 @@ stages:
       vmImage: 'ubuntu-16.04'
     strategy:
       matrix:
-        centos-7:
-          containerImage: centos-7
+        rhel-7:
+          containerImage: rhel-7
         ubuntu-1804:
           containerImage: ubuntu-1804
     container: $[variables['containerImage']]
