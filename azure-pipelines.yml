@@ -116,6 +116,8 @@ stages:
       matrix:
         rhel-7:
           containerImage: rhel-7
+        rhel-8:
+          containerImage: rhel-8
         ubuntu-1804:
           containerImage: ubuntu-1804
     container: $[variables['containerImage']]
@@ -124,16 +126,13 @@ stages:
 
     - checkout: none
     - template: azure/fetch-unpack-tarball.yml
+    - template: azure/install-galera.yml
       parameters:
         Artifact: Release
     - template: azure/tests/run-mtr-test.yml
       parameters:
         MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
         TestName: 'Quick Test - Release'
-    # - template: azure/tests/run-mtr-test.yml
-    #   parameters:
-    #     MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 -mem --testcase-timeout=90'
-    #     TestName: 'Galera Test'
 
   - job: TestRPMs_Quick
     timeoutInMinutes: 280
@@ -146,6 +145,10 @@ stages:
           poolName: 'rhel-6'
         rhel-7:
           poolName: 'rhel-7'
+        sles-12:
+          poolName: 'sles-12'
+        sles-15:
+          poolName: 'sles-15'
     pool:
       name: $(poolName)
 
@@ -153,7 +156,6 @@ stages:
 
     - checkout: none
     - template: azure/prepare-vm-for-installation.yml
-    - template: azure/install-galera.yml
 
     - task: DownloadBuildArtifacts@0
       inputs:
@@ -170,24 +172,16 @@ stages:
       displayName: "Install built RPM packages on Centos/RHEL"
       condition: in(variables['poolName'], 'rhel-6', 'rhel-7', 'rhel-8')
 
-    #- bash: |
-        #set -x
-        #ls -la '$(System.ArtifactsDirectory)'
-        #sudo zypper -n install '$(System.ArtifactsDirectory)'/current/'$(poolName)'-RPMS/*.rpm
-      #displayName: "Install built RPM packages on SLES"
-      #condition: in(variables['poolName'], 'sles-12', 'sles-15')
+    - bash: |
+        set -x
+        ls -la '$(System.ArtifactsDirectory)'
+        sudo zypper -n install '$(System.ArtifactsDirectory)'/current/'$(poolName)'-RPMS/*.rpm
+      displayName: "Install built RPM packages on SLES"
+      condition: in(variables['poolName'], 'sles-12', 'sles-15')
 
 
     - template: azure/tests/select-insert-test.yml
     - template: azure/tests/run-acceptance-tests.yml
-    - template: azure/tests/run-mtr-test.yml
-      parameters:
-        MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
-        TestName: 'RPM Quick Test'
-    - template: azure/tests/run-mtr-test.yml
-      parameters:
-        MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 -mem --testcase-timeout=90'
-        TestName: 'Galera Test'
 
   - job: TestDEBs_Quick
     timeoutInMinutes: 280
@@ -234,14 +228,6 @@ stages:
 
     - template: azure/tests/select-insert-test.yml
     - template: azure/tests/run-acceptance-tests.yml
-    - template: azure/tests/run-mtr-test.yml
-      parameters:
-        MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
-        TestName: 'DEB Quick Test'
-    - template: azure/tests/run-mtr-test.yml
-      parameters:
-        MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 -mem --testcase-timeout=90'
-        TestName: 'Galera Test'
 
   - job: TestMSI_Quick
     timeoutInMinutes: 10
@@ -276,84 +262,3 @@ stages:
 ########## STAGE 1 END ##########
 #################################
 #
-
-#
-#################################
-######### STAGE 2 BEGIN #########
-#################################
-#
-# Run install test for RPM/DEB packages
-
-# Run medium MTR test (?)
-# Run acceptance tests
-# Run install test on Windows
-
-#
-# Checks if binary packages are OK on all supported platforms
-# Checks if functionality is OK
-# Checks if replication is OK
-#
-- stage: TestPackages_Stage2
-  dependsOn: BuildPackages_Stage0
-  condition: and(succeededOrFailed(), eq(variables['Build.SourceBranch'], 'refs/heads/10.4-enterprise'))
-
-  jobs:
-
-  - job: TestTarball_Full
-    timeoutInMinutes: 600
-    #condition: false
-
-    workspace:
-      clean: all
-    pool:
-      vmImage: 'ubuntu-16.04'
-    strategy:
-      matrix:
-        rhel-6:
-          containerImage: rhel-6
-        rhel-7:
-          containerImage: rhel-7
-        sles-12:
-          containerImage: sles-12
-        sles-15:
-          containerImage: sles-15
-        debian-8:
-          containerImage: debian-8
-        debian-9:
-          containerImage: debian-9
-        debian-10:
-          containerImage: debian-10
-        ubuntu-1604:
-          containerImage: ubuntu-1604
-        ubuntu-1804:
-          containerImage: ubuntu-1804
-    container: $[variables['containerImage']]
-
-    steps:
-
-    - checkout: none
-    - template: azure/install-galera.yml
-    - template: azure/fetch-unpack-tarball.yml
-    - template: azure/stage2-mtr-tests.yml
-
-#
-#
-#################################
-########## STAGE 2 END ##########
-#################################
-#
-#
-#################################
-######### STAGE 3 BEGIN #########
-#################################
-#
-# Run upgrade test for RPM/DEB packages
-# Run full MTR set on packages
-#
-#################################
-########## STAGE 3 END ##########
-#################################
-#
-
-
-
