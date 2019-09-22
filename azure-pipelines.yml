@@ -139,12 +139,14 @@ stages:
     workspace:
       clean: all
     strategy:
-      maxParallel: 2
+      maxParallel: 1
       matrix:
         rhel-6:
           poolName: 'rhel-6'
         rhel-7:
           poolName: 'rhel-7'
+        rhel-8:
+          poolName: 'rhel-8'
         sles-12:
           poolName: 'sles-12'
         sles-15:
@@ -175,7 +177,7 @@ stages:
     - bash: |
         set -x
         ls -la '$(System.ArtifactsDirectory)'
-        sudo zypper -n install '$(System.ArtifactsDirectory)'/current/'$(poolName)'-RPMS/*.rpm
+        sudo zypper --no-gpg-checks -n install '$(System.ArtifactsDirectory)'/current/'$(poolName)'-RPMS/*.rpm
       displayName: "Install built RPM packages on SLES"
       condition: in(variables['poolName'], 'sles-12', 'sles-15')
 
