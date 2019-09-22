@@ -16,6 +16,12 @@ steps:
         sudo yum -y install patch
       fi
 
+      if [[ -e /etc/SuSE-release ]]; then
+        cat /etc/*release
+        INSTALLED=$(rpm -qa | grep -iE "^maria|^mysql|^percona|^galera" ||:)
+        [[ -n "${INSTALLED}" ]] && sudo zypper -n remove ${INSTALLED} ||:
+      fi
+
       if [[ -e /etc/debian_version ]]; then
         cat /etc/*_version
         sudo bash -c "rm -fv ${DEB_LOCAL_LIST}"
