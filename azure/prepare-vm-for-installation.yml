@@ -2,7 +2,7 @@
 steps:
 
   - bash: |
-      set -x
+      set -ex
 
       uname -a
       INSTALLED=""
@@ -10,7 +10,7 @@ steps:
       if [[ -e /etc/redhat-release ]]; then
         cat /etc/*release
         INSTALLED=$(rpm -qa | grep -iE "^maria|^mysql|^percona|^galera" ||:)
-        [[ -n "${INSTALLED}" ]] && sudo yum -y erase ${INSTALLED} ||:
+        [[ -n "${INSTALLED}" ]] && sudo yum -y erase ${INSTALLED}
         sudo yum -y upgrade
         #MENT-292
         sudo yum -y install patch
@@ -19,7 +19,7 @@ steps:
       if [[ -e /etc/SuSE-release ]]; then
         cat /etc/*release
         INSTALLED=$(rpm -qa | grep -iE "^maria|^mysql|^percona|^galera" ||:)
-        [[ -n "${INSTALLED}" ]] && sudo zypper -n remove ${INSTALLED} ||:
+        [[ -n "${INSTALLED}" ]] && sudo zypper -n remove ${INSTALLED}
       fi
 
       if [[ -e /etc/debian_version ]]; then
@@ -30,11 +30,11 @@ steps:
         sudo apt-get -y install debconf-utils
         INSTALLED=$(dpkg -l | awk '{print $2}' | grep -iE "^maria|^mysql|^percona|^galera"  ||:)
         if [[ -n "${INSTALLED}" ]]; then
-          echo mariadb-server-10.1  mariadb-server-10.1/postrm_remove_databases  boolean false | sudo debconf-set-selections
           echo mariadb-server-10.2  mariadb-server-10.2/postrm_remove_databases  boolean false | sudo debconf-set-selections
           echo mariadb-server-10.3  mariadb-server-10.3/postrm_remove_databases  boolean false | sudo debconf-set-selections
           echo mariadb-server-10.4  mariadb-server-10.4/postrm_remove_databases  boolean false | sudo debconf-set-selections
-          sudo apt-get -y -f purge ${INSTALLED} ||:
+          echo mariadb-server-10.5  mariadb-server-10.5/postrm_remove_databases  boolean false | sudo debconf-set-selections
+          sudo apt-get -y -f purge ${INSTALLED}
         fi
         sudo apt-get -y -f autoremove
         sudo apt-get -y -f -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dist-upgrade
