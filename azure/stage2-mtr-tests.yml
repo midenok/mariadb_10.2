@@ -55,10 +55,8 @@ steps:
 
       perl mysql-test-run.pl --force --parallel=auto --suite=galera,galera_sr,wsrep \
         --max-test-fail=0 --testcase-timeout=120 --vardir=${MYSQL_VARDIR}
-      if [[ $? -gt 0 ]]; then
-        echo "- Galera Enterprise test failed!"
-      fi
-    displayName: "Galera -big test"
+
+    displayName: "Galera test"
     failOnStderr: false
     condition: succeededOrFailed()
 
