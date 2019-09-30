@@ -12170,67 +12170,47 @@ int create_table_info_t::prepare_create_table(const char* name, bool strict)
 /*********************************************************************//**
 Push warning message to SQL-layer based on foreign key constraint
 index match error. */
-void
-dict_foreign_push_index_error(
+static void
+foreign_push_index_error(
 /*==========================*/
 	trx_t*		trx,		/*!< in: trx */
 	const char*	operation,	/*!< in: operation create or alter
 					*/
 	const char*	create_name,	/*!< in: table name in create or
 					alter table */
-	const char*	latest_foreign,	/*!< in: start of latest foreign key
-					constraint name */
 	const char**	columns,	/*!< in: foreign key columns */
 	fkerr_t		index_error,	/*!< in: error code */
 	ulint		err_col,	/*!< in: column where error happened
 					*/
 	dict_index_t*	err_index,	/*!< in: index where error happened
 					*/
-	dict_table_t*	table,		/*!< in: table */
-	FILE*		ef)		/*!< in: output stream */
+	dict_table_t*	table)		/*!< in: table */
 {
 	switch (index_error) {
 	case FK_SUCCESS:
 		break;
 	case FK_INDEX_NOT_FOUND:
-		fprintf(ef,
+		ib_foreign_warn(trx, DB_CANNOT_ADD_CONSTRAINT, create_name,
 			"%s table %s with foreign key constraint"
 			" failed. There is no index in the referenced"
 			" table where the referenced columns appear"
-			" as the first columns near '%s'.\n",
-			operation, create_name, latest_foreign);
-		ib_push_warning(trx, DB_CANNOT_ADD_CONSTRAINT,
-			"%s table %s with foreign key constraint"
-			" failed. There is no index in the referenced"
-			" table where the referenced columns appear"
-			" as the first columns near '%s'.",
-			operation, create_name, latest_foreign);
+			" as the first columns.",
+			operation, create_name);
 		return;
 	case FK_IS_PREFIX_INDEX:
-		fprintf(ef,
+		ib_foreign_warn(trx, DB_CANNOT_ADD_CONSTRAINT, create_name,
 			"%s table %s with foreign key constraint"
 			" failed. There is only prefix index in the referenced"
 			" table where the referenced columns appear"
-			" as the first columns near '%s'.\n",
-			operation, create_name, latest_foreign);
-		ib_push_warning(trx, DB_CANNOT_ADD_CONSTRAINT,
-			"%s table %s with foreign key constraint"
-			" failed. There is only prefix index in the referenced"
-			" table where the referenced columns appear"
-			" as the first columns near '%s'.",
-			operation, create_name, latest_foreign);
+			" as the first columns.",
+			operation, create_name);
 		return;
 	case FK_COL_NOT_NULL:
-		fprintf(ef,
+		ib_foreign_warn(trx, DB_CANNOT_ADD_CONSTRAINT, create_name,
 			"%s table %s with foreign key constraint"
 			" failed. You have defined a SET NULL condition but "
-			"column '%s' on index is defined as NOT NULL near '%s'.\n",
-			operation, create_name, columns[err_col], latest_foreign);
-		ib_push_warning(trx, DB_CANNOT_ADD_CONSTRAINT,
-			"%s table %s with foreign key constraint"
-			" failed. You have defined a SET NULL condition but "
-			"column '%s' on index is defined as NOT NULL near '%s'.",
-			operation, create_name, columns[err_col], latest_foreign);
+			"column '%s' on index is defined as NOT NULL.",
+			operation, create_name, columns[err_col]);
 		return;
 	case FK_COLS_NOT_EQUAL:
 		dict_field_t*	field;
@@ -12241,23 +12221,19 @@ dict_foreign_push_index_error(
 			? "(null)"
 			: dict_table_get_col_name(
 				table, dict_col_get_no(field->col));
-		fprintf(ef,
+		ib_foreign_warn(trx, DB_CANNOT_ADD_CONSTRAINT, create_name,
 			"%s table %s with foreign key constraint"
 			" failed. Field type or character set for column '%s' "
-			"does not mach referenced column '%s' near '%s'.\n",
-			operation, create_name, columns[err_col], col_name, latest_foreign);
-		ib_push_warning(trx, DB_CANNOT_ADD_CONSTRAINT,
-			"%s table %s with foreign key constraint"
-			" failed. Field type or character set for column '%s' "
-			"does not mach referenced column '%s' near '%s'.",
-			operation, create_name, columns[err_col], col_name, latest_foreign);
+			"does not mach referenced column '%s'.",
+			operation, create_name, columns[err_col], col_name);
 		return;
 	}
 	DBUG_ASSERT(!"unknown error");
 }
 
-bool tmp_dict_scan_col(dict_table_t*		table,
-		       const char**		name)
+static
+bool find_col(dict_table_t*		table,
+	      const char**		name)
 {
 	ulint		i;
 	for (i = 0; i < dict_table_get_n_cols(table); i++) {
@@ -12288,8 +12264,6 @@ bool tmp_dict_scan_col(dict_table_t*		table,
 	return false;
 }
 
-
-// replacement for dict_create_foreign_constraints_low()
 dberr_t
 create_table_info_t::create_foreign_key_info()
 {
@@ -12300,13 +12274,11 @@ create_table_info_t::create_foreign_key_info()
 	static const unsigned MAX_COLS_PER_FK = 500;
 	const char*	column_names[MAX_COLS_PER_FK];
 	const char*	ref_column_names[MAX_COLS_PER_FK];
-	FILE*		ef			= dict_foreign_err_file;
 	char	create_name[MAX_TABLE_NAME_LEN + 1];
 	dict_index_t*	index			= NULL;
 	fkerr_t	index_error			= FK_SUCCESS;
 	dict_index_t*	err_index		= NULL;
 	ulint		err_col;
-	const char * start_of_latest_foreign = "FIXME";
 	const bool tmp_table = m_flags2 & DICT_TF2_TEMPORARY;
 	const CHARSET_INFO*	cs = innobase_get_charset(m_thd);
 	const char * operation = "Create ";
@@ -12395,7 +12367,7 @@ create_table_info_t::create_foreign_key_info()
 		unsigned i = 0, j = 0;
 		while ((col = col_it++)) {
 			column_names[i] = mem_heap_strdupl(foreign->heap, col->field_name.str, col->field_name.length);
-			success = tmp_dict_scan_col(table, column_names + i);
+			success = find_col(table, column_names + i);
 			if (!success) {
 				ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT, create_name,
 					"%s table %s foreign key constraint"
@@ -12417,20 +12389,8 @@ create_table_info_t::create_foreign_key_info()
 			NULL, TRUE, FALSE, &index_error, &err_col, &err_index);
 
 		if (!index) {
-			mutex_enter(&dict_foreign_err_mutex);
-			rewind(ef); ut_print_timestamp(ef);
-			fprintf(ef, " Error in foreign key constraint of table %s:\n",
-				create_name);
-			fputs("There is no index in table ", ef);
-			ut_print_name(ef, NULL, create_name);
-			fprintf(ef, " where the columns appear\n"
-				"as the first columns. Constraint:\n%s\n%s",
-				start_of_latest_foreign,
-				FOREIGN_KEY_CONSTRAINTS_MSG);
-			dict_foreign_push_index_error(m_trx, operation, create_name, start_of_latest_foreign,
-				column_names, index_error, err_col, err_index, table, ef);
-
-			mutex_exit(&dict_foreign_err_mutex);
+			foreign_push_index_error(m_trx, operation, create_name,
+				column_names, index_error, err_col, err_index, table);
 			return(DB_CANNOT_ADD_CONSTRAINT);
 		}
 
@@ -12528,7 +12488,7 @@ create_table_info_t::create_foreign_key_info()
 			ref_column_names[j] = mem_heap_strdupl(foreign->heap, col->field_name.str, col->field_name.length);
 			if (foreign->referenced_table)
 			{
-				success = tmp_dict_scan_col(foreign->referenced_table, ref_column_names + j);
+				success = find_col(foreign->referenced_table, ref_column_names + j);
 				if (!success) {
 					ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT, create_name,
 						"%s table %s foreign key constraint"
@@ -12553,30 +12513,8 @@ create_table_info_t::create_foreign_key_info()
 				TRUE, FALSE, &index_error, &err_col, &err_index);
 
 			if (!index) {
-				mutex_enter(&dict_foreign_err_mutex);
-				rewind(ef); ut_print_timestamp(ef);
-				fprintf(ef, " Error in foreign key constraint of table %s:\n",
-					create_name);
-				fprintf(ef, "%s:\n"
-					"Cannot find an index in the"
-					" referenced table where the\n"
-					"referenced columns appear as the"
-					" first columns, or column types\n"
-					"in the table and the referenced table"
-					" do not match for constraint.\n"
-					"Note that the internal storage type of"
-					" ENUM and SET changed in\n"
-					"tables created with >= InnoDB-4.1.12,"
-					" and such columns in old tables\n"
-					"cannot be referenced by such columns"
-					" in new tables.\n%s\n",
-					start_of_latest_foreign,
-					FOREIGN_KEY_CONSTRAINTS_MSG);
-
-				dict_foreign_push_index_error(m_trx, operation, create_name, start_of_latest_foreign,
-					column_names, index_error, err_col, err_index, foreign->referenced_table, ef);
-
-				mutex_exit(&dict_foreign_err_mutex);
+				foreign_push_index_error(m_trx, operation, create_name,
+					column_names, index_error, err_col, err_index, foreign->referenced_table);
 
 				return(DB_CANNOT_ADD_CONSTRAINT);
 			}
