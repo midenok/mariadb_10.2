@@ -12397,7 +12397,6 @@ create_table_info_t::create_foreign_key_info()
 			column_names[i] = mem_heap_strdupl(foreign->heap, col->field_name.str, col->field_name.length);
 			success = tmp_dict_scan_col(table, column_names + i);
 			if (!success) {
-constraint_error:
 				ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT, create_name,
 					"%s table %s foreign key constraint"
 					" failed. Column %s was not found.", operation, create_name, column_names[i]);
@@ -12531,7 +12530,11 @@ constraint_error:
 			{
 				success = tmp_dict_scan_col(foreign->referenced_table, ref_column_names + j);
 				if (!success) {
-					goto constraint_error;
+					ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT, create_name,
+						"%s table %s foreign key constraint"
+						" failed. Column %s was not found.", operation, create_name, ref_column_names[j]);
+
+					return(DB_CANNOT_ADD_CONSTRAINT);
 				}
 			}
 			++j;
@@ -21689,10 +21692,14 @@ ib_foreign_warn(
 	char *buf;
 	static FILE* ef = dict_foreign_err_file;
 	static const size_t MAX_BUF_SIZE = 4*1024;
+	buf = (char *)my_malloc(MAX_BUF_SIZE, MYF(MY_WME));
+	if (!buf) {
+		return;
+	}
 
 	va_start(args, format);
-	buf = (char *)my_malloc(MAX_BUF_SIZE, MYF(MY_WME));
 	vsprintf(buf, format, args);
+	va_end(args);
 
 	mutex_enter(&dict_foreign_err_mutex);
 	rewind(ef); ut_print_timestamp(ef);
@@ -21710,7 +21717,6 @@ ib_foreign_warn(
 	}
 
 	my_free(buf);
-	va_end(args);
 }
 
 /********************************************************************//**
