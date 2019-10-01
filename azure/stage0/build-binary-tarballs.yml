@@ -6,7 +6,7 @@ parameters:
 jobs:
 
 - job: BuildTarballs_${{ parameters.Artifact }}
-  timeoutInMinutes: 60
+  timeoutInMinutes: 180
   dependsOn: BuildSourceTarball
   workspace:
     clean: all

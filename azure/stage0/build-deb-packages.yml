@@ -2,7 +2,7 @@
 jobs:
 
 - job: BuildDEBs
-  timeoutInMinutes: 60
+  timeoutInMinutes: 180
   dependsOn: BuildSourceTarball
   workspace:
     clean: all
