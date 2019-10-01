@@ -12255,8 +12255,6 @@ bool find_col(dict_table_t*		table,
 
 		if (0 == innobase_strcasecmp(col_name, *name)) {
 			/* Found */
-			dict_v_col_t * vcol;
-			vcol = dict_table_get_nth_v_col(table, i);
 			strcpy((char*) *name, col_name);
 			return true;
 		}
