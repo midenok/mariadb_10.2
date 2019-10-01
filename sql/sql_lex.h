@@ -4558,6 +4558,15 @@ public:
                                 Item_result return_type,
                                 const LEX_CSTRING &soname);
   Spvar_definition *row_field_name(THD *thd, const Lex_ident_sys_st &name);
+
+  bool add_table_foreign_key(const LEX_CSTRING *name,
+                             const LEX_CSTRING *constraint_name,
+                             Table_ident *table_name,
+                             DDL_options ddl_options);
+  bool add_column_foreign_key(const LEX_CSTRING *name,
+                              const LEX_CSTRING *constraint_name,
+                              Table_ident *ref_table_name,
+                              DDL_options ddl_options);
 };
 
 
