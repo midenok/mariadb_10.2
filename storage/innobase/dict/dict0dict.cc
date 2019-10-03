@@ -3298,8 +3298,9 @@ dict_get_referenced_table(
 		db_name = database_name;
 	}
 
-	if (0 == strncmp(table_name, srv_mysql50_table_name_prefix,
-			sizeof(srv_mysql50_table_name_prefix) - 1)) {
+	if (0
+	    == strncmp(table_name, srv_mysql50_table_name_prefix,
+		       sizeof(srv_mysql50_table_name_prefix) - 1)) {
 		/* This is a pre-5.1 table name
 		containing chars other than [A-Za-z0-9].
 		Discard the prefix and use raw UTF-8 encoding. */
@@ -3310,32 +3311,35 @@ dict_get_referenced_table(
 		const ulint table_name_alloc = 3 * table_name_len + 1;
 
 		/* Copy database_name, '/', table_name, '\0' */
-		ref = static_cast<char*>(
-			mem_heap_alloc(heap, database_name_len + table_name_alloc + 1));
+		ref = static_cast<char*>(mem_heap_alloc(
+			heap, database_name_len + table_name_alloc + 1));
 		if (!ref)
 			return NULL;
 
 		memcpy(ref, db_name, database_name_len);
 		ref[database_name_len] = '/';
-		innobase_convert_from_id(cs, ref + database_name_len + 1, table_name, table_name_alloc);
+		innobase_convert_from_id(cs, ref + database_name_len + 1,
+					 table_name, table_name_alloc);
 	} else {
 		/* Encode using filename-safe characters. */
 		const ulint table_name_alloc = 5 * table_name_len + 1;
 
 		/* Copy database_name, '/', table_name, '\0' */
-		ref = static_cast<char*>(
-			mem_heap_alloc(heap, database_name_len + table_name_alloc + 1));
+		ref = static_cast<char*>(mem_heap_alloc(
+			heap, database_name_len + table_name_alloc + 1));
 		if (!ref)
 			return NULL;
 
 		memcpy(ref, db_name, database_name_len);
 		ref[database_name_len] = '/';
-		innobase_convert_from_table_id(cs, ref + database_name_len + 1, table_name, table_name_alloc);
+		innobase_convert_from_table_id(cs, ref + database_name_len + 1,
+					       table_name, table_name_alloc);
 	}
 
 	/* Values;  0 = Store and compare as given; case sensitive
-	            1 = Store and compare in lower; case insensitive
-	            2 = Store as given, compare in lower; case semi-sensitive */
+		    1 = Store and compare in lower; case insensitive
+		    2 = Store as given, compare in lower; case semi-sensitive
+	 */
 	if (innobase_get_lower_case_table_names() == 2) {
 		innobase_casedn_str(ref);
 		*table = dict_table_get_low(ref);

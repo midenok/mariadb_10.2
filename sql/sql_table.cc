@@ -11254,8 +11254,9 @@ bool Sql_cmd_create_table_like::execute(THD *thd)
   }
 
   /*
-   Since CREATE_INFO is not full without Alter_info, it is better to pass them as
-   a signle parameter. TODO: remove alter_info argument where create_info is passed.
+   Since CREATE_INFO is not full without Alter_info, it is better to pass them
+   as a signle parameter. TODO: remove alter_info argument where create_info is
+   passed.
   */
   create_info.alter_info= &alter_info;
 
