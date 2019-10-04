@@ -6537,7 +6537,7 @@ key_def:
           {
             if (unlikely(Lex->check_add_key($4)) ||
                 unlikely(!(Lex->last_key= (new (thd->mem_root)
-                                           Key(Key::MULTIPLE,
+                                           Foreign_key(Key::MULTIPLE,
                                            $1.str ? &$1 : &$5,
                                            HA_KEY_ALG_UNDEF, true, $4)))))
               MYSQL_YYABORT;
@@ -6546,24 +6546,19 @@ key_def:
           '(' key_list ')' references
           {
             LEX *lex=Lex;
-            Key *key= (new (thd->mem_root)
-                       Foreign_key($5.str ? &$5 : &$1,
-                                   &lex->last_key->columns,
-                                   &$10->db,
-                                   &$10->table,
-                                   &lex->ref_list,
+            Foreign_key *key= static_cast<Foreign_key *>(lex->last_key);
+            key->init(             $10->db,
+                                   $10->table,
+                                   lex->ref_list,
                                    lex->fk_delete_opt,
                                    lex->fk_update_opt,
-                                   lex->fk_match_option,
-                                    $4));
-            if (unlikely(key == NULL))
-              MYSQL_YYABORT;
+                                   lex->fk_match_option);
             /*
               handle_if_exists_options() expectes the two keys in this order:
               the Foreign_key, followed by its auto-generated Key.
             */
             lex->alter_info.key_list.push_back(key, thd->mem_root);
-            lex->alter_info.key_list.push_back(Lex->last_key, thd->mem_root);
+            lex->alter_info.key_list.push_back(key, thd->mem_root);
             lex->option_list= NULL;
 
             /* Only used for ALTER TABLE. Ignored otherwise. */
