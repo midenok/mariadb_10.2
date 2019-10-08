@@ -54,7 +54,8 @@ steps:
   - bash: |
       MYSQLTEST=$(find /usr/share -name 'mysql-test' ||:)
       cd "${MYSQLTEST}"
-      perl mysql-test-run.pl  --verbose-restart --big --big --force --retry=3 --max-save-core=0 --max-save-datadir=1 --mem --parallel=4 --suites=galera,wsrep --vardir=${MYSQL_VARDIR}/galera4_big
+      perl mysql-test-run.pl  --verbose-restart --big --big --force --retry=3 --max-save-core=0 --max-save-datadir=1 --mem --parallel=4 --testcase-timeout=120 \
+        --suites=galera,wsrep --vardir=${MYSQL_VARDIR}/galera4_big
     displayName: "MTR Galera --big --big test"
     failOnStderr: false
 
