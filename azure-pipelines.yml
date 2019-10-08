@@ -126,13 +126,19 @@ stages:
 
     - checkout: none
     - template: azure/fetch-unpack-tarball.yml
-    - template: azure/install-galera.yml
       parameters:
         Artifact: Release
+
     - template: azure/tests/run-mtr-test.yml
       parameters:
         MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
         TestName: 'Quick Test - Release'
+
+    - template: azure/install-galera.yml
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 --testcase-timeout=120 --vardir=$(MYSQL_VARDIR) --big-test'
+        TestName: 'Quick Galera Test - Release'
 
   - job: TestRPMs_Quick
     timeoutInMinutes: 280
