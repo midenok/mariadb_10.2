@@ -12380,9 +12380,7 @@ create_table_info_t::create_foreign_keys()
 		create_name[bufend - create_name] = '\0';
 	}
 
-	Alter_info* alter_info = m_create_info->alter_info;
-	ut_ad(alter_info);
-	List_iterator_fast<Key> key_it(alter_info->key_list);
+	List_iterator_fast<Key> key_it(/*alter_info->key_list*/);
 
 	dict_table_t* table = dict_table_get_low(name);
 	if (!table) {
