@@ -17,7 +17,7 @@ jobs:
       whoami
       pwd
       mkdir dist && cd dist
-      cmake ..
+      cmake .. -DBUILD_CONFIG=enterprise
       make dist
       cp *.tar.gz $BUILD_ARTIFACTSTAGINGDIRECTORY
     displayName: Build Source Tarball
