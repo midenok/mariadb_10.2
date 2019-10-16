@@ -5075,7 +5075,8 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
 
     if (!frm_only)
     {
-      if (ha_create_table(thd, path, db.str, table_name.str, create_info, frm))
+      if (ha_create_table(thd, path, db.str, table_name.str, create_info,
+                          alter_info, frm))
       {
         file->ha_create_partitioning_metadata(path, NULL, CHF_DELETE_FLAG);
         deletefrm(path);
@@ -10163,7 +10164,7 @@ do_continue:;
 
   if (ha_create_table(thd, alter_ctx.get_tmp_path(),
                       alter_ctx.new_db.str, alter_ctx.new_name.str,
-                      create_info, &frm))
+                      create_info, alter_info, &frm))
     goto err_new_table_cleanup;
 
   /* Mark that we have created table in storage engine. */

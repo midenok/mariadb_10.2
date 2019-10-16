@@ -12274,30 +12274,31 @@ class key_text
 	char		    buf[MAX_TEXT + 1];
 
 public:
-	key_text(Key* key)
+	key_text(FOREIGN_KEY_INFO* key)
 	{
 		char* ptr = buf;
-		if (key->name.str) {
-			size_t len = std::min(key->name.length, MAX_TEXT - 2);
+		if (key->referenced_key_name->str) {
+			LEX_CSTRING* name = key->referenced_key_name;
+			size_t len = std::min(name->length, MAX_TEXT - 2);
 			*(ptr++)   = '`';
-			memcpy(ptr, key->name.str, len);
+			memcpy(ptr, name->str, len);
 			ptr	  += len;
 			*(ptr++)   = '`';
 			*ptr	   = '\0';
 			return;
 		}
 		*(ptr++)  = '(';
-		List_iterator_fast<Key_part_spec> it(key->columns);
-		while (Key_part_spec* k = it++) {
+		List_iterator_fast<LEX_CSTRING> it(key->foreign_fields);
+		while (LEX_CSTRING* field_name = it++) {
 			/* 3 is etc continuation ("...");
 			   2 is comma separator (", ") in case of next exists;
 			   1 is terminating ')' */
 			if ((size_t)(ptr - buf) < MAX_TEXT
 				- (it.peek() ? 3 + 2 + 1 : 3 + 1)
-				- k->field_name.length) {
-				memcpy(ptr, k->field_name.str,
-				       k->field_name.length);
-				ptr += k->field_name.length;
+				- field_name->length) {
+				memcpy(ptr, field_name->str,
+				       field_name->length);
+				ptr += field_name->length;
 				if (it.peek()) {
 					*(ptr++) = ',';
 					*(ptr++) = ' ';
@@ -12380,7 +12381,7 @@ create_table_info_t::create_foreign_keys()
 		create_name[bufend - create_name] = '\0';
 	}
 
-	List_iterator_fast<Key> key_it(/*alter_info->key_list*/);
+	List_iterator_fast<FOREIGN_KEY_INFO> key_it(*m_form->s->foreign_keys);
 
 	dict_table_t* table = dict_table_get_low(name);
 	if (!table) {
@@ -12392,10 +12393,7 @@ create_table_info_t::create_foreign_keys()
 		return (DB_CANNOT_ADD_CONSTRAINT);
 	}
 
-	while (Key* key = key_it++) {
-		if (key->type != Key::FOREIGN_KEY)
-			continue;
-
+	while (FOREIGN_KEY_INFO* fk = key_it++) {
 		if (tmp_table) {
 			ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT,
 					create_name,
@@ -12409,8 +12407,7 @@ create_table_info_t::create_foreign_keys()
 			return (DB_CANNOT_ADD_CONSTRAINT);
 		}
 
-		Foreign_key*   fk = static_cast<Foreign_key*>(key);
-		Key_part_spec* col;
+		LEX_CSTRING*   col;
 		bool	       success;
 
 		dict_foreign_t* foreign = dict_mem_foreign_create();
@@ -12418,12 +12415,50 @@ create_table_info_t::create_foreign_keys()
 			return (DB_OUT_OF_MEMORY);
 		}
 
-		List_iterator_fast<Key_part_spec> col_it(fk->columns);
+		if (fk->foreign_id->str) {
+			ulint db_len;
+
+			/* Catenate 'databasename/' to the constraint name
+			specified by the user: we conceive the constraint as
+			belonging to the same MySQL 'database' as the table
+			itself. We store the name to foreign->id. */
+
+			db_len = dict_get_db_name_len(table->name.m_name);
+
+			foreign->id = static_cast<char*>(mem_heap_alloc(
+				foreign->heap,
+				db_len + fk->foreign_id->length + 2));
+
+			ut_memcpy(foreign->id, table->name.m_name, db_len);
+			foreign->id[db_len] = '/';
+			strcpy(foreign->id + db_len + 1,
+			       fk->foreign_id->str);
+		}
+
+		if (foreign->id == NULL) {
+			error = dict_create_add_foreign_id(
+				&number, table->name.m_name, foreign);
+			if (error != DB_SUCCESS) {
+				dict_foreign_free(foreign);
+				return (error);
+			}
+		}
+
+		std::pair<dict_foreign_set::iterator, bool> ret
+			= local_fk_set.insert(foreign);
+
+		if (!ret.second) {
+			/* A duplicate foreign key name has been found */
+			dict_foreign_free(foreign);
+			return (DB_CANNOT_ADD_CONSTRAINT);
+		}
+
+
+		List_iterator_fast<LEX_CSTRING> col_it(fk->foreign_fields);
 		unsigned			  i = 0, j = 0;
 		while ((col = col_it++)) {
 			column_names[i] = mem_heap_strdupl(
-				foreign->heap, col->field_name.str,
-				col->field_name.length);
+				foreign->heap, col->str, col->length);
 			success = find_col(table, column_names + i);
 			if (!success) {
 				key_text k(fk);
@@ -12465,44 +12500,6 @@ create_table_info_t::create_foreign_keys()
 			return (DB_CANNOT_ADD_CONSTRAINT);
 		}
 
-		if (fk->constraint_name.str) {
-			ulint db_len;
-
-			/* Catenate 'databasename/' to the constraint name
-			specified by the user: we conceive the constraint as
-			belonging to the same MySQL 'database' as the table
-			itself. We store the name to foreign->id. */
-
-			db_len = dict_get_db_name_len(table->name.m_name);
-
-			foreign->id = static_cast<char*>(mem_heap_alloc(
-				foreign->heap,
-				db_len + fk->constraint_name.length + 2));
-
-			ut_memcpy(foreign->id, table->name.m_name, db_len);
-			foreign->id[db_len] = '/';
-			strcpy(foreign->id + db_len + 1,
-			       fk->constraint_name.str);
-		}
-
-		if (foreign->id == NULL) {
-			error = dict_create_add_foreign_id(
-				&number, table->name.m_name, foreign);
-			if (error != DB_SUCCESS) {
-				dict_foreign_free(foreign);
-				return (error);
-			}
-		}
-
-		std::pair<dict_foreign_set::iterator, bool> ret
-			= local_fk_set.insert(foreign);
-
-		if (!ret.second) {
-			/* A duplicate foreign key name has been found */
-			dict_foreign_free(foreign);
-			return (DB_CANNOT_ADD_CONSTRAINT);
-		}
-
 		foreign->foreign_table = table;
 		foreign->foreign_table_name
 			= mem_heap_strdup(foreign->heap, table->name.m_name);
@@ -12525,8 +12522,8 @@ create_table_info_t::create_foreign_keys()
 		       i * sizeof(void*));
 
 		foreign->referenced_table_name = dict_get_referenced_table(
-			name, LEX_STRING_WITH_LEN(fk->ref_db),
-			LEX_STRING_WITH_LEN(fk->ref_table),
+			name, LEX_STRING_WITH_LEN(*fk->referenced_db),
+			LEX_STRING_WITH_LEN(*fk->referenced_table),
 			&foreign->referenced_table, foreign->heap, cs);
 
 		if (!foreign->referenced_table_name) {
@@ -12562,11 +12559,10 @@ create_table_info_t::create_foreign_keys()
 			return (DB_CANNOT_ADD_CONSTRAINT);
 		}
 
-		col_it.init(fk->ref_columns);
+		col_it.init(fk->referenced_fields);
 		while ((col = col_it++)) {
 			ref_column_names[j] = mem_heap_strdupl(
-				foreign->heap, col->field_name.str,
-				col->field_name.length);
+				foreign->heap, col->str, col->length);
 			if (foreign->referenced_table) {
 				success = find_col(foreign->referenced_table,
 						   ref_column_names + j);
@@ -12627,8 +12623,8 @@ create_table_info_t::create_foreign_keys()
 		memcpy(foreign->referenced_col_names, ref_column_names,
 		       i * sizeof(void*));
 
-		if (fk->delete_opt == FK_OPTION_SET_NULL
-		    || fk->update_opt == FK_OPTION_SET_NULL) {
+		if (fk->delete_method == FK_OPTION_SET_NULL
+		    || fk->update_method == FK_OPTION_SET_NULL) {
 			for (j = 0; j < foreign->n_fields; j++) {
 				if ((dict_index_get_nth_col(
 					     foreign->foreign_index, j)
@@ -12666,7 +12662,7 @@ create_table_info_t::create_foreign_keys()
 			}
 		}
 
-		switch (fk->delete_opt) {
+		switch (fk->delete_method) {
 		case FK_OPTION_UNDEF:
 		case FK_OPTION_RESTRICT:
 			break;
@@ -12687,7 +12683,7 @@ create_table_info_t::create_foreign_keys()
 			break;
 		}
 
-		switch (fk->update_opt) {
+		switch (fk->update_method) {
 		case FK_OPTION_UNDEF:
 		case FK_OPTION_RESTRICT:
 			break;
@@ -12857,7 +12853,8 @@ int create_table_info_t::create_table(bool create_fk)
 		dict_table_get_all_fts_indexes(m_table, fts->indexes);
 	}
 
-	dberr_t err = create_fk ? create_foreign_keys() : DB_SUCCESS;
+	dberr_t err = create_fk && m_form->s->foreign_keys
+		? create_foreign_keys() : DB_SUCCESS;
 
 	if (err == DB_SUCCESS) {
 		/* Check that also referencing constraints are ok */

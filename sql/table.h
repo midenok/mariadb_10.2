@@ -642,6 +642,27 @@ struct TABLE_SHARE
   Field **field;
   Field **found_next_number_field;
   KEY  *key_info;			/* data of keys in database */
+  List <FOREIGN_KEY_INFO> *foreign_keys;
+  bool update_foreign_keys(THD *thd, Alter_info *alter_info);
+  template<typename S>
+  S* lex_strdup(const S &src)
+  {
+    S *dst= new (&mem_root) S;
+    if (!dst)
+      return NULL;
+    if (!src.str)
+    {
+      dst->str= NULL;
+      dst->length= 0;
+      return dst;
+    }
+    dst->str= memdup_root(&mem_root, src.str, src.length + 1);
+    if (!dst->str)
+      return NULL;
+    dst->length= src.length;
+    return dst;
+  }
+
   Virtual_column_info **check_constraints;
   uint	*blob_field;			/* Index to blobs in Field arrray*/
   LEX_CUSTRING vcol_defs;              /* definitions of generated columns */
