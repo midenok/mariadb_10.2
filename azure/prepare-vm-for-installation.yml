@@ -1,19 +1,57 @@
+parameters:
+  CLEAN: yes
 
 steps:
+  - bash: |
+      set -x
+
+      if [[ -e /etc/redhat-release ]]; then
+        sudo yum -y install patch
+        sudo yum -y upgrade
+        sudo yum -y clean all
+        sudo rm -fv /etc/yum.repos.d/mariadb.repo*
+        ls -la /etc/yum.repos.d/
+      fi
+
+      if [[ -e /etc/debian_version ]]; then
+        export DEBIAN_FRONTEND=noninteractive
+        sudo bash -c "rm -fv ${DEB_LOCAL_LIST} /etc/apt/sources.list.d/mariadb.list*"
+        sudo apt-get update
+        sudo apt-get -y -f -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dist-upgrade
+        sudo apt-get -y -f install debconf-utils dpkg-dev zlib1g-dev curl patch
+        #
+        echo mariadb-server-10.2  mariadb-server-10.2/postrm_remove_databases  boolean false   | sudo debconf-set-selections
+        echo mariadb-server-10.2  mysql-server/root_password  password $(MYSQL_PASSWORD)       | sudo debconf-set-selections
+        echo mariadb-server-10.2  mysql-server/root_password_again  password $(MYSQL_PASSWORD) | sudo debconf-set-selections
+        #
+        echo mariadb-server-10.3  mariadb-server-10.3/postrm_remove_databases  boolean false   | sudo debconf-set-selections
+        echo mariadb-server-10.3  mysql-server/root_password  password $(MYSQL_PASSWORD)       | sudo debconf-set-selections
+        echo mariadb-server-10.3  mysql-server/root_password_again  password $(MYSQL_PASSWORD) | sudo debconf-set-selections
+        #
+        echo mariadb-server-10.4  mariadb-server-10.4/postrm_remove_databases  boolean false   | sudo debconf-set-selections
+        echo mariadb-server-10.4  mysql-server/root_password  password $(MYSQL_PASSWORD)       | sudo debconf-set-selections
+        echo mariadb-server-10.4  mysql-server/root_password_again  password $(MYSQL_PASSWORD) | sudo debconf-set-selections
+        #
+        echo mariadb-server-10.5  mariadb-server-10.5/postrm_remove_databases  boolean false   | sudo debconf-set-selections
+        echo mariadb-server-10.5  mysql-server/root_password  password $(MYSQL_PASSWORD)       | sudo debconf-set-selections
+        echo mariadb-server-10.5  mysql-server/root_password_again  password $(MYSQL_PASSWORD) | sudo debconf-set-selections
+        #
+      fi
+    displayName: "Prepare and clean repo data"
 
   - bash: |
       set -ex
-
       uname -a
+
+      SHOULDRUN=${{ parameters.CLEAN }}
+      [[ ${SHOULDRUN} == no ]] && exit 0
+
       INSTALLED=""
 
       if [[ -e /etc/redhat-release ]]; then
         cat /etc/*release
         INSTALLED=$(rpm -qa | grep -iE "^maria|^mysql|^percona|^galera" ||:)
         [[ -n "${INSTALLED}" ]] && sudo yum -y erase ${INSTALLED}
-        sudo yum -y upgrade
-        #MENT-292
-        sudo yum -y install patch
       fi
 
       if [[ -e /etc/SuSE-release ]]; then
@@ -24,23 +62,12 @@ steps:
 
       if [[ -e /etc/debian_version ]]; then
         cat /etc/*_version
-        sudo bash -c "rm -fv ${DEB_LOCAL_LIST}"
-        export DEBIAN_FRONTEND=noninteractive
-        sudo apt update
-        sudo apt-get -y install debconf-utils
         INSTALLED=$(dpkg -l | awk '{print $2}' | grep -iE "^maria|^mysql|^percona|^galera"  ||:)
         if [[ -n "${INSTALLED}" ]]; then
-          echo mariadb-server-10.2  mariadb-server-10.2/postrm_remove_databases  boolean false | sudo debconf-set-selections
-          echo mariadb-server-10.3  mariadb-server-10.3/postrm_remove_databases  boolean false | sudo debconf-set-selections
-          echo mariadb-server-10.4  mariadb-server-10.4/postrm_remove_databases  boolean false | sudo debconf-set-selections
-          echo mariadb-server-10.5  mariadb-server-10.5/postrm_remove_databases  boolean false | sudo debconf-set-selections
+          export DEBIAN_FRONTEND=noninteractive
           sudo apt-get -y -f purge ${INSTALLED}
+          sudo apt-get -y -f autoremove
         fi
-        sudo apt-get -y -f autoremove
-        sudo apt-get -y -f -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dist-upgrade
-        sudo apt-get -y -f install debconf-utils dpkg-dev zlib1g-dev
-        #MENT-292
-        sudo apt-get -y -f install patch
       fi
 
       [[ -n "$(pidof mysqld)" ]] && sudo pkill -9 mysqld
@@ -49,4 +76,4 @@ steps:
       sudo rm -frv /dev/shm/var*
       sudo rm -frv ${MYSQL_VARDIR}
       sudo rm -fv ${TEST_RESULTS_FILE}
-    displayName: "Prepare VM for installation"
+    displayName: "Uninstall existing MariaDB packages"

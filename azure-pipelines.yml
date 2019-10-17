@@ -137,8 +137,8 @@ stages:
     - template: azure/install-galera.yml
     - template: azure/tests/run-mtr-test.yml
       parameters:
-        MtrArgs: '--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 --testcase-timeout=120 --vardir=$(MYSQL_VARDIR) --big-test'
-        TestName: 'Quick Galera Test - Release'
+        MtrArgs: "--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 --testcase-timeout=120 --vardir=$(MYSQL_VARDIR) --big-test"
+        TestName: 'Galera --big-test - Release'
 
   - job: TestRPMs_Quick
     timeoutInMinutes: 280

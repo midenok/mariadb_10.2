@@ -31,7 +31,6 @@ steps:
 
       cd "${MYSQLTEST}"
       exec perl mysql-test-run.pl ${{ parameters.MtrArgs }}
-      if [[ $? -gt 0 ]]; then
-        echo "- ${{ parameters.TestName }} failed!"
-      fi
+
     displayName: "MTR - ${{ parameters.TestName }}"
+    condition: succeededOrFailed()
