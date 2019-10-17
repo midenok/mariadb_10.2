@@ -638,6 +638,7 @@ struct TABLE_SHARE
   engine_option_value *option_list;     /* text options for table */
   ha_table_option_struct *option_struct; /* structure with parsed options */
 
+
   /* The following is copied to each TABLE on OPEN */
   Field **field;
   Field **found_next_number_field;
@@ -647,7 +648,7 @@ struct TABLE_SHARE
   template<typename S>
   S* lex_strdup(const S &src)
   {
-    S *dst= new (&mem_root) S;
+    S *dst= (S *) alloc_root(&mem_root, sizeof(S));
     if (!dst)
       return NULL;
     if (!src.str)
@@ -656,7 +657,7 @@ struct TABLE_SHARE
       dst->length= 0;
       return dst;
     }
-    dst->str= memdup_root(&mem_root, src.str, src.length + 1);
+    dst->str= (const char *) memdup_root(&mem_root, src.str, src.length + 1);
     if (!dst->str)
       return NULL;
     dst->length= src.length;

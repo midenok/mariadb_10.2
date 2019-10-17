@@ -2112,48 +2112,6 @@ retry_share:
     tc_add_table(thd, table);
   }
 
-  if (!table->s->foreign_keys)
-  {
-    mysql_mutex_lock(&table->s->LOCK_share);
-    if (!table->s->foreign_keys)
-    {
-      table->s->foreign_keys= (List <FOREIGN_KEY_INFO> *) alloc_root(
-        &table->s->mem_root, sizeof(List <FOREIGN_KEY_INFO>));
-      if (unlikely(!table->s->foreign_keys))
-      {
-        mysql_mutex_unlock(&table->s->LOCK_share);
-        MYSQL_UNBIND_TABLE(table->file);
-        tc_release_table(table);
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        DBUG_RETURN(true);
-      }
-      table->s->foreign_keys->empty();
-      List<FOREIGN_KEY_INFO> f_key_list;
-      MEM_ROOT *old_root= thd->mem_root;
-      thd->mem_root= &table->s->mem_root;
-      bool err= table->file->get_foreign_key_list(thd, &f_key_list);
-      thd->mem_root= old_root;
-      if (unlikely(err))
-      {
-        mysql_mutex_unlock(&table->s->LOCK_share);
-        MYSQL_UNBIND_TABLE(table->file);
-        tc_release_table(table);
-        DBUG_RETURN(true);
-      }
-      if (unlikely(table->s->foreign_keys->copy(&f_key_list,
-                                                &table->s->mem_root)))
-      {
-        mysql_mutex_unlock(&table->s->LOCK_share);
-        MYSQL_UNBIND_TABLE(table->file);
-        tc_release_table(table);
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        DBUG_RETURN(true);
-      }
-    }
-    mysql_mutex_unlock(&table->s->LOCK_share);
-    DBUG_ASSERT(table->s->foreign_keys);
-  }
-
   if (!(flags & MYSQL_OPEN_HAS_MDL_LOCK) &&
       table->s->table_category < TABLE_CATEGORY_INFORMATION)
   {
