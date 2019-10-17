@@ -2,8 +2,8 @@ steps:
 
   - bash: |
       set -x
-      sudo mysql -e "CREATE USER IF NOT EXISTS 'testuser'@'localhost' IDENTIFIED BY 'tESt123%_password';"
-      UNSTABLE=$(mysql -utestuser -ptESt123%_password -E -e "SELECT PLUGIN_NAME, PLUGIN_MATURITY, PLUGIN_STATUS FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_MATURITY != 'Stable' AND PLUGIN_STATUS != 'DISABLED';")
+      sudo mysql -e "CREATE USER IF NOT EXISTS 'testuser'@'localhost' IDENTIFIED BY '$(MYSQL_PASSWORD)';"
+      UNSTABLE=$(mysql -utestuser -p'$(MYSQL_PASSWORD)' -E -e "SELECT PLUGIN_NAME, PLUGIN_MATURITY, PLUGIN_STATUS FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_MATURITY != 'Stable' AND PLUGIN_STATUS != 'DISABLED';")
       if [[ -n "${UNSTABLE}" ]]; then
         echo "- Plugins maturity test failed"
         echo "${UNSTABLE}"
