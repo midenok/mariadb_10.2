@@ -12854,6 +12854,7 @@ int create_table_info_t::create_table(bool create_fk)
 	}
 
 	dberr_t err = create_fk && m_form->s->foreign_keys
+		&& !m_form->s->foreign_keys->is_empty()
 		? create_foreign_keys() : DB_SUCCESS;
 
 	if (err == DB_SUCCESS) {
