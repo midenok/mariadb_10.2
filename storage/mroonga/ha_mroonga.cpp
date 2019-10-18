@@ -4904,6 +4904,38 @@ error:
   DBUG_RETURN(error);
 }
 
+List<FOREIGN_KEY_INFO> *ha_mroonga::build_foreign_list(bool &err,
+                                                       bool referenced)
+{
+  List<FOREIGN_KEY_INFO> fk_list;
+  THD *thd= ha_thd();
+  MEM_ROOT *old_root= thd->mem_root;
+  thd->mem_root= &table->s->mem_root;
+  if (referenced)
+  {
+    err= get_parent_foreign_key_list(thd, &fk_list);
+  }
+  else
+  {
+    err= get_foreign_key_list(thd, &fk_list);
+  }
+  thd->mem_root= old_root;
+
+  if (fk_list.is_empty())
+    return NULL;
+
+  List<FOREIGN_KEY_INFO> *result_list= (List<FOREIGN_KEY_INFO> *) alloc_root(
+      &table->s->mem_root, sizeof(List<FOREIGN_KEY_INFO>));
+  if (unlikely(!result_list))
+  {
+    err= true;
+    return NULL;
+  }
+  result_list->empty();
+  result_list->copy(&fk_list, &table->s->mem_root);
+  return result_list;
+}
+
 int ha_mroonga::open(const char *name,
                      int mode,
                      uint open_options
@@ -4930,8 +4962,42 @@ int ha_mroonga::open(const char *name,
   if (share->wrapper_mode)
   {
     error = wrapper_open(name, mode, open_options);
-  } else {
+  }
+  else
+  {
     error = storage_open(name, mode, open_options);
+    if (!error && !table->s->referenced_keys &&
+        table->s->tmp_table == NO_TMP_TABLE)
+    {
+      bool err= false;
+      mysql_mutex_lock(&table->s->LOCK_share);
+      if (!table->s->referenced_keys)
+      {
+        DBUG_ASSERT(!table->s->foreign_keys);
+        table->s->foreign_keys= build_foreign_list(err, false);
+        if (!err)
+        {
+          table->s->referenced_keys= build_foreign_list(err, true);
+        }
+      }
+      mysql_mutex_unlock(&table->s->LOCK_share);
+      if (!table->s->referenced_keys)
+      {
+        /* Assign some empty list to indicate that we don't need to initialize
+         * this TABLE_SHARE anymore. */
+        static List<FOREIGN_KEY_INFO> empty_list;
+        DBUG_ASSERT(empty_list.is_empty());
+        table->s->referenced_keys= &empty_list;
+      }
+      if (unlikely(err))
+      {
+        error= HA_ERR_OUT_OF_MEM;
+      }
+      else
+      {
+        DBUG_ASSERT(table->s->referenced_keys);
+      }
+    }
   }
 
   if (error)
@@ -16689,7 +16755,7 @@ int ha_mroonga::wrapper_get_foreign_key_list(THD *thd,
   int res;
   MRN_SET_WRAP_SHARE_KEY(share, table->s);
   MRN_SET_WRAP_TABLE_KEY(this, table);
-  res = wrap_handler->get_foreign_key_list(thd, f_key_list);
+  res = f_key_list->copy(table->s->foreign_keys, thd->mem_root);
   MRN_SET_BASE_SHARE_KEY(share, table->s);
   MRN_SET_BASE_TABLE_KEY(this, table);
   DBUG_RETURN(res);
@@ -16801,8 +16867,7 @@ int ha_mroonga::storage_get_foreign_key_list(THD *thd,
                                            List<FOREIGN_KEY_INFO> *f_key_list)
 {
   MRN_DBUG_ENTER_METHOD();
-  int res = handler::get_foreign_key_list(thd, f_key_list);
-  DBUG_RETURN(res);
+  DBUG_RETURN(0);
 }
 #endif
 
@@ -16827,7 +16892,7 @@ int ha_mroonga::wrapper_get_parent_foreign_key_list(THD *thd,
   int res;
   MRN_SET_WRAP_SHARE_KEY(share, table->s);
   MRN_SET_WRAP_TABLE_KEY(this, table);
-  res = wrap_handler->get_parent_foreign_key_list(thd, f_key_list);
+  res = f_key_list->copy(table->s->referenced_keys, thd->mem_root);
   MRN_SET_BASE_SHARE_KEY(share, table->s);
   MRN_SET_BASE_TABLE_KEY(this, table);
   DBUG_RETURN(res);
@@ -16837,8 +16902,7 @@ int ha_mroonga::storage_get_parent_foreign_key_list(THD *thd,
                                             List<FOREIGN_KEY_INFO> *f_key_list)
 {
   MRN_DBUG_ENTER_METHOD();
-  int res = handler::get_parent_foreign_key_list(thd, f_key_list);
-  DBUG_RETURN(res);
+  DBUG_RETURN(0);
 }
 
 int ha_mroonga::get_parent_foreign_key_list(THD *thd,
