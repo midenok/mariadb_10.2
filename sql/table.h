@@ -646,6 +646,10 @@ struct TABLE_SHARE
   List <FOREIGN_KEY_INFO> *foreign_keys;
   List <FOREIGN_KEY_INFO> *referenced_keys;
   bool update_foreign_keys(THD *thd, Alter_info *alter_info);
+  bool referenced_by_foreign_key() const
+  {
+    return referenced_keys && !referenced_keys->is_empty();
+  }
 
   Virtual_column_info **check_constraints;
   uint	*blob_field;			/* Index to blobs in Field arrray*/

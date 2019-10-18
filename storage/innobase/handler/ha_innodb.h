@@ -220,7 +220,7 @@ public:
 
 	bool can_switch_engines() override;
 
-	uint referenced_by_foreign_key() override;
+	uint referenced_by_foreign_key();
 
 	void free_foreign_key_create_info(char* str) override;
 

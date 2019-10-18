@@ -126,7 +126,7 @@ fk_truncate_illegal_if_parent(THD *thd, TABLE *table)
     Bail out early if the table is not referenced by a foreign key.
     In this case, the table could only be, if at all, a child table.
   */
-  if (! table->file->referenced_by_foreign_key())
+  if (! table->s->referenced_by_foreign_key())
     return FALSE;
 
   /*

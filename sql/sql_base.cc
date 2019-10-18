@@ -4702,7 +4702,7 @@ handle_table(THD *thd, Query_tables_list *prelocking_ctx,
         return TRUE;
     }
 
-    if (table->s->referenced_keys && table->file->referenced_by_foreign_key())
+    if (table->s->referenced_by_foreign_key())
     {
       List_iterator<FOREIGN_KEY_INFO> fk_list_it(*table->s->referenced_keys);
       FOREIGN_KEY_INFO *fk;

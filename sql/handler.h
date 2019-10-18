@@ -3866,7 +3866,6 @@ public:
   */
   virtual bool can_switch_engines() { return true; }
   virtual int can_continue_handler_scan() { return 0; }
-  virtual uint referenced_by_foreign_key() { return 0;}
   virtual void init_table_handle_for_HANDLER()
   { return; }       /* prepare InnoDB for HANDLER */
   virtual void free_foreign_key_create_info(char* str) {}

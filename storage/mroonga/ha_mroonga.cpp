@@ -4913,11 +4913,11 @@ List<FOREIGN_KEY_INFO> *ha_mroonga::build_foreign_list(bool &err,
   thd->mem_root= &table->s->mem_root;
   if (referenced)
   {
-    err= get_parent_foreign_key_list(thd, &fk_list);
+    err= storage_get_foreign_key_list(thd, &fk_list);
   }
   else
   {
-    err= get_foreign_key_list(thd, &fk_list);
+    err= storage_get_foreign_key_list(thd, &fk_list);
   }
   thd->mem_root= old_root;
 
@@ -16748,19 +16748,6 @@ bool ha_mroonga::can_switch_engines()
   DBUG_RETURN(res);
 }
 
-int ha_mroonga::wrapper_get_foreign_key_list(THD *thd,
-                                           List<FOREIGN_KEY_INFO> *f_key_list)
-{
-  MRN_DBUG_ENTER_METHOD();
-  int res;
-  MRN_SET_WRAP_SHARE_KEY(share, table->s);
-  MRN_SET_WRAP_TABLE_KEY(this, table);
-  res = f_key_list->copy(table->s->foreign_keys, thd->mem_root);
-  MRN_SET_BASE_SHARE_KEY(share, table->s);
-  MRN_SET_BASE_TABLE_KEY(this, table);
-  DBUG_RETURN(res);
-}
-
 #ifdef MRN_SUPPORT_FOREIGN_KEYS
 int ha_mroonga::storage_get_foreign_key_list(THD *thd,
                                              List<FOREIGN_KEY_INFO> *f_key_list)
@@ -16870,86 +16857,6 @@ int ha_mroonga::storage_get_foreign_key_list(THD *thd,
   DBUG_RETURN(0);
 }
 #endif
-
-int ha_mroonga::get_foreign_key_list(THD *thd,
-                                     List<FOREIGN_KEY_INFO> *f_key_list)
-{
-  MRN_DBUG_ENTER_METHOD();
-  int res;
-  if (share->wrapper_mode)
-  {
-    res = wrapper_get_foreign_key_list(thd, f_key_list);
-  } else {
-    res = storage_get_foreign_key_list(thd, f_key_list);
-  }
-  DBUG_RETURN(res);
-}
-
-int ha_mroonga::wrapper_get_parent_foreign_key_list(THD *thd,
-                                            List<FOREIGN_KEY_INFO> *f_key_list)
-{
-  MRN_DBUG_ENTER_METHOD();
-  int res;
-  MRN_SET_WRAP_SHARE_KEY(share, table->s);
-  MRN_SET_WRAP_TABLE_KEY(this, table);
-  res = f_key_list->copy(table->s->referenced_keys, thd->mem_root);
-  MRN_SET_BASE_SHARE_KEY(share, table->s);
-  MRN_SET_BASE_TABLE_KEY(this, table);
-  DBUG_RETURN(res);
-}
-
-int ha_mroonga::storage_get_parent_foreign_key_list(THD *thd,
-                                            List<FOREIGN_KEY_INFO> *f_key_list)
-{
-  MRN_DBUG_ENTER_METHOD();
-  DBUG_RETURN(0);
-}
-
-int ha_mroonga::get_parent_foreign_key_list(THD *thd,
-                                            List<FOREIGN_KEY_INFO> *f_key_list)
-{
-  MRN_DBUG_ENTER_METHOD();
-  int res;
-  if (share->wrapper_mode)
-  {
-    res = wrapper_get_parent_foreign_key_list(thd, f_key_list);
-  } else {
-    res = storage_get_parent_foreign_key_list(thd, f_key_list);
-  }
-  DBUG_RETURN(res);
-}
-
-uint ha_mroonga::wrapper_referenced_by_foreign_key()
-{
-  MRN_DBUG_ENTER_METHOD();
-  uint res;
-  MRN_SET_WRAP_SHARE_KEY(share, table->s);
-  MRN_SET_WRAP_TABLE_KEY(this, table);
-  res = wrap_handler->referenced_by_foreign_key();
-  MRN_SET_BASE_SHARE_KEY(share, table->s);
-  MRN_SET_BASE_TABLE_KEY(this, table);
-  DBUG_RETURN(res);
-}
-
-uint ha_mroonga::storage_referenced_by_foreign_key()
-{
-  MRN_DBUG_ENTER_METHOD();
-  uint res = handler::referenced_by_foreign_key();
-  DBUG_RETURN(res);
-}
-
-uint ha_mroonga::referenced_by_foreign_key()
-{
-  MRN_DBUG_ENTER_METHOD();
-  uint res;
-  if (share->wrapper_mode)
-  {
-    res = wrapper_referenced_by_foreign_key();
-  } else {
-    res = storage_referenced_by_foreign_key();
-  }
-  DBUG_RETURN(res);
-}
 
 void ha_mroonga::wrapper_init_table_handle_for_HANDLER()
 {
