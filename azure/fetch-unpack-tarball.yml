@@ -17,8 +17,8 @@ steps:
     ls -la
     pwd
     mkdir test
-    tar xzf '$(System.ArtifactsDirectory)'/$(containerImage)-${{ parameters.Artifact }}/mariadb-enterprise-*.tar.gz \
+    tar xzf '$(System.ArtifactsDirectory)'/$(containerImage)-${{ parameters.Artifact }}/mariadb-*.tar.gz \
       --strip-components=1 -C $(Build.SourcesDirectory)
     ls -la
-    rm -frv '$(System.ArtifactsDirectory)'/$(containerImage)-${{ parameters.Artifact }}/mariadb-enterprise-*.tar.gz
+    rm -frv '$(System.ArtifactsDirectory)'/$(containerImage)-${{ parameters.Artifact }}/mariadb-*.tar.gz
   displayName: "Unpack ${{ parameters.Artifact }} Tarball"
