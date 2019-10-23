@@ -77,6 +77,7 @@ jobs:
     displayName: 'Build ${{ parameters.BuildType }} ${{ parameters.CMakeArgs }} Tarball'
 
   - task: CopyFiles@2
+    timeoutInMinutes: 2
     inputs:
       targetFolder: '$(Build.ArtifactStagingDirectory)'
       sourceFolder: "$(BUILDDIR)/build"
