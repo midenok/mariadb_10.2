@@ -24,7 +24,8 @@ steps:
 
       if [[ -e /usr/bin/zypper ]]; then
         sudo zypper -n in wget || true
-        RELEASE=$(grep VERSION /etc/SuSE-release | awk '{print $NF}')
+        source /etc/os-release
+        RELEASE=${VERSION_ID%.*}
         wget https://downloads.mariadb.com/MariaDB/RPM-GPG-KEY-MariaDB-Ent -O /tmp/rpm.key
         sudo rpm --import /tmp/rpm.key && rm -f /tmp/rpm.key
         sudo zypper rr Galera-Enterprise || true
@@ -32,3 +33,4 @@ steps:
         sudo zypper -n in rsync socat lsof
       fi
     displayName: "Install Galera-Enterprise-4"
+    condition: succeededOrFailed()
