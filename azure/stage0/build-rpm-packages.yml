@@ -28,14 +28,36 @@ jobs:
   - checkout: none
   - template: extract-source-tarball.yml
 
+
   - bash: |
       set -x
       cd "${BUILDDIR}"
       curl -o ../MariaDB-shared-5.3.x.rpm  \
         http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
       curl -o ../MariaDB-shared-10.1.x.rpm \
-        http://yum.mariadb.org/10.1/centos6-amd64/rpms/MariaDB-10.1.40-centos6-x86_64-compat.rpm
-    displayName: 'Fetch Compat RPMs'
+        http://yum.mariadb.org/10.1/centos6-amd64/rpms/MariaDB-10.1.41-centos6-x86_64-shared.rpm
+    displayName: 'Fetch Compat RPMs for for RHEL-6'
+    condition: eq(variables['containerImage'], 'rhel-6')
+
+  - bash: |
+      set -x
+      cd "${BUILDDIR}"
+      curl -o ../MariaDB-shared-5.3.x.rpm  \
+        http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
+      curl -o ../MariaDB-shared-10.1.x.rpm \
+        http://yum.mariadb.org/10.1/centos7-amd64/rpms/MariaDB-shared-10.1.41-1.el7.centos.x86_64.rpm
+    displayName: 'Fetch Compat RPMs for RHEL-7'
+    condition: eq(variables['containerImage'], 'rhel-7')
+
+  - bash: |
+      set -x
+      cd "${BUILDDIR}"
+      curl -o ../MariaDB-shared-5.3.x.rpm  \
+        http://yum.mariadb.org/5.3/centos5-amd64/rpms/MariaDB-shared-5.3.12-122.el5.x86_64.rpm
+      curl -o ../MariaDB-shared-10.1.x.rpm \
+        http://yum.mariadb.org/10.1/sles12-amd64/rpms/MariaDB-shared-10.1.41-1.x86_64.rpm
+    displayName: 'Fetch Compat RPMs for SLES 12 & 15'
+    condition: in(variables['containerImage'], 'sles-12', 'sles-15')
 
   - bash: |
       set -x
