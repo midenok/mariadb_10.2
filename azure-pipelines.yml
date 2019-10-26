@@ -125,6 +125,7 @@ stages:
     steps:
 
     - checkout: none
+    - template: azure/install-galera.yml
     - template: azure/fetch-unpack-tarball.yml
       parameters:
         Artifact: Release
@@ -134,7 +135,6 @@ stages:
         MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
         TestName: 'Quick Test - Release'
 
-    - template: azure/install-galera.yml
     - template: azure/tests/run-mtr-test.yml
       parameters:
         MtrArgs: "--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 --testcase-timeout=120 --vardir=$(MYSQL_VARDIR) --big-test"
@@ -190,6 +190,7 @@ stages:
 
     - template: azure/tests/select-insert-test.yml
     - template: azure/tests/run-acceptance-tests.yml
+    - template: azure/prepare-vm-for-installation.yml
 
   - job: TestDEBs_Quick
     timeoutInMinutes: 280
@@ -236,6 +237,7 @@ stages:
 
     - template: azure/tests/select-insert-test.yml
     - template: azure/tests/run-acceptance-tests.yml
+    - template: azure/prepare-vm-for-installation.yml
 
   - job: TestMSI_Quick
     timeoutInMinutes: 10
