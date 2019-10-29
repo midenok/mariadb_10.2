@@ -166,6 +166,7 @@ stages:
     - template: azure/prepare-vm-for-installation.yml
 
     - task: DownloadBuildArtifacts@0
+      timeoutInMinutes: 2
       inputs:
         buildType: 'current'
         specificBuildWithTriggering: true
