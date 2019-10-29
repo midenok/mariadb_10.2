@@ -16,3 +16,4 @@ point_big : MDEV-14057 InnoDB GIS tests fail
 geometry : MDEV-14057 InnoDB GIS tests fail
 bug16236208 : MDEV-14057 InnoDB GIS tests fail
 bug16266012 : MDEV-14057 InnoDB GIS tests fail
+rtree_compress2 : MENT-449 InnoDB GIS test design problem
