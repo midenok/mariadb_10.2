@@ -65,7 +65,9 @@ steps:
         INSTALLED=$(dpkg -l | awk '{print $2}' | grep -iE "^maria|^mysql|^percona|^galera"  ||:)
         if [[ -n "${INSTALLED}" ]]; then
           export DEBIAN_FRONTEND=noninteractive
-          sudo apt-get -y -f purge ${INSTALLED}
+          until sudo apt-get -y -f purge ${INSTALLED}; do
+            sleep 10
+          done
           sudo apt-get -y -f autoremove
         fi
       fi
