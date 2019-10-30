@@ -13,7 +13,6 @@ steps:
       if [[ -n ${WSREP_PROVIDER} ]]; then
         export WSREP_PROVIDER
         sudo mysqld --help --verbose 2>&1 | grep wsrep
-        sudo mysql -e 'show status like "wsrep%%"'
       fi
 
       if [[ -d mysql-test ]]; then
