@@ -35,16 +35,15 @@ jobs:
     displayName: 'make'
     failOnStderr: false
 
+#   #- script: cd support-files/macOSpkg && ./mkpkg ../../mariadb*tar.gz && mv -vi *.pkg ../../
+
   - task: CopyFiles@2
-    timeoutInMinutes: 2
     inputs:
       targetFolder: '$(Build.ArtifactStagingDirectory)'
       sourceFolder: '$(Build.SourcesDirectory)'
       contents: '?(*.tar.gz|*.pkg)'
 
-#   #- script: cd support-files/macOSpkg && ./mkpkg ../../mariadb*tar.gz && mv -vi *.pkg ../../
-
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: 'MacOS-Release'
+      artifactName: "$(vmImage)-Release"
