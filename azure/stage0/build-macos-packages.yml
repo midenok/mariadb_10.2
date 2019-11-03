@@ -7,18 +7,17 @@ jobs:
 
 - job: BuildMacPackages_${{ parameters.Artifact }}
   dependsOn: BuildSourceTarball
-  condition: false
   workspace:
     clean: all
   pool:
-    vmImage: 'macOS-10.13'
+    vmImage: 'macOS-latest'
 
   steps:
 
   - template: extract-source-tarball.yml
 
   - script: |
-      brew install jemalloc mhash curl gnutls
+      brew install jemalloc mhash curl gnutls openssl
     displayName: "brew install dependencies"
 
   - script: |
@@ -26,7 +25,7 @@ jobs:
         -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/ \
         -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib \
         -DBUILD_CONFIG=enterprise
-    displayName: 'cmake configure'
+    displayName: 'cmake configure MacOS'
     failOnStderr: false
 
   #- script: sed -i '' s/SIZEOF_CHARP/"sizeof(char *)"/g libmariadb/libmariadb/ma_dtoa.c
@@ -37,12 +36,14 @@ jobs:
     failOnStderr: false
 
 #   #- script: cd support-files/macOSpkg && ./mkpkg ../../mariadb*tar.gz && mv -vi *.pkg ../../
-#   - task: CopyFiles@2
-#     inputs:
-#       targetFolder: '$(Build.ArtifactStagingDirectory)'
-#       sourceFolder: '$(Build.SourcesDirectory)'
-#       contents: '?(*.tar.gz|*.pkg)'
-#   - task: PublishBuildArtifacts@1
-#     inputs:
-#       pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-#       artifactName: macOS-10.13
+
+  - task: CopyFiles@2
+    inputs:
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
+      sourceFolder: '$(Build.SourcesDirectory)'
+      contents: '?(*.tar.gz|*.pkg)'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: "$(vmImage)-Release"
