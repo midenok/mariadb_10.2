@@ -1,6 +1,8 @@
 parameters:
   MtrArgs: ''
   TestName: 'MTR Test'
+  tarname: ''
+  Artifact: Release
 
 steps:
 
@@ -33,3 +35,17 @@ steps:
 
     displayName: "MTR - ${{ parameters.TestName }}"
     condition: succeededOrFailed()
+
+  - bash: |
+      set -x
+      mkdir -p '$(Build.ArtifactStagingDirectory)'/MTR-Results
+      tar czvf '$(Build.ArtifactStagingDirectory)'/MTR-Results/${{ parameters.tarname }} $(MYSQL_VARDIR)/*
+    displayName: 'Archive mysql vardir'
+    condition: failed()
+
+  - task: PublishBuildArtifacts@1
+    condition: failed()
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)/MTR-Results'
+      artifactName: '$(containerImage)-${{ parameters.Artifact }}/MTR-Results'
+
