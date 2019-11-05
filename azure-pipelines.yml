@@ -132,13 +132,17 @@ stages:
 
     - template: azure/tests/run-mtr-test.yml
       parameters:
-        MtrArgs: '--mem --force --verbose-restart --skip-test-list=unstable-tests --parallel=auto'
+        MtrArgs: '--force --verbose-restart --skip-test-list=unstable-tests --parallel=auto --vardir=$(MYSQL_VARDIR)'
         TestName: 'Quick Test - Release'
+        tarname: 'mtr-quick-test.tar.gz'
+        Artifact: Release
 
     - template: azure/tests/run-mtr-test.yml
       parameters:
         MtrArgs: "--force --parallel=auto --suite=galera,galera_sr,wsrep --max-test-fail=0 --testcase-timeout=120 --vardir=$(MYSQL_VARDIR) --big-test"
         TestName: 'Galera --big-test - Release'
+        tarname: 'galera-big-test.tar.gz'
+        Artifact: Release
 
   - job: TestRPMs_Quick
     timeoutInMinutes: 280
