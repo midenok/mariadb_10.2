@@ -126,25 +126,45 @@ stages:
     - checkout: none
     - template: azure/install-galera.yml
     - template: azure/fetch-unpack-tarball.yml
-    - template: azure/stage2-mtr-tests.yml
 
-#
-#
-#################################
-########## STAGE 2 END ##########
-#################################
-#
-#
-#################################
-######### STAGE 3 BEGIN #########
-#################################
-#
-# Run upgrade test for RPM/DEB packages
-# Run full MTR set on packages
-#
-#################################
-########## STAGE 3 END ##########
-#################################
-#
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--force --retry=3 --max-save-core=1 --vardir=${MYSQL_VARDIR} --max-save-datadir=1 --max-test-fail=20 --big-test --parallel=auto'
+        TestName: 'MTR -big test'
+        tarname: 'mtr-big-test.tar.gz'
+        Artifact: Release
 
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--force --parallel=auto --suite=galera,wsrep --max-test-fail=0 --testcase-timeout=120 --vardir=$(MYSQL_VARDIR) --big-test'
+        TestName: 'MTR Galera -big test'
+        tarname: 'mtr-galera-big-test.tar.gz'
+        Artifact: Release
 
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--verbose-restart --force --retry=3 --max-save-core=0 --max-save-datadir=1 --parallel=auto --vardir=$(MYSQL_VARDIR)'
+        TestName: 'MTR Normal test'
+        tarname: 'mtr-normal-test.tar.gz'
+        Artifact: Release
+
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--verbose-restart --force --retry=3 --max-save-core=0 --max-save-datadir=1 --parallel=auto --ps-protocol --vardir=$(MYSQL_VARDIR)'
+        TestName: 'MTR PS Protocol test'
+        tarname: 'mtr-ps-protocol-test.tar.gz'
+        Artifact: Release
+
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--verbose-restart --force --retry=3 --max-save-core=0 --max-save-datadir=1 --parallel=auto --suite=funcs_1,funcs_2,stress,jp --testcase-timeout=120 --mysqld=--open-files-limit=0 --mysqld=--log-warnings=1 --vardir=$(MYSQL_VARDIR)'
+        TestName: 'MTR Extra test'
+        tarname: 'mtr-extra-test.tar.gz'
+        Artifact: Release
+
+    - template: azure/tests/run-mtr-test.yml
+      parameters:
+        MtrArgs: '--verbose-restart --force --retry=3 --max-save-core=0 --max-save-datadir=1 --parallel=auto --suite=spider,spider/bg,engines/funcs,engines/iuds --testcase-timeout=120 --mysqld=--open-files-limit=0 --mysqld=--log-warnings=1--vardir=$(MYSQL_VARDIR)'
+        TestName: 'MTR Engines test'
+        tarname: 'mtr-engines-test.tar.gz'
+        Artifact: Release

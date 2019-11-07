@@ -38,6 +38,8 @@ steps:
 
   - bash: |
       set -x
+      ls -la '$(Build.ArtifactStagingDirectory)'
+      rm -frv '$(Build.ArtifactStagingDirectory)'/*
       mkdir -p '$(Build.ArtifactStagingDirectory)'/MTR-Results
       tar czvf '$(Build.ArtifactStagingDirectory)'/MTR-Results/${{ parameters.tarname }} $(MYSQL_VARDIR)/*
     displayName: 'Archive mysql vardir'
@@ -46,6 +48,5 @@ steps:
   - task: PublishBuildArtifacts@1
     condition: failed()
     inputs:
-      pathtoPublish: '$(Build.ArtifactStagingDirectory)/MTR-Results'
-      artifactName: '$(containerImage)-${{ parameters.Artifact }}/MTR-Results'
-
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: '$(containerImage)-${{ parameters.Artifact }}'
