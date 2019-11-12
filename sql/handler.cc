@@ -7674,7 +7674,7 @@ static void require_trx_id_error(const char *field, const char *table)
            table);
 }
 
-bool FK_list::get(THD *thd, std::set<Table_name> &result, LEX_CSTRING &col_name)
+bool FK_list::get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &col_name)
 {
   List_iterator_fast<FOREIGN_KEY_INFO> it(*this);
   List_iterator_fast<LEX_CSTRING> col_it;
@@ -7685,13 +7685,28 @@ bool FK_list::get(THD *thd, std::set<Table_name> &result, LEX_CSTRING &col_name)
     {
       if (!my_strcasecmp(system_charset_info, name->str, col_name.str))
       {
-        Table_name n;
+        Table_ident n;
         if (n.clone(*fk->referenced_db, *fk->referenced_table, thd->mem_root))
           return true;
         result.insert(n);
         break;
       }
     }
+  }
+  return false;
+}
+
+bool FK_list::get(THD *thd, std::set<Table_ident> &result)
+{
+  List_iterator_fast<FOREIGN_KEY_INFO> it(*this);
+  List_iterator_fast<LEX_CSTRING> col_it;
+  while (FOREIGN_KEY_INFO *fk= it++)
+  {
+    col_it.init(fk->foreign_fields);
+    Table_ident n;
+    if (n.clone(*fk->referenced_db, *fk->referenced_table, thd->mem_root))
+      return true;
+    result.insert(n);
   }
   return false;
 }

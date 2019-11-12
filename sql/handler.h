@@ -1031,11 +1031,12 @@ struct TABLE_SHARE;
 struct HA_CREATE_INFO;
 struct st_foreign_key_info;
 typedef struct st_foreign_key_info FOREIGN_KEY_INFO;
-struct Table_name;
+class Table_ident;
 class FK_list : public List<FOREIGN_KEY_INFO>
 {
 public:
-  bool get(THD *thd, std::set<Table_name> &result, LEX_CSTRING &col_name);
+  bool get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &col_name);
+  bool get(THD *thd, std::set<Table_ident> &result);
 };
 typedef bool (stat_print_fn)(THD *thd, const char *type, size_t type_len,
                              const char *file, size_t file_len,
