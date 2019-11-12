@@ -7977,7 +7977,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
                           HA_CREATE_INFO *create_info,
                           Alter_info *alter_info,
                           Alter_table_ctx *alter_ctx,
-                          std::set<Table_name> *ref_tables)
+                          std::set<Table_ident> *ref_tables)
 {
   /* New column definitions are added here */
   List<Create_field> new_create_list;
@@ -8719,20 +8719,20 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   {
     /* These referenced tables need to be updated, lock them now
        and close after this alter command succeeds. */
-    std::set<Table_name>::const_iterator it;
+    std::set<Table_ident>::const_iterator it;
     for (it= ref_tables->begin(); it != ref_tables->end(); ++it)
     {
       MDL_request_list mdl_list;
       MDL_request mdl_request;
 
-      mdl_request.init(MDL_key::TABLE, it->db.str, it->table_name.str,
+      mdl_request.init(MDL_key::TABLE, it->db.str, it->table.str,
                        MDL_EXCLUSIVE, MDL_TRANSACTION);
       mdl_list.push_front(&mdl_request);
       if (thd->mdl_context.acquire_locks(&mdl_list,
                                          thd->variables.lock_wait_timeout))
       {
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
-                            "Could not lock '%s.%s'", it->db.str, it->table_name.str);
+                            "Could not lock '%s.%s'", it->db.str, it->table.str);
         goto err;
       }
     }
@@ -9811,7 +9811,7 @@ do_continue:;
   }
 #endif
 
-  std::set<Table_name> ref_tables;
+  std::set<Table_ident> ref_tables;
   if (mysql_prepare_alter_table(thd, table, create_info, alter_info,
                                 &alter_ctx, &ref_tables))
   {
@@ -10453,10 +10453,10 @@ do_continue:;
 
 end_inplace:
   {
-    std::set<Table_name>::const_iterator it;
+    std::set<Table_ident>::const_iterator it;
     for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
     {
-      TDC_element *el= tdc_lock_share(thd, it->db.str, it->table_name.str);
+      TDC_element *el= tdc_lock_share(thd, it->db.str, it->table.str);
       if (el == MY_ERRPTR)
       {
         my_error(ER_OUT_OF_RESOURCES, MYF(0));

@@ -1670,40 +1670,6 @@ struct All_share_tables
   }
 };
 
-struct Table_name
-{
-  Lex_cstring db;
-  Lex_cstring table_name;
-
-  Table_name() {}
-  Table_name(LEX_CSTRING &_db, LEX_CSTRING &_table_name) :
-    db(_db), table_name(_table_name) {}
-  bool clone(LEX_CSTRING &_db, LEX_CSTRING &_table_name, MEM_ROOT *mem_root)
-  {
-    db.length= _db.length;
-    table_name.length= _table_name.length;
-    if (db.length)
-    {
-      db.str= (const char *) memdup_root(mem_root, _db.str, db.length + 1);
-      if (!db.str)
-        return true;
-    }
-    if (table_name.length)
-    {
-      table_name.str= (const char *) memdup_root(mem_root, _table_name.str, table_name.length + 1);
-      if (!table_name.str)
-        return true;
-    }
-    return false;
-  }
-  Table_name(TABLE &t) :
-    db(t.s->db), table_name(t.s->table_name) {}
-  bool operator<(const Table_name &rhs) const
-  {
-    return db < rhs.db || table_name < rhs.table_name;
-  }
-};
-
 typedef I_P_List <TABLE, All_share_tables> All_share_tables_list;
 
 enum enum_schema_table_state
