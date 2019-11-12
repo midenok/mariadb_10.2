@@ -77,8 +77,10 @@ stages:
         Artifact: ASAN-Debug
     - template: azure/tests/run-mtr-test.yml
       parameters:
-        MtrArgs: '--mem --force --verbose-restart --parallel=auto'
+        MtrArgs: '--force --verbose-restart --parallel=auto --vardir=$(MYSQL_VARDIR)'
         TestName: 'Quick MTR Test - ASAN Debug'
+        tarname: 'asan-mtr-quick-test.tar.gz'
+        Artifact: ASAN-Debug
 
   - job: TestTarball_RelWithDebInfo
     timeoutInMinutes: 240
@@ -100,8 +102,10 @@ stages:
         Artifact: ASAN-RelWithDebInfo
     - template: azure/tests/run-mtr-test.yml
       parameters:
-        MtrArgs: '--mem --force --verbose-restart --parallel=auto'
+        MtrArgs: '--force --verbose-restart --parallel=auto --vardir=$(MYSQL_VARDIR)'
         TestName: 'Quick MTR Test - ASAN RelWithDebInfo'
+        tarname: 'asan-mtr-quick-test.tar.gz'
+        Artifact: ASAN-RelWithDebInfo
 #
 #################################
 ########## STAGE 1 END ##########
