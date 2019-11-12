@@ -8717,24 +8717,24 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
 
   if (ref_tables)
   {
+    Tmp_mem_root tmp_root;
+    MDL_request_list mdl_list;
     /* These referenced tables need to be updated, lock them now
        and close after this alter command succeeds. */
     std::set<Table_ident>::const_iterator it;
     for (it= ref_tables->begin(); it != ref_tables->end(); ++it)
     {
-      MDL_request_list mdl_list;
-      MDL_request mdl_request;
-
-      mdl_request.init(MDL_key::TABLE, it->db.str, it->table.str,
-                       MDL_EXCLUSIVE, MDL_TRANSACTION);
-      mdl_list.push_front(&mdl_request);
-      if (thd->mdl_context.acquire_locks(&mdl_list,
-                                         thd->variables.lock_wait_timeout))
-      {
-        push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
-                            "Could not lock '%s.%s'", it->db.str, it->table.str);
-        goto err;
-      }
+      MDL_request *req= new (&tmp_root) MDL_request;
+      req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
+                MDL_TRANSACTION);
+      mdl_list.push_front(req);
+    }
+    if (thd->mdl_context.acquire_locks(&mdl_list,
+                                        thd->variables.lock_wait_timeout))
+    {
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
+                          "Could not lock referenced tables");
+      goto err;
     }
   }
 

@@ -9287,20 +9287,6 @@ bool fk_modifies_child(enum_fk_option opt)
 }
 
 
-class Tmp_mem_root : public MEM_ROOT
-{
-public:
-  Tmp_mem_root()
-  {
-    init_sql_alloc(this, "Tmp_mem_root", ALLOC_ROOT_SET, 0,
-                   MYF(MY_THREAD_SPECIFIC));
-  }
-  ~Tmp_mem_root()
-  {
-    free_root(this, MYF(0));
-  }
-};
-
 // FIXME: move to sql_table.cc
 bool TABLE_SHARE::check_and_close_ref_tables(THD* thd, bool remove)
 {
