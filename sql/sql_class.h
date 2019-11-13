@@ -6296,19 +6296,17 @@ public:
   }
   bool resolve_table_rowtype_ref(THD *thd, Row_definition_list &defs);
   bool append_to(THD *thd, String *to) const;
-  bool clone(LEX_CSTRING &db_arg, LEX_CSTRING &table_arg, MEM_ROOT *mem_root)
+  bool memdup(MEM_ROOT *mem_root)
   {
-    db.length= db_arg.length;
-    table.length= table_arg.length;
     if (db.length)
     {
-      db.str= (const char *) memdup_root(mem_root, db_arg.str, db.length + 1);
+      db.str= (const char *) memdup_root(mem_root, db.str, db.length + 1);
       if (!db.str)
         return true;
     }
     if (table.length)
     {
-      table.str= (const char *) memdup_root(mem_root, table_arg.str, table.length + 1);
+      table.str= (const char *) memdup_root(mem_root, table.str, table.length + 1);
       if (!table.str)
         return true;
     }

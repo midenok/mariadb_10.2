@@ -2436,11 +2436,20 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     {
       char *end;
       int frm_delete_error= 0;
-
-      if (check_and_close_ref_tables(thd, table, true))
       {
-        error= 1;
-        goto err;
+        TABLE_SHARE *s= NULL;
+        MDL_request_list mdl_list;
+        if (lock_ref_table_names(thd, s, table, mdl_list))
+        {
+          error= 1;
+          goto err;
+        }
+        if (s)
+        {
+          if (s->foreign_keys)
+            s->remove_from_refs(thd);
+          tdc_release_share(s);
+        }
       }
       /*
         It could happen that table's share in the table definition cache
@@ -8715,7 +8724,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     }
   }
 
-  if (ref_tables)
+  if (ref_tables && !ref_tables->empty())
   {
     Tmp_mem_root tmp_root;
     MDL_request_list mdl_list;
@@ -8725,6 +8734,11 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     for (it= ref_tables->begin(); it != ref_tables->end(); ++it)
     {
       MDL_request *req= new (&tmp_root) MDL_request;
+      if (!req)
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        goto err;
+      }
       req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
                 MDL_TRANSACTION);
       mdl_list.push_front(req);
@@ -9727,12 +9741,6 @@ do_continue:;
     }
   }
 
-  if (alter_info->flags & ALTER_DROP_FOREIGN_KEY && table->s->foreign_keys)
-  {
-    if (table->s->check_and_close_ref_tables(thd))
-      DBUG_RETURN(true);
-  }
-
   if (handle_if_exists_options(thd, table, alter_info,
                                &create_info->period_info) ||
       fix_constraints_names(thd, &alter_info->check_constraint_list,
@@ -10456,6 +10464,7 @@ end_inplace:
     std::set<Table_ident>::const_iterator it;
     for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
     {
+      // FIXME: don't lock, just release?
       TDC_element *el= tdc_lock_share(thd, it->db.str, it->table.str);
       if (el == MY_ERRPTR)
       {

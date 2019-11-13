@@ -1035,8 +1035,10 @@ class Table_ident;
 class FK_list : public List<FOREIGN_KEY_INFO>
 {
 public:
-  bool get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &col_name);
-  bool get(THD *thd, std::set<Table_ident> &result);
+  /* Get all referenced tables for foreign key fk_name. Does memdup. */
+  bool get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &fk_name);
+  /* optionally does memdup */
+  bool get(THD *thd, std::set<Table_ident> &result, bool foreign, bool memdup= false);
 };
 typedef bool (stat_print_fn)(THD *thd, const char *type, size_t type_len,
                              const char *file, size_t file_len,
