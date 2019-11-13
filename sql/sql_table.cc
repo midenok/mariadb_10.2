@@ -7986,7 +7986,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
                           HA_CREATE_INFO *create_info,
                           Alter_info *alter_info,
                           Alter_table_ctx *alter_ctx,
-                          std::set<Table_ident> *ref_tables)
+                          MDL_request_list *mdl_ref_tables)
 {
   /* New column definitions are added here */
   List<Create_field> new_create_list;
@@ -8012,6 +8012,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   Field **f_ptr,*field;
   MY_BITMAP *dropped_fields= NULL; // if it's NULL - no dropped fields
   bool drop_period= false;
+  std::set<Table_ident> ref_tables;
   DBUG_ENTER("mysql_prepare_alter_table");
 
   /*
@@ -8162,12 +8163,12 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     if (def && field->invisible < INVISIBLE_SYSTEM)
     {						// Field is changed
       def->field=field;
-      if (ref_tables && table->s->foreign_keys &&
+      if (mdl_ref_tables && table->s->foreign_keys &&
           alter_info->flags & ALTER_RENAME_COLUMN &&
           my_strcasecmp(system_charset_info, def->change.str,
                         def->field_name.str))
       {
-        if (table->s->foreign_keys->get(thd, *ref_tables, def->change))
+        if (table->s->foreign_keys->get(thd, ref_tables, def->change))
         {
           my_error(ER_OUT_OF_RESOURCES, MYF(0));
           DBUG_RETURN(1);
@@ -8724,16 +8725,14 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     }
   }
 
-  if (ref_tables && !ref_tables->empty())
+  if (mdl_ref_tables && !ref_tables.empty())
   {
-    Tmp_mem_root tmp_root;
-    MDL_request_list mdl_list;
     /* These referenced tables need to be updated, lock them now
        and close after this alter command succeeds. */
     std::set<Table_ident>::const_iterator it;
-    for (it= ref_tables->begin(); it != ref_tables->end(); ++it)
+    for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
     {
-      MDL_request *req= new (&tmp_root) MDL_request;
+      MDL_request *req= new (thd->mem_root) MDL_request;
       if (!req)
       {
         my_error(ER_OUT_OF_RESOURCES, MYF(0));
@@ -8741,10 +8740,10 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       }
       req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
                 MDL_TRANSACTION);
-      mdl_list.push_front(req);
+      mdl_ref_tables->push_front(req);
     }
-    if (thd->mdl_context.acquire_locks(&mdl_list,
-                                        thd->variables.lock_wait_timeout))
+    if (thd->mdl_context.acquire_locks(mdl_ref_tables,
+                                       thd->variables.lock_wait_timeout))
     {
       push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
                           "Could not lock referenced tables");
@@ -9819,9 +9818,9 @@ do_continue:;
   }
 #endif
 
-  std::set<Table_ident> ref_tables;
+  MDL_request_list mdl_ref_tables;
   if (mysql_prepare_alter_table(thd, table, create_info, alter_info,
-                                &alter_ctx, &ref_tables))
+                                &alter_ctx, &mdl_ref_tables))
   {
     DBUG_RETURN(true);
   }
@@ -10461,22 +10460,9 @@ do_continue:;
 
 end_inplace:
   {
-    std::set<Table_ident>::const_iterator it;
-    for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
-    {
-      // FIXME: don't lock, just release?
-      TDC_element *el= tdc_lock_share(thd, it->db.str, it->table.str);
-      if (el == MY_ERRPTR)
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        goto err_with_mdl_after_alter;
-      }
-      if (el)
-      {
-        tdc_unlock_share(el);
-        close_all_tables_for_name(thd, el->share, HA_EXTRA_NOT_USED, NULL);
-      }
-    }
+    MDL_request_list::Iterator it(mdl_ref_tables);
+    while (MDL_request *req= it++)
+      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name(), FALSE);
   }
   if (thd->locked_tables_list.reopen_tables(thd, false))
     goto err_with_mdl_after_alter;
