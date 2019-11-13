@@ -7674,7 +7674,7 @@ static void require_trx_id_error(const char *field, const char *table)
            table);
 }
 
-bool FK_list::get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &col_name)
+bool FK_list::get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &fk_name)
 {
   List_iterator_fast<FOREIGN_KEY_INFO> it(*this);
   List_iterator_fast<LEX_CSTRING> col_it;
@@ -7683,12 +7683,18 @@ bool FK_list::get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &col_name
     col_it.init(fk->foreign_fields);
     while (LEX_CSTRING* name= col_it++)
     {
-      if (!my_strcasecmp(system_charset_info, name->str, col_name.str))
+      if (!my_strcasecmp(system_charset_info, name->str, fk_name.str))
       {
-        Table_ident n;
-        if (n.clone(*fk->referenced_db, *fk->referenced_table, thd->mem_root))
-          return true;
-        result.insert(n);
+        auto res= result.insert(
+          Table_ident(*fk->referenced_db, *fk->referenced_table));
+        /* `this` might be already freed when `result` is used (like ALTER does),
+            so let's copy strings to another memory. */
+        if (res.second)
+        {
+          Table_ident &t= const_cast<Table_ident &>(*res.first);
+          if (t.memdup(thd->mem_root))
+            return true;
+        }
         break;
       }
     }
@@ -7696,17 +7702,30 @@ bool FK_list::get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &col_name
   return false;
 }
 
-bool FK_list::get(THD *thd, std::set<Table_ident> &result)
+bool FK_list::get(THD *thd, std::set<Table_ident> &result, bool foreign, bool memdup)
 {
   List_iterator_fast<FOREIGN_KEY_INFO> it(*this);
   List_iterator_fast<LEX_CSTRING> col_it;
   while (FOREIGN_KEY_INFO *fk= it++)
   {
-    col_it.init(fk->foreign_fields);
-    Table_ident n;
-    if (n.clone(*fk->referenced_db, *fk->referenced_table, thd->mem_root))
+    bool inserted;
+    Table_ident *t;
+    if (foreign)
+    {
+      auto res= result.insert(
+        Table_ident(*fk->foreign_db, *fk->foreign_table));
+      inserted= res.second;
+      t= const_cast<Table_ident *>(&*res.first);
+    }
+    else
+    {
+      auto res= result.insert(
+        Table_ident(*fk->referenced_db, *fk->referenced_table));
+      inserted= res.second;
+      t= const_cast<Table_ident *>(&*res.first);
+    }
+    if (memdup && inserted && t->memdup(thd->mem_root))
       return true;
-    result.insert(n);
   }
   return false;
 }

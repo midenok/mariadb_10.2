@@ -9288,13 +9288,11 @@ bool fk_modifies_child(enum_fk_option opt)
 
 
 // FIXME: move to sql_table.cc
-bool TABLE_SHARE::check_and_close_ref_tables(THD* thd, bool remove)
+bool TABLE_SHARE::remove_from_refs(THD* thd)
 {
   DBUG_ASSERT(foreign_keys);
-  MDL_request_list mdl_list;
   List_iterator_fast<FOREIGN_KEY_INFO> it(*foreign_keys);
   List_iterator<FOREIGN_KEY_INFO> ref_it;
-  Tmp_mem_root tmp_root;
   while (FOREIGN_KEY_INFO *fk= it++)
   {
     if (!cmp(fk->referenced_db, &db) && !cmp(fk->referenced_table, &table_name))
@@ -9311,15 +9309,6 @@ bool TABLE_SHARE::check_and_close_ref_tables(THD* thd, bool remove)
       return true;
     }
     DBUG_ASSERT(el->share->referenced_keys);
-    if (!remove)
-    {
-      MDL_request *req= new (&tmp_root) MDL_request;
-
-      req->init(MDL_key::TABLE, el->share->db.str, el->share->table_name.str,
-                MDL_EXCLUSIVE, MDL_STATEMENT);
-      mdl_list.push_front(req);
-    }
-    else
     {
       FOREIGN_KEY_INFO *ref;
       ref_it.init(*el->share->referenced_keys);
@@ -9331,82 +9320,101 @@ bool TABLE_SHARE::check_and_close_ref_tables(THD* thd, bool remove)
     }
     tdc_unlock_share(el);
   }
-  if (!mdl_list.is_empty())
-  {
-    if (thd->mdl_context.acquire_locks(&mdl_list, thd->variables.lock_wait_timeout))
-      return true;
-    MDL_request_list::Iterator it(mdl_list);
-    while (MDL_request *req= it++)
-    {
-      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name(), FALSE);
-//       close_all_tables_for_name(thd, el->share, HA_EXTRA_NOT_USED, NULL);
-    }
-  }
   return false;
 }
 
-bool TABLE_SHARE::check_and_close_fk_tables(THD* thd)
+bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_request_list &mdl_list)
 {
-  DBUG_ASSERT(referenced_keys);
-  MDL_request_list mdl_list;
-  List_iterator_fast<FOREIGN_KEY_INFO> it(*referenced_keys);
-  List_iterator<FOREIGN_KEY_INFO> fk_it;
-  Tmp_mem_root tmp_root;
-  while (FOREIGN_KEY_INFO *rk= it++)
-  {
-    if (!cmp(rk->foreign_db, &db) && !cmp(rk->foreign_table, &table_name))
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
+                                             t->table_name.str,
+                                             MDL_INTENTION_EXCLUSIVE));
+  DBUG_ASSERT(!thd->is_error());
+  bool opened= false;
+  if (!t->table)
+  { /* TODO: [MDEV-16417] remove this block when FK info in .FRM is implemented.
+             open_table() is needed to get FK info from storage handler. */
+    DBUG_ASSERT(thd->open_tables == NULL);
+    Open_table_context ctx(thd, MYSQL_OPEN_IGNORE_REPAIR|MYSQL_OPEN_HAS_MDL_LOCK);
+    Diagnostics_area *da= thd->get_stmt_da();
+    Warning_info tmp_wi(thd->query_id, false, true);
+    da->push_warning_info(&tmp_wi);
+    enum enum_open_type save_open_type= t->open_type;
+    uint save_req_object= t->i_s_requested_object;
+    t->open_type= OT_BASE_ONLY;
+    t->i_s_requested_object= OPEN_TABLE_ONLY;
+    bool res= open_table(thd, t, &ctx);
+    t->open_type= save_open_type;
+    t->i_s_requested_object= save_req_object;
+    da->pop_warning_info();
+    if (res)
     {
-      /* Skip self-references */
-      continue;
+      if (thd->is_error())
+        thd->get_stmt_da()->reset_diagnostics_area();
+      return false;
     }
-    TDC_element *el= tdc_lock_share(thd, rk->foreign_db->str, rk->foreign_table->str);
-    if (!el)
-      continue;
-    if (el == MY_ERRPTR)
+    if (t->view)
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
+      close_thread_tables(thd);
+      return false;
     }
-    DBUG_ASSERT(el->share->referenced_keys);
-    MDL_request *req= new (&tmp_root) MDL_request;
-
-    req->init(MDL_key::TABLE, el->share->db.str, el->share->table_name.str,
-              MDL_EXCLUSIVE, MDL_STATEMENT);
-    mdl_list.push_front(req);
-    tdc_unlock_share(el);
+    opened= true;
   }
-  if (!mdl_list.is_empty())
-  {
-    if (thd->mdl_context.acquire_locks(&mdl_list, thd->variables.lock_wait_timeout))
-      return true;
-    MDL_request_list::Iterator it(mdl_list);
-    while (MDL_request *req= it++)
-    {
-      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name(), FALSE);
-//       close_all_tables_for_name(thd, el->share, HA_EXTRA_NOT_USED, NULL);
-    }
-  }
-  return false;
-}
 
-bool check_and_close_ref_tables(THD *thd, TABLE_LIST *t, bool remove)
-{
-  TABLE_SHARE *share= tdc_acquire_share(thd, t, GTS_TABLE, NULL);
-  if (share)
+  DBUG_ASSERT(!t->view);
+  share= tdc_acquire_share(thd, t, GTS_TABLE, NULL);
+  if (!share)
   {
-    if (share->foreign_keys &&
-        share->check_and_close_ref_tables(thd, remove))
+    if (thd->is_error() && thd->get_stmt_da()->sql_errno() == ER_WRONG_OBJECT)
     {
-      tdc_release_share(share);
-      return true;
+      thd->get_stmt_da()->reset_diagnostics_area();
+      return false;
     }
-    if (share->referenced_keys &&
-        share->check_and_close_fk_tables(thd))
-    {
-      tdc_release_share(share);
-      return true;
-    }
+    return true;
+  }
+
+  if (opened)
+    close_thread_tables(thd);
+
+  std::set<Table_ident> tables;
+
+  if (share->foreign_keys && share->foreign_keys->get(thd, tables, false))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
     tdc_release_share(share);
+    return true;
+  }
+  if (share->referenced_keys && share->referenced_keys->get(thd, tables, true))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    tdc_release_share(share);
+    return true;
+  }
+
+  if (!tables.empty())
+  {
+    std::set<Table_ident>::const_iterator it;
+    for (it= tables.begin(); it != tables.end(); ++it)
+    {
+      if (!cmp(it->db, t->db) && !cmp(it->table, t->table_name))
+        continue; // subject table name is already locked by caller DDL
+      MDL_request *req= new (thd->mem_root) MDL_request;
+      if (!req)
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        tdc_release_share(share);
+        return true;
+      }
+      req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
+                MDL_TRANSACTION);
+      mdl_list.push_front(req);
+    }
+    if (!mdl_list.is_empty() &&
+        thd->mdl_context.acquire_locks(&mdl_list,
+                                       thd->variables.lock_wait_timeout))
+    {
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
+                          "Could not lock foreign or referenced tables");
+    }
   }
   return false;
 }
@@ -9514,7 +9522,7 @@ bool TABLE_SHARE::check_foreign_keys(THD *thd)
         my_error(ER_OUT_OF_RESOURCES, MYF(0));
         return true;
       }
-      ref_it.init(*el->share->foreign_keys);
+      ref_it.init(*el->share->referenced_keys);
       FOREIGN_KEY_INFO *rk;
       bool found_table= false;
       while ((rk= ref_it++))
@@ -9634,8 +9642,51 @@ bool TABLE_SHARE::update_foreign_keys(THD *thd, Alter_info *alter_info)
     }
   }
   thd->mem_root= old_root;
-  if (foreign_keys && check_and_close_ref_tables(thd))
-    return true;
+
+  if (foreign_keys)
+  {
+    MDL_request_list mdl_list;
+    std::set<Table_ident> tables;
+    Tmp_mem_root tmp_root;
+    if (foreign_keys->get(thd, tables, false))
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+
+    if (!tables.empty())
+    {
+      std::set<Table_ident>::const_iterator it;
+      for (it= tables.begin(); it != tables.end(); ++it)
+      {
+        if (!cmp(it->db, db) && !cmp(it->table, table_name))
+          continue; // subject table name is already locked by caller DDL
+        MDL_request *req= new (&tmp_root) MDL_request;
+        if (!req)
+        {
+          my_error(ER_OUT_OF_RESOURCES, MYF(0));
+          return true;
+        }
+        req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
+                  MDL_TRANSACTION);
+        mdl_list.push_front(req);
+      }
+      if (!mdl_list.is_empty() &&
+          thd->mdl_context.acquire_locks(&mdl_list,
+                                        thd->variables.lock_wait_timeout))
+      {
+        push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
+                            "Could not lock referenced tables");
+      }
+    }
+
+    if (!mdl_list.is_empty())
+    {
+      MDL_request_list::Iterator it(mdl_list);
+      while (MDL_request *req= it++)
+        tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name(), false);
+    }
+  }
   return false;
 }
 

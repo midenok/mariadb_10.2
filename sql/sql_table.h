@@ -19,6 +19,7 @@
 
 #include <my_sys.h>                             // pthread_mutex_t
 #include "m_string.h"                           // LEX_CUSTRING
+#include "mdl.h"                                // MDL_request_list
 
 class Alter_info;
 class Alter_table_ctx;
