@@ -7685,16 +7685,7 @@ bool FK_list::get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &fk_name)
     {
       if (!my_strcasecmp(system_charset_info, name->str, fk_name.str))
       {
-        auto res= result.insert(
-          Table_ident(*fk->referenced_db, *fk->referenced_table));
-        /* `this` might be already freed when `result` is used (like ALTER does),
-            so let's copy strings to another memory. */
-        if (res.second)
-        {
-          Table_ident &t= const_cast<Table_ident &>(*res.first);
-          if (t.memdup(thd->mem_root))
-            return true;
-        }
+        result.insert(Table_ident(*fk->referenced_db, *fk->referenced_table));
         break;
       }
     }
@@ -7702,30 +7693,16 @@ bool FK_list::get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &fk_name)
   return false;
 }
 
-bool FK_list::get(THD *thd, std::set<Table_ident> &result, bool foreign, bool memdup)
+bool FK_list::get(THD *thd, std::set<Table_ident> &result, bool foreign)
 {
   List_iterator_fast<FOREIGN_KEY_INFO> it(*this);
   List_iterator_fast<LEX_CSTRING> col_it;
   while (FOREIGN_KEY_INFO *fk= it++)
   {
-    bool inserted;
-    Table_ident *t;
     if (foreign)
-    {
-      auto res= result.insert(
-        Table_ident(*fk->foreign_db, *fk->foreign_table));
-      inserted= res.second;
-      t= const_cast<Table_ident *>(&*res.first);
-    }
+      result.insert(Table_ident(*fk->foreign_db, *fk->foreign_table));
     else
-    {
-      auto res= result.insert(
-        Table_ident(*fk->referenced_db, *fk->referenced_table));
-      inserted= res.second;
-      t= const_cast<Table_ident *>(&*res.first);
-    }
-    if (memdup && inserted && t->memdup(thd->mem_root))
-      return true;
+      result.insert(Table_ident(*fk->referenced_db, *fk->referenced_table));
   }
   return false;
 }
