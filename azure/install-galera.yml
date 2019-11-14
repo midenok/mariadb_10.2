@@ -31,7 +31,8 @@ steps:
         sudo rpm --import /tmp/rpm.key && rm -f /tmp/rpm.key
         sudo zypper rr Galera-Enterprise || true
         sudo zypper ar -f -g http://downloads.mariadb.com/galera-test/repo4/rpm/sles/${RELEASE}/x86_64/ Galera-Enterprise
-        sudo zypper -n in galera rsync socat lsof
+        sudo zypper refresh -sf
+        sudo zypper -n in galera-enterprise-4 rsync socat lsof
       fi
     displayName: "Install Galera-Enterprise-4"
     condition: succeededOrFailed()
