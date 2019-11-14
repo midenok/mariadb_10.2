@@ -168,6 +168,7 @@ stages:
 
     - checkout: none
     - template: azure/prepare-vm-for-installation.yml
+    - template: azure/install-galera.yml
 
     - task: DownloadBuildArtifacts@0
       timeoutInMinutes: 2
