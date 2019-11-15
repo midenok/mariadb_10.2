@@ -9323,21 +9323,47 @@ bool TABLE_SHARE::remove_from_refs(THD* thd)
   return false;
 }
 
+class Local_da : public Diagnostics_area
+{
+  THD *thd;
+  Diagnostics_area *saved_da;
+
+public:
+  Local_da(THD *thd_arg) :
+    Diagnostics_area(thd_arg->query_id, false, true),
+    thd(thd_arg), saved_da(thd_arg->get_stmt_da())
+  {
+    thd->set_stmt_da(this);
+  }
+  ~Local_da()
+  {
+    if (saved_da)
+      thd->set_stmt_da(saved_da);
+  }
+  void finish()
+  {
+    DBUG_ASSERT(saved_da && thd);
+    thd->set_stmt_da(saved_da);
+    saved_da= NULL;
+  }
+};
+
 bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_request_list &mdl_list)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
                                              t->table_name.str,
                                              MDL_INTENTION_EXCLUSIVE));
-  DBUG_ASSERT(!thd->is_error());
+  Local_da da(thd);
   bool opened= false;
+  Open_tables_backup save_open_tables;
   if (!t->table)
   { /* TODO: [MDEV-16417] remove this block when FK info in .FRM is implemented.
              open_table() is needed to get FK info from storage handler. */
-    DBUG_ASSERT(thd->open_tables == NULL);
+    thd->reset_n_backup_open_tables_state(&save_open_tables);
     Open_table_context ctx(thd, MYSQL_OPEN_IGNORE_REPAIR|MYSQL_OPEN_HAS_MDL_LOCK);
-    Diagnostics_area *da= thd->get_stmt_da();
-    Warning_info tmp_wi(thd->query_id, false, true);
-    da->push_warning_info(&tmp_wi);
+//     Diagnostics_area *da= thd->get_stmt_da();
+//     Warning_info tmp_wi(thd->query_id, false, true);
+//     da->push_warning_info(&tmp_wi);
     enum enum_open_type save_open_type= t->open_type;
     uint save_req_object= t->i_s_requested_object;
     t->open_type= OT_BASE_ONLY;
@@ -9345,16 +9371,19 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
     bool res= open_table(thd, t, &ctx);
     t->open_type= save_open_type;
     t->i_s_requested_object= save_req_object;
-    da->pop_warning_info();
+//     da->pop_warning_info();
     if (res)
     {
-      if (thd->is_error())
-        thd->get_stmt_da()->reset_diagnostics_area();
+//       if (thd->is_error())
+//         thd->get_stmt_da()->reset_diagnostics_area();
+      thd->restore_backup_open_tables_state(&save_open_tables);
       return false;
     }
     if (t->view)
     {
+      t->table= NULL;
       close_thread_tables(thd);
+      thd->restore_backup_open_tables_state(&save_open_tables);
       return false;
     }
     opened= true;
@@ -9362,18 +9391,25 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
 
   DBUG_ASSERT(!t->view);
   share= tdc_acquire_share(thd, t, GTS_TABLE, NULL);
+
+  if (opened)
+  {
+    t->table= NULL;
+    close_thread_tables(thd);
+    thd->restore_backup_open_tables_state(&save_open_tables);
+  }
+
   if (!share)
   {
     if (thd->is_error() && thd->get_stmt_da()->sql_errno() == ER_WRONG_OBJECT)
     {
-      thd->get_stmt_da()->reset_diagnostics_area();
+//       thd->get_stmt_da()->reset_diagnostics_area();
       return false;
     }
     return true;
   }
 
-  if (opened)
-    close_thread_tables(thd);
+  da.finish();
 
   std::set<Table_ident> tables;
 
