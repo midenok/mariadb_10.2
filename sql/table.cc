@@ -9361,9 +9361,7 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
              open_table() is needed to get FK info from storage handler. */
     thd->reset_n_backup_open_tables_state(&save_open_tables);
     Open_table_context ctx(thd, MYSQL_OPEN_IGNORE_REPAIR|MYSQL_OPEN_HAS_MDL_LOCK);
-//     Diagnostics_area *da= thd->get_stmt_da();
-//     Warning_info tmp_wi(thd->query_id, false, true);
-//     da->push_warning_info(&tmp_wi);
+
     enum enum_open_type save_open_type= t->open_type;
     uint save_req_object= t->i_s_requested_object;
     t->open_type= OT_BASE_ONLY;
@@ -9371,11 +9369,8 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
     bool res= open_table(thd, t, &ctx);
     t->open_type= save_open_type;
     t->i_s_requested_object= save_req_object;
-//     da->pop_warning_info();
     if (res)
     {
-//       if (thd->is_error())
-//         thd->get_stmt_da()->reset_diagnostics_area();
       thd->restore_backup_open_tables_state(&save_open_tables);
       return false;
     }
