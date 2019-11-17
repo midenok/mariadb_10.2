@@ -1291,3 +1291,26 @@ void TDC_element::flush_unused(bool mark_flushed)
   while (auto table= purge_tables.pop_front())
     intern_close_table(table);
 }
+
+
+Share_acquire::Share_acquire(THD *thd, TABLE_LIST &tl)
+{
+  Diagnostics_area *da= thd->get_stmt_da();
+  Warning_info tmp_wi(thd->query_id, false, true);
+
+  da->push_warning_info(&tmp_wi);
+  share= tdc_acquire_share(thd, &tl, GTS_TABLE);
+  da->pop_warning_info();
+}
+
+
+bool Share_acquire::is_error(THD *thd)
+{
+  if (share)
+    return false;
+  if (thd->is_error() && thd->get_stmt_da()->sql_errno() == ER_WRONG_OBJECT)
+  {
+    thd->clear_error();
+  }
+  return true;
+}
