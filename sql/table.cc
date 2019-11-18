@@ -9369,12 +9369,7 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
     bool res= open_table(thd, t, &ctx);
     t->open_type= save_open_type;
     t->i_s_requested_object= save_req_object;
-    if (res)
-    {
-      thd->restore_backup_open_tables_state(&save_open_tables);
-      return false;
-    }
-    if (t->view)
+    if (res || t->view)
     {
       t->table= NULL;
       close_thread_tables(thd);
