@@ -171,7 +171,7 @@ stages:
     - template: azure/install-galera.yml
 
     - task: DownloadBuildArtifacts@0
-      timeoutInMinutes: 2
+      timeoutInMinutes: 10
       inputs:
         buildType: 'current'
         specificBuildWithTriggering: true
