@@ -163,7 +163,7 @@ create or replace table t2 (id int references t1);
 select * from t2;
 rename table t1 to t3;
 flush tables t2;
-drop tables t3, t2;
+drop tables t2, t3;
 
 create or replace table t1 (id int primary key);
 create or replace table t2 (id int primary key);

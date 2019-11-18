@@ -124,6 +124,13 @@ rename table t2 to t3;
 flush tables t1;
 drop tables t3, t1;
 create or replace table t1 (id int primary key);
+create or replace table t2 (id int references t1);
+select * from t2;
+id
+rename table t1 to t3;
+flush tables t2;
+drop tables t2, t3;
+create or replace table t1 (id int primary key);
 create or replace table t2 (id int primary key);
 create or replace table t3 (id int primary key);
 select * from t1, t2, t3;
