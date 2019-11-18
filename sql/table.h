@@ -653,7 +653,6 @@ struct TABLE_SHARE
   {
     return referenced_keys && !referenced_keys->is_empty();
   }
-  bool remove_from_refs(THD *thd);
 
   Virtual_column_info **check_constraints;
   uint	*blob_field;			/* Index to blobs in Field arrray*/
@@ -1108,7 +1107,7 @@ public:
   bool is_truncated_value() { return truncated_value; }
 };
 
-bool lock_ref_table_names(THD *thd, TABLE_SHARE*&, TABLE_LIST *t, MDL_request_list &);
+bool release_ref_shares(THD *thd, TABLE_LIST *t);
 
 
 /* Information for one open table */

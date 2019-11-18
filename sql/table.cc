@@ -9287,42 +9287,6 @@ bool fk_modifies_child(enum_fk_option opt)
 }
 
 
-// FIXME: move to sql_table.cc
-bool TABLE_SHARE::remove_from_refs(THD* thd)
-{
-  DBUG_ASSERT(foreign_keys);
-  List_iterator_fast<FOREIGN_KEY_INFO> it(*foreign_keys);
-  List_iterator<FOREIGN_KEY_INFO> ref_it;
-  while (FOREIGN_KEY_INFO *fk= it++)
-  {
-    if (!cmp(fk->referenced_db, &db) && !cmp(fk->referenced_table, &table_name))
-    {
-      /* Skip self-references */
-      continue;
-    }
-    TDC_element *el= tdc_lock_share(thd, fk->referenced_db->str, fk->referenced_table->str);
-    if (!el)
-      continue;
-    if (el == MY_ERRPTR)
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    }
-    DBUG_ASSERT(el->share->referenced_keys);
-    {
-      FOREIGN_KEY_INFO *ref;
-      ref_it.init(*el->share->referenced_keys);
-      while ((ref= ref_it++))
-      {
-        if (!cmp(ref->foreign_db, &db) && !cmp(ref->foreign_table, &table_name))
-          ref_it.remove();
-      }
-    }
-    tdc_unlock_share(el);
-  }
-  return false;
-}
-
 class Local_da : public Diagnostics_area
 {
   THD *thd;
@@ -9348,7 +9312,8 @@ public:
   }
 };
 
-bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_request_list &mdl_list)
+// Used in DROP TABLE and RENAME TABLE
+bool release_ref_shares(THD *thd, TABLE_LIST *t)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
                                              t->table_name.str,
@@ -9380,7 +9345,7 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
   }
 
   DBUG_ASSERT(!t->view);
-  share= tdc_acquire_share(thd, t, GTS_TABLE, NULL);
+  TABLE_SHARE *share= tdc_acquire_share(thd, t, GTS_TABLE, NULL);
 
   if (opened)
   {
@@ -9393,7 +9358,6 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
   {
     if (thd->is_error() && thd->get_stmt_da()->sql_errno() == ER_WRONG_OBJECT)
     {
-//       thd->get_stmt_da()->reset_diagnostics_area();
       return false;
     }
     return true;
@@ -9409,6 +9373,7 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
     tdc_release_share(share);
     return true;
   }
+
   if (share->referenced_keys && share->referenced_keys->get(thd, tables, true))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
@@ -9416,8 +9381,11 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
     return true;
   }
 
+  tdc_release_share(share);
+
   if (!tables.empty())
   {
+    MDL_request_list mdl_list;
     std::set<Table_ident>::const_iterator it;
     for (it= tables.begin(); it != tables.end(); ++it)
     {
@@ -9441,10 +9409,15 @@ bool lock_ref_table_names(THD *thd, TABLE_SHARE *&share, TABLE_LIST *t, MDL_requ
       push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
                           "Could not lock foreign or referenced tables");
     }
+
+    MDL_request_list::Iterator req_it(mdl_list);
+    while (MDL_request *req= req_it++)
+      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name(), FALSE);
   }
   return false;
 }
 
+// FIXME: move to sql_table.cc
 bool TABLE_SHARE::check_foreign_keys(THD *thd)
 {
   List_iterator_fast<FOREIGN_KEY_INFO> ref_it;

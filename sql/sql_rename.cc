@@ -286,19 +286,8 @@ do_rename(THD *thd, TABLE_LIST *ren_table, const LEX_CSTRING *new_db,
   if (ha_table_exists(thd, &ren_table->db, &old_alias, &hton) && hton)
   {
     DBUG_ASSERT(!thd->locked_tables_mode);
-    {
-      TABLE_SHARE *s= NULL;
-      MDL_request_list mdl_list;
-      if (lock_ref_table_names(thd, s, ren_table, mdl_list))
-        DBUG_RETURN(1);
-
-      if (s)
-        tdc_release_share(s);
-
-      MDL_request_list::Iterator it(mdl_list);
-      while (MDL_request *req= it++)
-        tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name(), FALSE);
-    }
+    if (release_ref_shares(thd, ren_table))
+      DBUG_RETURN(1);
     tdc_remove_table(thd, TDC_RT_REMOVE_ALL,
                      ren_table->db.str, ren_table->table_name.str, false);
 

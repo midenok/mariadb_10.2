@@ -2436,20 +2436,10 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     {
       char *end;
       int frm_delete_error= 0;
+      if (release_ref_shares(thd, table))
       {
-        TABLE_SHARE *s= NULL;
-        MDL_request_list mdl_list;
-        if (lock_ref_table_names(thd, s, table, mdl_list))
-        {
-          error= 1;
-          goto err;
-        }
-        if (s)
-        {
-          if (s->foreign_keys)
-            s->remove_from_refs(thd);
-          tdc_release_share(s);
-        }
+        error= 1;
+        goto err;
       }
       /*
         It could happen that table's share in the table definition cache
