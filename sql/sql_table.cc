@@ -8012,7 +8012,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   Field **f_ptr,*field;
   MY_BITMAP *dropped_fields= NULL; // if it's NULL - no dropped fields
   bool drop_period= false;
-  std::set<Table_ident> ref_tables;
+  std::set<Table_ident> refs_to_close;
   DBUG_ENTER("mysql_prepare_alter_table");
 
   /*
@@ -8168,7 +8168,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           my_strcasecmp(system_charset_info, def->change.str,
                         def->field_name.str))
       {
-        if (table->s->foreign_keys->get(thd, ref_tables, def->change))
+        if (table->s->foreign_keys->get(thd, refs_to_close, def->change))
         {
           my_error(ER_OUT_OF_RESOURCES, MYF(0));
           DBUG_RETURN(1);
@@ -8584,13 +8584,27 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       re_setup_keyinfo_hash(key_info);
     }
   }
+
   {
     Key *key;
     while ((key=key_it++))			// Add new keys
     {
-      if (key->type == Key::FOREIGN_KEY &&
-          ((Foreign_key *)key)->validate(new_create_list))
-        goto err;
+      if (key->type == Key::FOREIGN_KEY)
+      {
+        Foreign_key *fk= static_cast<Foreign_key*>(key);
+        if (fk->validate(new_create_list))
+          goto err;
+        // self-references have no ref_table and ref_db
+        DBUG_ASSERT(fk->ref_table.str || fk->ref_db.str);
+        if (mdl_ref_tables && fk->ref_table.str)
+        {
+          Table_ident t(fk->ref_db.str ? fk->ref_db : table->s->db,
+                        fk->ref_table);
+          if (lower_case_table_names)
+            t.lowercase(thd->mem_root);
+          refs_to_close.insert(t);
+        }
+      }
       new_key_list.push_back(key, thd->mem_root);
       if (key->name.str &&
 	  !my_strcasecmp(system_charset_info, key->name.str, primary_key_name))
@@ -8725,12 +8739,12 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     }
   }
 
-  if (mdl_ref_tables && !ref_tables.empty())
+  if (mdl_ref_tables && !refs_to_close.empty())
   {
     /* These referenced tables need to be updated, lock them now
        and close after this alter command succeeds. */
     std::set<Table_ident>::const_iterator it;
-    for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
+    for (it= refs_to_close.begin(); it != refs_to_close.end(); ++it)
     {
       MDL_request *req= new (thd->mem_root) MDL_request;
       if (!req)

@@ -6300,6 +6300,24 @@ public:
   {
     return db < rhs.db || table < rhs.table;
   }
+  bool lowercase(MEM_ROOT *mem_root)
+  {
+    if (db.length)
+    {
+      db.str= (const char *) memdup_root(mem_root, db.str, db.length + 1);
+      if (unlikely(!db.str))
+        return true;
+      my_casedn_str(system_charset_info, (char *)db.str);
+    }
+    if (table.length)
+    {
+      table.str= (const char *) memdup_root(mem_root, table.str, table.length + 1);
+      if (unlikely(!table.str))
+        return true;
+      my_casedn_str(system_charset_info, (char *)table.str);
+    }
+    return false;
+  }
 };
 
 
