@@ -5,8 +5,9 @@ steps:
 
       if [[ -e /usr/bin/apt-get ]]; then
         sudo apt update
-        sudo apt install -y software-properties-common dirmngr
-        sudo apt-add-repository http://downloads.mariadb.com/galera-test/repo4/deb
+        sudo apt install -y dirmngr lsb-release
+        DEBIAN_VERSION=$(lsb_release -sc)
+        sudo bash -c "echo deb http://downloads.mariadb.com/galera-test/repo4/deb ${DEBIAN_VERSION} main > /etc/apt/sources.list.d/galera.list"
         sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xCE1A3DD5E3C94F49
         sudo apt update
         DEBIAN_FRONTEND=noninteractive sudo apt install -y galera-enterprise-4 galera-arbitrator-4 rsync netcat socat
