@@ -115,6 +115,23 @@ select * from ch1;
 xid	xid2
 flush tables t1, t2, t3;
 drop tables ch1, t2, t1, t3;
+# Rename column on referenced table
+create or replace table t1 (id int primary key);
+create or replace table t2 (id int references t1);
+select * from t2;
+id
+alter table t1 change id xid int;
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int(11) DEFAULT NULL,
+  KEY `id` (`id`),
+  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`id`) REFERENCES `t1` (`xid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+select * from t1;
+xid
+flush table t2;
+drop tables t2, t1;
 # Check rename table
 create or replace table t1 (id int primary key);
 create or replace table t2 (id int references t1);
@@ -123,13 +140,6 @@ id	id
 rename table t2 to t3;
 flush tables t1;
 drop tables t3, t1;
-create or replace table t1 (id int primary key);
-create or replace table t2 (id int references t1);
-select * from t2;
-id
-rename table t1 to t3;
-flush tables t2;
-drop tables t2, t3;
 create or replace table t1 (id int primary key);
 create or replace table t2 (id int primary key);
 create or replace table t3 (id int primary key);
@@ -145,6 +155,25 @@ id	id2
 rename table ch1 to ch2;
 flush tables t1, t2, t3;
 drop tables ch2, t2, t1, t3;
+# Rename of referenced table
+create or replace table t1 (id int primary key);
+create or replace table t2 (id int references t1);
+select * from t2;
+id
+rename table t1 to xt1;
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int(11) DEFAULT NULL,
+  KEY `id` (`id`),
+  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`id`) REFERENCES `xt1` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+select * from xt1;
+id
+flush tables t2, xt1;
+Warnings:
+Note	1105	Foreign table test.t2 is not opened
+drop tables t2, xt1;
 # Check drop table
 create or replace table t1 (id int primary key);
 create or replace table ch1 (id int, foreign key (id) references t1 (id));

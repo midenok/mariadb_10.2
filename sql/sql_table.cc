@@ -8153,12 +8153,18 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     if (def && field->invisible < INVISIBLE_SYSTEM)
     {						// Field is changed
       def->field=field;
-      if (mdl_ref_tables && table->s->foreign_keys &&
-          alter_info->flags & ALTER_RENAME_COLUMN &&
-          my_strcasecmp(system_charset_info, def->change.str,
-                        def->field_name.str))
+      if (mdl_ref_tables && (alter_info->flags & ALTER_RENAME_COLUMN) &&
+          0 != my_strcasecmp(system_charset_info, def->change.str,
+                             def->field_name.str))
       {
-        if (table->s->foreign_keys->get(thd, refs_to_close, def->change))
+        if (table->s->foreign_keys &&
+            table->s->foreign_keys->get(thd, refs_to_close, def->change, true))
+        {
+          my_error(ER_OUT_OF_RESOURCES, MYF(0));
+          DBUG_RETURN(1);
+        }
+        if (table->s->referenced_keys &&
+            table->s->referenced_keys->get(thd, refs_to_close, def->change, false))
         {
           my_error(ER_OUT_OF_RESOURCES, MYF(0));
           DBUG_RETURN(1);

@@ -1036,7 +1036,7 @@ class FK_list : public List<FOREIGN_KEY_INFO>
 {
 public:
   /* Get all referenced tables for foreign key fk_name. */
-  bool get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &fk_name);
+  bool get(THD *thd, std::set<Table_ident> &result, LEX_CSTRING &fk_name, bool foreign);
   /* Get all referenced or foreign tables. */
   bool get(THD *thd, std::set<Table_ident> &result, bool foreign);
 };
