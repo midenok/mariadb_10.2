@@ -17,10 +17,10 @@ jobs:
   strategy:
     maxParallel: 1
     matrix:
-      rhel-6:
-        poolName: 'rhel-6'
-      rhel-7:
-        poolName: 'rhel-7'
+      # rhel-6:
+      #   poolName: 'rhel-6'
+      # rhel-7:
+      #   poolName: 'rhel-7'
       debian-8:
         poolName: 'debian-8'
       debian-9:
@@ -66,7 +66,7 @@ jobs:
       mariadb-test mariadb-test-data
       # we do not install cassandra and tokudb (doesn't exist in ES)
     displayName: "Install ${{ parameters.FROM }}-${{ parameters.FROMVERSION }} on Debian/Ubuntu"
-    condition: in(variables['poolName'], 'debian-8', 'debian-9', 'ubuntu-1604', 'ubuntu-1804')
+    condition: in(variables['poolName'], 'debian-8', 'debian-9', 'debian-10', 'ubuntu-1604', 'ubuntu-1804')
 
   - bash: |
       set -ex
