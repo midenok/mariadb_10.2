@@ -13,10 +13,10 @@ jobs:
   strategy:
     maxParallel: 1
     matrix:
-      rhel-6:
-        poolName: 'rhel-6'
-      rhel-7:
-        poolName: 'rhel-7'
+      # rhel-6:
+      #   poolName: 'rhel-6'
+      # rhel-7:
+      #   poolName: 'rhel-7'
       debian-8:
         poolName: 'debian-8'
       debian-9:
