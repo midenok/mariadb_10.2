@@ -696,6 +696,8 @@ bool mysql_derived_prepare(THD *thd, LEX *lex, TABLE_LIST *derived)
     */
     if (!unit->prepared &&
         derived->table->versioned() &&
+        derived->merge_underlying_list &&
+        !derived->merge_underlying_list->merge_underlying_list &&
         thd->lex->sql_command != SQLCOM_LOAD &&
         (res= unit->prepare(derived, derived->derived_result, 0)))
       goto exit;
@@ -818,7 +820,7 @@ exit:
   {
     if (!derived->is_with_table_recursive_reference())
     {
-      if (derived->table)
+      if (derived->table && derived->table->s->tmp_table)
         free_tmp_table(thd, derived->table);
       delete derived->derived_result;
     }
