@@ -696,6 +696,7 @@ bool mysql_derived_prepare(THD *thd, LEX *lex, TABLE_LIST *derived)
     */
     if (!unit->prepared &&
         derived->table->versioned() &&
+        thd->lex->sql_command != SQLCOM_LOAD &&
         (res= unit->prepare(derived, derived->derived_result, 0)))
       goto exit;
     DBUG_RETURN(FALSE);
