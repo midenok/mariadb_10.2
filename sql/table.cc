@@ -60,6 +60,7 @@ struct extra2_fields
   LEX_CUSTRING system_period;
   LEX_CUSTRING application_period;
   LEX_CUSTRING field_data_type_info;
+  LEX_CUSTRING foreign_key_info;
   void reset()
   { bzero((void*)this, sizeof(*this)); }
 };
@@ -1579,6 +1580,12 @@ bool read_extra2(const uchar *frm_image, size_t len, extra2_fields *fields)
           fields->field_data_type_info.str= extra2;
           fields->field_data_type_info.length= length;
           break;
+        case EXTRA2_FOREIGN_KEY_INFO:
+          if (fields->foreign_key_info.str)
+            DBUG_RETURN(true);
+          fields->foreign_key_info.str= extra2;
+          fields->foreign_key_info.length= length;
+          break;
         default:
           /* abort frm parsing if it's an unknown but important extra2 value */
           if (type >= EXTRA2_ENGINE_IMPORTANT)
@@ -1724,6 +1731,7 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
   plugin_ref se_plugin= 0;
   bool vers_can_native= false;
   Field_data_type_info_array field_data_type_info_array;
+  Foreign_key_io foreign_key_io;
 
   MEM_ROOT *old_root= thd->mem_root;
   Virtual_column_info **table_check_constraints;
@@ -2266,6 +2274,10 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
   if (extra2.field_data_type_info.length &&
       field_data_type_info_array.parse(old_root, share->fields,
                                        extra2.field_data_type_info))
+    goto err;
+
+  if (extra2.foreign_key_info.length &&
+      foreign_key_io.parse(this, extra2.foreign_key_info))
     goto err;
 
   for (i=0 ; i < share->fields; i++, strpos+=field_pack_length, field_ptr++)
@@ -9334,60 +9346,9 @@ public:
 };
 
 // Used in CREATE TABLE
-bool TABLE_SHARE::update_foreign_keys(THD *thd, Alter_info *alter_info,
-                                      Table_ident_set &ref_tables)
+bool TABLE_SHARE::update_referenced_tables(THD *thd, Alter_info *alter_info,
+                                           Table_ident_set &ref_tables)
 {
-  // TODO: this while() is removed in MDEV-21051
-  List_iterator_fast<Key> key_it(alter_info->key_list);
-  while (Key* key= key_it++)
-  {
-    if (!key->foreign)
-      continue;
-
-    Foreign_key *src= static_cast<Foreign_key*>(key);
-    FK_info *dst= new (&mem_root) FK_info();
-    if (unlikely(!dst || foreign_keys.push_back(dst, &mem_root)))
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    }
-    dst->foreign_id.strdup(&mem_root, src->constraint_name);
-    dst->foreign_db.strdup(&mem_root, db);
-    dst->foreign_table.strdup(&mem_root, table_name);
-    dst->referenced_key_name.strdup(&mem_root, src->name);
-    dst->referenced_db.strdup(&mem_root, src->ref_db.str ? src->ref_db : db);
-    dst->referenced_table.strdup(&mem_root, src->ref_table);
-    dst->update_method= src->update_opt;
-    dst->delete_method= src->delete_opt;
-
-    Key_part_spec* col;
-    List_iterator_fast<Key_part_spec> col_it(src->columns);
-    while ((col= col_it++))
-    {
-      Lex_cstring *field_name= new (&mem_root) Lex_cstring;
-      if (unlikely(!field_name ||
-                   field_name->strdup(&mem_root, col->field_name) ||
-                   dst->foreign_fields.push_back(field_name, &mem_root)))
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        return true;
-      }
-    }
-
-    col_it.init(src->ref_columns);
-    while ((col= col_it++))
-    {
-      Lex_cstring *field_name= new (&mem_root) Lex_cstring;
-      if (unlikely(!field_name ||
-                   field_name->strdup(&mem_root, col->field_name) ||
-                   dst->referenced_fields.push_back(field_name, &mem_root)))
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        return true;
-      }
-    }
-  }
-
   if (foreign_keys.is_empty())
     return false;
 
@@ -9430,6 +9391,7 @@ bool TABLE_SHARE::update_foreign_keys(THD *thd, Alter_info *alter_info,
     }
 
     MDL_request_list::Iterator it(mdl_list);
+    List_iterator_fast<Key> key_it(alter_info->key_list);
     while (MDL_request *req= it++)
     {
       const char *ref_db= req->key.db_name();

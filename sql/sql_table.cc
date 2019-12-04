@@ -4152,6 +4152,11 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	  }
 	  key_name=primary_key_name;
 	  primary_key=1;
+          if (!key->name.str)
+          {
+            key->name.str= key_name;
+            key->name.length= strlen(key_name);
+          }
 	}
 	else if (!(key_name= key->name.str))
 	  key_name=make_unique_key_name(thd, sql_field->field_name.str,
@@ -4163,7 +4168,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	}
 	key_info->name.str= (char*) key_name;
         key_info->name.length= strlen(key_name);
-      }
+        key->name= key_info->name;
+      } //  if (column_nr == 0)
     }
     if (!key_info->name.str || check_column_name(key_info->name.str))
     {
