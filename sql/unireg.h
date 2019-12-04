@@ -177,7 +177,8 @@ enum extra2_frm_value_type {
 
   EXTRA2_ENGINE_TABLEOPTS=128,
   EXTRA2_FIELD_FLAGS=129,
-  EXTRA2_FIELD_DATA_TYPE_INFO=130
+  EXTRA2_FIELD_DATA_TYPE_INFO=130,
+  EXTRA2_FOREIGN_KEY_INFO=131
 };
 
 enum extra2_field_flags {
@@ -200,5 +201,79 @@ static inline bool is_binary_frm_header(const uchar *head)
       && head[2] >= FRM_VER
       && head[2] <= FRM_VER_CURRENT;
 }
+
+
+class Key;
+class Foreign_key;
+class Foreign_key_io: public BinaryStringBuffer<512>
+{
+public:
+  static const ulonglong fk_io_version= 0;
+  struct Pos
+  {
+    uchar *pos;
+    const uchar *end;
+    Pos(LEX_CUSTRING& image)
+    {
+      pos= const_cast<uchar *>(image.str);
+      end= pos + image.length;
+    }
+  };
+  /* read */
+private:
+  static bool read_length(size_t &out, Pos &p)
+  {
+    ulonglong num= safe_net_field_length_ll(&p.pos, p.end - p.pos);
+    if (!p.pos || num > UINT_MAX32)
+      return true;
+    out= (uint32_t) num;
+    return false;
+  }
+  static bool read_string(Lex_cstring *to, MEM_ROOT *mem_root, Pos &p)
+  {
+    if (read_length(to->length, p) || p.pos + to->length > p.end)
+      return true; // Not enough data
+    if (!to->length)
+      return false;
+    to->str= strmake_root(mem_root, (char *)p.pos, to->length);
+    if (!to->str)
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    p.pos+= to->length;
+    return false;
+  }
+public:
+  Foreign_key_io() {}
+  bool parse(TABLE_SHARE *s, LEX_CUSTRING &image);
+
+  /* write */
+private:
+  static uchar *store_length(uchar *pos, ulonglong length)
+  {
+    return net_store_length(pos, length);
+  }
+  static uchar *store_string(uchar *pos, const LEX_CSTRING &str, bool nullable= false)
+  {
+    if (!nullable && !str.length)
+    {
+      DBUG_ASSERT(0);
+    }
+    pos= store_length(pos, str.length);
+    if (str.length)
+      memcpy(pos, str.str, str.length);
+    return pos + str.length;
+  }
+  static ulonglong string_size(LEX_CSTRING &str)
+  {
+    return net_length_size(str.length) + str.length;
+  }
+
+public:
+  ulonglong key_size(Foreign_key &key);
+  bool store(Foreign_key &key, uchar *&pos);
+  bool store(List<Key> &keys);
+};
 
 #endif

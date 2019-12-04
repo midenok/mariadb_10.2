@@ -6150,12 +6150,12 @@ no_such_table:
 		bool err = false;
 		mysql_mutex_lock(&table->s->LOCK_share);
 		if (table->s->foreign_keys.is_empty()) {
-			DBUG_ASSERT(table->s->foreign_keys.is_empty());
 			if (!m_prebuilt->table->foreign_set.empty()) {
 				build_foreign_list(
 					table->s->foreign_keys,
 					thd, m_prebuilt->table->foreign_set,
 					err);
+				// FIXME: compare before and after build_foreign_list
 			}
 		}
 		if (!err && table->s->referenced_keys.is_empty()) {
@@ -12316,7 +12316,7 @@ create_table_info_t::create_foreign_keys()
 	const char*	 operation = sqlcom == SQLCOM_ALTER_TABLE
 					? "Alter " : "Create ";
 
-	if (tmp_table && m_form->s->foreign_keys->elements) {
+	if (tmp_table && !m_form->s->foreign_keys.is_empty()) {
 		ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT,
 				create_name,
 				"%s table `%s`.`%s` with foreign key "

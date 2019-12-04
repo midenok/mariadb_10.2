@@ -645,8 +645,8 @@ struct TABLE_SHARE
   KEY  *key_info;			/* data of keys in database */
   FK_list foreign_keys;
   FK_list referenced_keys;
-  bool update_foreign_keys(THD *thd, Alter_info *alter_info,
-                           Table_ident_set &ref_tables);
+  bool update_referenced_tables(THD *thd, Alter_info *alter_info,
+                                Table_ident_set &ref_tables);
   void revert_referenced_shares(THD *thd, Table_ident_set &ref_tables);
   bool check_foreign_keys(THD *thd);
   bool referenced_by_foreign_key() const
@@ -1692,7 +1692,7 @@ enum enum_schema_table_state
   PROCESSED_BY_JOIN_EXEC
 };
 
-enum enum_fk_option { FK_OPTION_UNDEF, FK_OPTION_RESTRICT, FK_OPTION_CASCADE,
+enum enum_fk_option { FK_OPTION_UNDEF= 0, FK_OPTION_RESTRICT, FK_OPTION_CASCADE,
                FK_OPTION_SET_NULL, FK_OPTION_NO_ACTION, FK_OPTION_SET_DEFAULT};
 
 class FK_info : public Sql_alloc
