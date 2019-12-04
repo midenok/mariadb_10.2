@@ -825,8 +825,9 @@ bool Sql_cmd_alter_table_truncate_partition::execute(THD *thd)
   if (thd->mdl_context.upgrade_shared_lock(ticket, MDL_EXCLUSIVE, timeout))
     DBUG_RETURN(TRUE);
 
-  tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN, first_table->db.str,
-                   first_table->table_name.str);
+  if (tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN, first_table->db.str,
+                       first_table->table_name.str))
+    DBUG_RETURN(TRUE);
 
   partition= (ha_partition*) first_table->table->file;
   /* Invoke the handler method responsible for truncating the partition. */

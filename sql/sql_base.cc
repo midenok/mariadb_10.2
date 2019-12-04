@@ -445,8 +445,9 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
       DBUG_RETURN(true);
 
     for (TABLE_LIST *table= tables; table; table= table->next_local)
-      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, table->db.str,
-                       table->table_name.str);
+      if (tdc_remove_table(thd, TDC_RT_REMOVE_ALL, table->db.str,
+                           table->table_name.str))
+        DBUG_RETURN(true);
   }
   DBUG_RETURN(false);
 }
@@ -795,7 +796,7 @@ static void mark_used_tables_as_free_for_reuse(THD *thd, TABLE *table)
   @pre Must be called with an X MDL lock on the table.
 */
 
-void
+void // FIXME: return error
 close_all_tables_for_name(THD *thd, TABLE_SHARE *share,
                           ha_extra_function extra,
                           TABLE *skip_table)
@@ -844,7 +845,11 @@ close_all_tables_for_name(THD *thd, TABLE_SHARE *share,
   }
   /* Remove the table share from the cache. */
   if (skip_table == NULL)
-    tdc_remove_table(thd, TDC_RT_REMOVE_ALL, db, table_name);
+  {
+    /* Remove the table share from the cache. */
+    if (tdc_remove_table(thd, TDC_RT_REMOVE_ALL, db, table_name))
+      return; // FIXME: return error
+  }
 }
 
 
@@ -1406,8 +1411,9 @@ bool wait_while_table_is_used(THD *thd, TABLE *table,
              thd->variables.lock_wait_timeout))
     DBUG_RETURN(TRUE);
 
-  tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN,
-                   table->s->db.str, table->s->table_name.str);
+  if (tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN,
+                       table->s->db.str, table->s->table_name.str))
+    DBUG_RETURN(true);
   /* extra() call must come only after all instances above are closed */
   if (function != HA_EXTRA_NOT_USED)
     (void) table->file->extra(function);
@@ -1434,8 +1440,9 @@ bool wait_while_table_is_used(THD *thd, TABLE *table,
   prelocked mode, e.g. if we do CREATE TABLE .. SELECT f1();
 */
 
-void drop_open_table(THD *thd, TABLE *table, const LEX_CSTRING *db_name,
-                     const LEX_CSTRING *table_name)
+void // FIXME: return error
+drop_open_table(THD *thd, TABLE *table, const LEX_CSTRING *db_name,
+                const LEX_CSTRING *table_name)
 {
   DBUG_ENTER("drop_open_table");
   if (table->s->tmp_table)
@@ -1448,7 +1455,8 @@ void drop_open_table(THD *thd, TABLE *table, const LEX_CSTRING *db_name,
     table->file->extra(HA_EXTRA_PREPARE_FOR_DROP);
     close_thread_table(thd, &thd->open_tables);
     /* Remove the table share from the table cache. */
-    tdc_remove_table(thd, TDC_RT_REMOVE_ALL, db_name->str, table_name->str);
+    if (tdc_remove_table(thd, TDC_RT_REMOVE_ALL, db_name->str, table_name->str))
+      DBUG_VOID_RETURN; // FIXME: return error
     /* Remove the table from the storage engine and rm the .frm. */
     quick_rm_table(thd, table_type, db_name, table_name, 0);
  }
@@ -3036,8 +3044,9 @@ static bool auto_repair_table(THD *thd, TABLE_LIST *table_list)
 
   tdc_release_share(share);
   /* Remove the repaired share from the table cache. */
-  tdc_remove_table(thd, TDC_RT_REMOVE_ALL,
-                   table_list->db.str, table_list->table_name.str);
+  if (tdc_remove_table(thd, TDC_RT_REMOVE_ALL, table_list->db.str,
+                       table_list->table_name.str))
+    result= true;
 end_free:
   my_free(entry);
   return result;
@@ -3208,8 +3217,12 @@ Open_table_context::recover_from_failed_open()
                                       get_timeout(), 0)))
           break;
 
-        tdc_remove_table(m_thd, TDC_RT_REMOVE_ALL, m_failed_table->db.str,
-                         m_failed_table->table_name.str);
+        if (tdc_remove_table(m_thd, TDC_RT_REMOVE_ALL, m_failed_table->db.str,
+                             m_failed_table->table_name.str))
+        {
+          result= true;
+          break;
+        }
 
         m_thd->get_stmt_da()->clear_warning_info(m_thd->query_id);
         m_thd->clear_error();                 // Clear error message
@@ -3244,8 +3257,12 @@ Open_table_context::recover_from_failed_open()
                                       get_timeout(), 0)))
           break;
 
-        tdc_remove_table(m_thd, TDC_RT_REMOVE_ALL, m_failed_table->db.str,
-                         m_failed_table->table_name.str);
+        if (tdc_remove_table(m_thd, TDC_RT_REMOVE_ALL, m_failed_table->db.str,
+                             m_failed_table->table_name.str))
+        {
+          result= true;
+          break;
+        }
 
         result= auto_repair_table(m_thd, m_failed_table);
         /*
