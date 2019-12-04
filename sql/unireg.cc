@@ -266,6 +266,7 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
   LEX_CUSTRING frm= {0,0};
   StringBuffer<MAX_FIELD_WIDTH> vcols;
   Field_data_type_info_image field_data_type_info_image;
+  Foreign_key_io foreign_key_io;
   DBUG_ENTER("build_frm_image");
 
  /* If fixed row records, we need one bit to check for deleted rows */
@@ -469,6 +470,23 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
     }
     *pos= EXTRA2_FIELD_DATA_TYPE_INFO;
     pos= extra2_write_str(pos + 1, field_data_type_info_image.lex_cstring());
+  }
+
+  if (foreign_key_io.length())
+  {
+    if (foreign_key_io.length() > 0xFFFFFFFF)
+    {
+      // FIXME: move this to class
+      my_printf_error(ER_CANT_CREATE_TABLE,
+                      "Cannot create table %`s: "
+                      "field data type info image is too large. "
+                      "Decrease the number of columns with "
+                      "extended data types.",
+                      MYF(0), table.str);
+      goto err;
+    }
+    *pos= EXTRA2_FIELD_DATA_TYPE_INFO;
+    pos= extra2_write_str(pos + 1, foreign_key_io.lex_cstring());
   }
 
   // PERIOD

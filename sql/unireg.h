@@ -177,7 +177,8 @@ enum extra2_frm_value_type {
 
   EXTRA2_ENGINE_TABLEOPTS=128,
   EXTRA2_FIELD_FLAGS=129,
-  EXTRA2_FIELD_DATA_TYPE_INFO=130
+  EXTRA2_FIELD_DATA_TYPE_INFO=130,
+  EXTRA2_FOREIGN_KEY_INFO=131
 };
 
 enum extra2_field_flags {
@@ -200,5 +201,139 @@ static inline bool is_binary_frm_header(uchar *head)
       && head[2] >= FRM_VER
       && head[2] <= FRM_VER_CURRENT;
 }
+
+
+class Foreign_key_io: public BinaryStringBuffer<512>
+{
+  /* read */
+public:
+  class Elem
+  {
+    LEX_CSTRING m_type_info;
+  public:
+    void set(const LEX_CSTRING &type_info)
+    {
+      m_type_info= type_info;
+    }
+    const LEX_CSTRING &type_info() const
+    {
+      return m_type_info;
+    }
+  };
+private:
+  Elem *m_array;
+  uint m_count;
+  bool alloc(MEM_ROOT *root, uint count)
+  {
+    DBUG_ASSERT(!m_array);
+    DBUG_ASSERT(!m_count);
+    size_t nbytes= sizeof(Elem) * count;
+    if (!(m_array= (Elem*) alloc_root(root, nbytes)))
+      return true;
+    m_count= count;
+    bzero((void*) m_array, nbytes);
+    return false;
+  }
+  static uint32 read_length(uchar **pos, const uchar *end)
+  {
+    ulonglong num= safe_net_field_length_ll(pos, end - *pos);
+    if (num > UINT_MAX32)
+      return 0;
+    return (uint32) num;
+  }
+  static bool read_string(LEX_CSTRING *to, uchar **pos, const uchar *end)
+  {
+    to->length= read_length(pos, end);
+    if (*pos + to->length > end)
+      return true; // Not enough data
+    to->str= (const char *) *pos;
+    *pos+= to->length;
+    return false;
+  }
+public:
+  Foreign_key_io()
+   :m_array(NULL), m_count(0)
+  { }
+  uint count() const
+  {
+    return m_count;
+  }
+  const Elem& element(uint i) const
+  {
+    DBUG_ASSERT(i < m_count);
+    return m_array[i];
+  }
+  bool parse(MEM_ROOT *root, uint count, LEX_CUSTRING &image)
+  {
+    const uchar *pos= image.str;
+    const uchar *end= pos + image.length;
+    if (alloc(root, count))
+      return true;
+    for (uint i= 0; i < count && pos < end; i++)
+    {
+      LEX_CSTRING type_info;
+      uint fieldnr= read_length((uchar**) &pos, end);
+      if ((fieldnr == 0 && i > 0) || fieldnr >= count)
+        return true; // Bad data
+      if (read_string(&type_info, (uchar**) &pos, end) || type_info.length == 0)
+        return true; // Bad data
+      m_array[fieldnr].set(type_info);
+    }
+    return pos < end; // Error if some data is still left
+  }
+
+  /* write */
+private:
+  static uchar *store_length(uchar *pos, ulonglong length)
+  {
+    return net_store_length(pos, length);
+  }
+  static uchar *store_string(uchar *pos, const LEX_CSTRING &str)
+  {
+    pos= store_length(pos, str.length);
+    memcpy(pos, str.str, str.length);
+    return pos + str.length;
+  }
+  static uint store_length_required_length(ulonglong length)
+  {
+    return net_length_size(length);
+  }
+
+public:
+  bool append(uint fieldnr, const Column_definition &def)
+  {
+    BinaryStringBuffer<64> type_info;
+    if (def.type_handler()->
+              Column_definition_data_type_info_image(&type_info, def) ||
+        type_info.length() > 0xFFFF/*Some reasonable limit*/)
+      return true; // Error
+    if (!type_info.length())
+      return false;
+    size_t need_length= store_length_required_length(fieldnr) +
+                        store_length_required_length(type_info.length()) +
+                        type_info.length();
+    if (reserve(need_length))
+      return true; // Error
+    uchar *pos= (uchar *) end();
+    pos= store_length(pos, fieldnr);
+    pos= store_string(pos, type_info.lex_cstring());
+    size_t new_length= (const char *) pos - ptr();
+    DBUG_ASSERT(new_length < alloced_length());
+    length((uint32) new_length);
+    return false;
+  }
+  bool append(List<Create_field> &fields)
+  {
+    uint fieldnr= 0;
+    Create_field *field;
+    List_iterator<Create_field> it(fields);
+    for (field= it++; field; field= it++, fieldnr++)
+    {
+      if (append(fieldnr, *field))
+        return true; // Error
+    }
+    return false;
+  }
+};
 
 #endif

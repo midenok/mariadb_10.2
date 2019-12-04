@@ -60,6 +60,7 @@ struct extra2_fields
   LEX_CUSTRING system_period;
   LEX_CUSTRING application_period;
   LEX_CUSTRING field_data_type_info;
+  LEX_CUSTRING foreign_key_info;
   void reset()
   { bzero((void*)this, sizeof(*this)); }
 };
@@ -1568,6 +1569,11 @@ bool read_extra2(const uchar *frm_image, size_t len, extra2_fields *fields)
           fields->field_data_type_info.str= extra2;
           fields->field_data_type_info.length= length;
           break;
+        case EXTRA2_FOREIGN_KEY_INFO:
+          if (fields->foreign_key_info.str)
+            DBUG_RETURN(true);
+          fields->foreign_key_info.str= extra2;
+          fields->foreign_key_info.length= length;
         default:
           /* abort frm parsing if it's an unknown but important extra2 value */
           if (type >= EXTRA2_ENGINE_IMPORTANT)
@@ -1713,6 +1719,7 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
   plugin_ref se_plugin= 0;
   bool vers_can_native= false;
   Field_data_type_info_array field_data_type_info_array;
+  Foreign_key_io foreign_key_io;
 
   MEM_ROOT *old_root= thd->mem_root;
   Virtual_column_info **table_check_constraints;
@@ -2255,6 +2262,10 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
   if (extra2.field_data_type_info.length &&
       field_data_type_info_array.parse(old_root, share->fields,
                                        extra2.field_data_type_info))
+    goto err;
+
+  if (extra2.foreign_key_info.length &&
+      foreign_key_io.parse(old_root, share->fields, extra2.foreign_key_info))
     goto err;
 
   for (i=0 ; i < share->fields; i++, strpos+=field_pack_length, field_ptr++)
