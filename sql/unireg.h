@@ -203,6 +203,7 @@ static inline bool is_binary_frm_header(uchar *head)
 }
 
 
+class Key;
 class Foreign_key_io: public BinaryStringBuffer<512>
 {
   /* read */
@@ -300,40 +301,8 @@ private:
   }
 
 public:
-  bool append(uint fieldnr, const Column_definition &def)
-  {
-    BinaryStringBuffer<64> type_info;
-    if (def.type_handler()->
-              Column_definition_data_type_info_image(&type_info, def) ||
-        type_info.length() > 0xFFFF/*Some reasonable limit*/)
-      return true; // Error
-    if (!type_info.length())
-      return false;
-    size_t need_length= store_length_required_length(fieldnr) +
-                        store_length_required_length(type_info.length()) +
-                        type_info.length();
-    if (reserve(need_length))
-      return true; // Error
-    uchar *pos= (uchar *) end();
-    pos= store_length(pos, fieldnr);
-    pos= store_string(pos, type_info.lex_cstring());
-    size_t new_length= (const char *) pos - ptr();
-    DBUG_ASSERT(new_length < alloced_length());
-    length((uint32) new_length);
-    return false;
-  }
-  bool append(List<Create_field> &fields)
-  {
-    uint fieldnr= 0;
-    Create_field *field;
-    List_iterator<Create_field> it(fields);
-    for (field= it++; field; field= it++, fieldnr++)
-    {
-      if (append(fieldnr, *field))
-        return true; // Error
-    }
-    return false;
-  }
+  bool append(const Key& key);
+  bool append(List<Key> &keys);
 };
 
 #endif

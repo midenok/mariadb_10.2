@@ -328,6 +328,14 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                     MYF(0), table.str);
     DBUG_RETURN(frm);
   }
+  if (foreign_key_io.append(create_info->alter_info->key_list))
+  {
+    my_printf_error(ER_CANT_CREATE_TABLE,
+                    "Cannot create table %`s: "
+                    "Building the foreign key info image failed.",
+                    MYF(0), table.str);
+    DBUG_RETURN(frm);
+  }
   DBUG_PRINT("info", ("Field data type info length: %u",
                       (uint) field_data_type_info_image.length()));
   DBUG_EXECUTE_IF("frm_data_type_info",
@@ -1203,3 +1211,42 @@ err:
   thd->count_cuted_fields= old_count_cuted_fields;
   DBUG_RETURN(error);
 } /* make_empty_rec */
+
+bool Foreign_key_io::append(List<Key> &keys)
+{
+  List_iterator_fast<Key> it(keys);
+  while (const Key *key= it++)
+  {
+    if (key->type != Key::FOREIGN_KEY) {
+            continue;
+    }
+    if (append(*key))
+      return true;
+  }
+  return false;
+}
+
+bool Foreign_key_io::append(const Key &key)
+{
+#if 0
+  BinaryStringBuffer<64> type_info;
+  if (def.type_handler()->
+            Column_definition_data_type_info_image(&type_info, def) ||
+      type_info.length() > 0xFFFF/*Some reasonable limit*/)
+    return true; // Error
+  if (!type_info.length())
+    return false;
+  size_t need_length= store_length_required_length(fieldnr) +
+                      store_length_required_length(type_info.length()) +
+                      type_info.length();
+  if (reserve(need_length))
+    return true; // Error
+  uchar *pos= (uchar *) end();
+  pos= store_length(pos, fieldnr);
+  pos= store_string(pos, type_info.lex_cstring());
+  size_t new_length= (const char *) pos - ptr();
+  DBUG_ASSERT(new_length < alloced_length());
+  length((uint32) new_length);
+#endif
+  return false;
+}
