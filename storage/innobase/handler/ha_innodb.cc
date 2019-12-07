@@ -5926,7 +5926,7 @@ initialize_auto_increment(dict_table_t* table, const Field* field)
 	mutex_exit(&table->autoinc_mutex);
 }
 
-static FOREIGN_KEY_INFO*
+static FK_info*
 get_foreign_key_info(THD* thd, TABLE_SHARE* s, dict_foreign_t* foreign);
 
 /* TODO: Temporary until MDEV-21051 Store FK info in FRM files */
@@ -5934,8 +5934,8 @@ FK_list*
 ha_innobase::build_foreign_list(THD* thd, dict_foreign_set& foreign_set,
 				bool& err) const
 {
-	FK_list* result_list
-		= (FK_list*)alloc_root(
+	FK_list* result_list=
+		(FK_list*)alloc_root(
 			&table->s->mem_root, sizeof(FK_list));
 	if (unlikely(!result_list)) {
 		err = true;
@@ -5949,7 +5949,7 @@ ha_innobase::build_foreign_list(THD* thd, dict_foreign_set& foreign_set,
 	for (dict_foreign_set::iterator it = foreign_set.begin();
 	     it != foreign_set.end(); ++it) {
 
-		FOREIGN_KEY_INFO* key_info
+		FK_info* key_info
 			= get_foreign_key_info(thd, table->s, *it);
 
 		if (!key_info) {
@@ -12354,22 +12354,22 @@ class key_text
 	char		    buf[MAX_TEXT + 1];
 
 public:
-	key_text(FOREIGN_KEY_INFO* key)
+	key_text(FK_info* key)
 	{
 		char* ptr = buf;
-		if (key->referenced_key_name->str) {
-			LEX_CSTRING* name = key->referenced_key_name;
-			size_t len = std::min(name->length, MAX_TEXT - 2);
+		if (key->referenced_key_name.str) {
+			Lex_cstring& name = key->referenced_key_name;
+			size_t len = std::min(name.length, MAX_TEXT - 2);
 			*(ptr++)   = '`';
-			memcpy(ptr, name->str, len);
+			memcpy(ptr, name.str, len);
 			ptr	  += len;
 			*(ptr++)   = '`';
 			*ptr	   = '\0';
 			return;
 		}
 		*(ptr++)  = '(';
-		List_iterator_fast<LEX_CSTRING> it(key->foreign_fields);
-		while (LEX_CSTRING* field_name = it++) {
+		List_iterator_fast<Lex_cstring> it(key->foreign_fields);
+		while (Lex_cstring* field_name = it++) {
 			/* 3 is etc continuation ("...");
 			   2 is comma separator (", ") in case of next exists;
 			   1 is terminating ')' */
@@ -12461,7 +12461,7 @@ create_table_info_t::create_foreign_keys()
 		create_name[bufend - create_name] = '\0';
 	}
 
-	List_iterator_fast<FOREIGN_KEY_INFO> key_it(*m_form->s->foreign_keys);
+	List_iterator_fast<FK_info> key_it(*m_form->s->foreign_keys);
 
 	dict_table_t* table = dict_table_get_low(name);
 	if (!table) {
@@ -12473,7 +12473,7 @@ create_table_info_t::create_foreign_keys()
 		return (DB_CANNOT_ADD_CONSTRAINT);
 	}
 
-	while (FOREIGN_KEY_INFO* fk = key_it++) {
+	while (FK_info* fk = key_it++) {
 		if (tmp_table) {
 			ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT,
 					create_name,
@@ -12495,7 +12495,7 @@ create_table_info_t::create_foreign_keys()
 			return (DB_OUT_OF_MEMORY);
 		}
 
-		if (fk->foreign_id->str) {
+		if (fk->foreign_id.str) {
 			ulint db_len;
 
 			/* Catenate 'databasename/' to the constraint name
@@ -12507,12 +12507,12 @@ create_table_info_t::create_foreign_keys()
 
 			foreign->id = static_cast<char*>(mem_heap_alloc(
 				foreign->heap,
-				db_len + fk->foreign_id->length + 2));
+				db_len + fk->foreign_id.length + 2));
 
 			ut_memcpy(foreign->id, table->name.m_name, db_len);
 			foreign->id[db_len] = '/';
 			strcpy(foreign->id + db_len + 1,
-			       fk->foreign_id->str);
+			       fk->foreign_id.str);
 		}
 
 		if (foreign->id == NULL) {
@@ -12534,7 +12534,7 @@ create_table_info_t::create_foreign_keys()
 		}
 
 
-		List_iterator_fast<LEX_CSTRING> col_it(fk->foreign_fields);
+		List_iterator_fast<Lex_cstring> col_it(fk->foreign_fields);
 		unsigned			  i = 0, j = 0;
 		while ((col = col_it++)) {
 			column_names[i] = mem_heap_strdupl(
@@ -12602,8 +12602,8 @@ create_table_info_t::create_foreign_keys()
 		       i * sizeof(void*));
 
 		foreign->referenced_table_name = dict_get_referenced_table(
-			name, LEX_STRING_WITH_LEN(*fk->referenced_db),
-			LEX_STRING_WITH_LEN(*fk->referenced_table),
+			name, LEX_STRING_WITH_LEN(fk->referenced_db),
+			LEX_STRING_WITH_LEN(fk->referenced_table),
 			&foreign->referenced_table, foreign->heap, cs);
 
 		if (!foreign->referenced_table_name) {
@@ -15278,7 +15278,7 @@ ha_innobase::get_foreign_key_create_info(void)
 Maps a InnoDB foreign key constraint to a equivalent MySQL foreign key info.
 @return pointer to foreign key info */
 static
-FOREIGN_KEY_INFO*
+FK_info*
 get_foreign_key_info(
 /*=================*/
 	THD*		thd,	/*!< in: user thread handle */
@@ -15290,22 +15290,17 @@ get_foreign_key_info(
 	char	     tmp_buff[NAME_LEN + 1];
 	char	     name_buff[NAME_LEN + 1];
 	const char*  ptr;
-	LEX_CSTRING* referenced_key_name;
-	LEX_CSTRING* name = NULL;
+	Lex_cstring* name = NULL;
 
-	FOREIGN_KEY_INFO* pf_key_info = (FOREIGN_KEY_INFO*)alloc_root(
-		&s->mem_root, sizeof(FOREIGN_KEY_INFO));
+	FK_info* pf_key_info = new (&s->mem_root) FK_info();
 	if (!pf_key_info) {
 		return NULL;
 	}
-	FOREIGN_KEY_INFO& f_key_info = *pf_key_info;
-
-	f_key_info.foreign_fields.empty();
-	f_key_info.referenced_fields.empty();
+	FK_info& f_key_info = *pf_key_info;
 
 	ptr = dict_remove_db_name(foreign->id);
-	f_key_info.foreign_id
-		= Lex_cstring(ptr, strlen(ptr)).strdup_root(s->mem_root);
+	if (f_key_info.foreign_id.strdup(&s->mem_root, ptr))
+		return NULL;
 
 	/* Name format: database name, '/', table name, '\0' */
 
@@ -15316,14 +15311,14 @@ get_foreign_key_info(
 	tmp_buff[len] = 0;
 
 	len = filename_to_tablename(tmp_buff, name_buff, sizeof(name_buff));
-	f_key_info.referenced_db
-		= Lex_cstring(name_buff, len).strdup_root(s->mem_root);
+	if (f_key_info.referenced_db.strdup(&s->mem_root, name_buff, len))
+		return NULL;
 
 	/* Referenced (parent) table name */
 	ptr = dict_remove_db_name(foreign->referenced_table_name);
 	len = filename_to_tablename(ptr, name_buff, sizeof(name_buff), 1);
-	f_key_info.referenced_table
-		= Lex_cstring(name_buff, len).strdup_root(s->mem_root);
+	if (f_key_info.referenced_table.strdup(&s->mem_root, name_buff, len))
+		return NULL;
 
 	/* Dependent (child) database name */
 	len = dict_get_db_name_len(foreign->foreign_table_name);
@@ -15332,21 +15327,27 @@ get_foreign_key_info(
 	tmp_buff[len] = 0;
 
 	len = filename_to_tablename(tmp_buff, name_buff, sizeof(name_buff));
-	f_key_info.foreign_db
-		= Lex_cstring(name_buff, len).strdup_root(s->mem_root);
+	if (f_key_info.foreign_db.strdup(&s->mem_root, name_buff, len))
+		return NULL;
 
 	/* Dependent (child) table name */
 	ptr = dict_remove_db_name(foreign->foreign_table_name);
 	len = filename_to_tablename(ptr, name_buff, sizeof(name_buff), 1);
-	f_key_info.foreign_table
-		= Lex_cstring(name_buff, len).strdup_root(s->mem_root);
+	if (f_key_info.foreign_table.strdup(&s->mem_root, name_buff, len))
+		return NULL;
 
 	do {
 		ptr  = foreign->foreign_col_names[i];
-		name = Lex_cstring(ptr, strlen(ptr)).strdup_root(s->mem_root);
+		if (!(name = new (&s->mem_root) Lex_cstring))
+			return NULL;
+		if (name->strdup(&s->mem_root, ptr))
+			return NULL;
 		f_key_info.foreign_fields.push_back(name, &s->mem_root);
-		ptr  = foreign->referenced_col_names[i];
-		name = Lex_cstring(ptr, strlen(ptr)).strdup_root(s->mem_root);
+		ptr = foreign->referenced_col_names[i];
+		if (!(name = new (&s->mem_root) Lex_cstring))
+			return NULL;
+		if (name->strdup(&s->mem_root, ptr))
+			return NULL;
 		f_key_info.referenced_fields.push_back(name, &s->mem_root);
 	} while (++i < foreign->n_fields);
 
@@ -15397,15 +15398,10 @@ get_foreign_key_info(
 
 	if (foreign->referenced_index
 	    && foreign->referenced_index->name != NULL) {
-		referenced_key_name
-			= Lex_cstring(foreign->referenced_index->name,
-				      strlen(foreign->referenced_index->name))
-				  .strdup_root(s->mem_root);
-	} else {
-		referenced_key_name = NULL;
+		f_key_info.referenced_key_name.strdup(
+			&s->mem_root, foreign->referenced_index->name);
 	}
 
-	f_key_info.referenced_key_name = referenced_key_name;
 	return pf_key_info;
 }
 
