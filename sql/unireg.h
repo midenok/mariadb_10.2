@@ -204,84 +204,49 @@ static inline bool is_binary_frm_header(uchar *head)
 
 
 class Key;
+class Foreign_key;
 class Foreign_key_io: public BinaryStringBuffer<512>
 {
-  /* read */
 public:
-  class Elem
+  static const ulonglong fk_io_version= 0;
+  struct Pos
   {
-    LEX_CSTRING m_type_info;
-  public:
-    void set(const LEX_CSTRING &type_info)
+    uchar *pos;
+    const uchar *end;
+    Pos(LEX_CUSTRING& image)
     {
-      m_type_info= type_info;
-    }
-    const LEX_CSTRING &type_info() const
-    {
-      return m_type_info;
+      pos= const_cast<uchar *>(image.str);
+      end= pos + image.length;
     }
   };
+  /* read */
 private:
-  Elem *m_array;
-  uint m_count;
-  bool alloc(MEM_ROOT *root, uint count)
+  static bool read_length(size_t &out, Pos &p)
   {
-    DBUG_ASSERT(!m_array);
-    DBUG_ASSERT(!m_count);
-    size_t nbytes= sizeof(Elem) * count;
-    if (!(m_array= (Elem*) alloc_root(root, nbytes)))
+    ulonglong num= safe_net_field_length_ll(&p.pos, p.end - p.pos);
+    if (!p.pos || num > UINT_MAX32)
       return true;
-    m_count= count;
-    bzero((void*) m_array, nbytes);
+    out= (uint32_t) num;
     return false;
   }
-  static uint32 read_length(uchar **pos, const uchar *end)
+  static bool read_string(Lex_cstring *to, MEM_ROOT *mem_root, Pos &p)
   {
-    ulonglong num= safe_net_field_length_ll(pos, end - *pos);
-    if (num > UINT_MAX32)
-      return 0;
-    return (uint32) num;
-  }
-  static bool read_string(LEX_CSTRING *to, uchar **pos, const uchar *end)
-  {
-    to->length= read_length(pos, end);
-    if (*pos + to->length > end)
+    if (read_length(to->length, p) || p.pos + to->length > p.end)
       return true; // Not enough data
-    to->str= (const char *) *pos;
-    *pos+= to->length;
+    if (!to->length)
+      return false;
+    to->str= strmake_root(mem_root, (char *)p.pos, to->length);
+    if (!to->str)
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    p.pos+= to->length;
     return false;
   }
 public:
-  Foreign_key_io()
-   :m_array(NULL), m_count(0)
-  { }
-  uint count() const
-  {
-    return m_count;
-  }
-  const Elem& element(uint i) const
-  {
-    DBUG_ASSERT(i < m_count);
-    return m_array[i];
-  }
-  bool parse(MEM_ROOT *root, uint count, LEX_CUSTRING &image)
-  {
-    const uchar *pos= image.str;
-    const uchar *end= pos + image.length;
-    if (alloc(root, count))
-      return true;
-    for (uint i= 0; i < count && pos < end; i++)
-    {
-      LEX_CSTRING type_info;
-      uint fieldnr= read_length((uchar**) &pos, end);
-      if ((fieldnr == 0 && i > 0) || fieldnr >= count)
-        return true; // Bad data
-      if (read_string(&type_info, (uchar**) &pos, end) || type_info.length == 0)
-        return true; // Bad data
-      m_array[fieldnr].set(type_info);
-    }
-    return pos < end; // Error if some data is still left
-  }
+  Foreign_key_io() {}
+  bool parse(TABLE_SHARE *s, LEX_CUSTRING &image);
 
   /* write */
 private:
@@ -295,14 +260,15 @@ private:
     memcpy(pos, str.str, str.length);
     return pos + str.length;
   }
-  static uint store_length_required_length(ulonglong length)
+  static ulonglong string_size(LEX_CSTRING &str)
   {
-    return net_length_size(length);
+    return net_length_size(str.length) + str.length;
   }
 
 public:
-  bool append(const Key& key);
-  bool append(List<Key> &keys);
+  ulonglong key_size(Foreign_key &key);
+  bool store(Foreign_key &key, uchar *&pos);
+  bool store(List<Key> &keys);
 };
 
 #endif

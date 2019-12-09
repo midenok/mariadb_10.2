@@ -183,10 +183,6 @@ class Field_data_type_info_image: public BinaryStringBuffer<512>
     memcpy(pos, str.str, str.length);
     return pos + str.length;
   }
-  static uint store_length_required_length(ulonglong length)
-  {
-    return net_length_size(length);
-  }
 public:
   Field_data_type_info_image() { }
   bool append(uint fieldnr, const Column_definition &def)
@@ -198,8 +194,8 @@ public:
       return true; // Error
     if (!type_info.length())
       return false;
-    size_t need_length= store_length_required_length(fieldnr) +
-                        store_length_required_length(type_info.length()) +
+    size_t need_length= net_length_size(fieldnr) +
+                        net_length_size(type_info.length()) +
                         type_info.length();
     if (reserve(need_length))
       return true; // Error
@@ -328,7 +324,7 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                     MYF(0), table.str);
     DBUG_RETURN(frm);
   }
-  if (foreign_key_io.append(create_info->alter_info->key_list))
+  if (foreign_key_io.store(create_info->alter_info->key_list))
   {
     my_printf_error(ER_CANT_CREATE_TABLE,
                     "Cannot create table %`s: "
@@ -391,6 +387,9 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
 
   if (field_data_type_info_image.length())
     extra2_size+= 1 + extra2_str_size(field_data_type_info_image.length());
+
+  if (foreign_key_io.length())
+    extra2_size+= 1 + extra2_str_size(foreign_key_io.length());
 
   if (create_info->versioned())
   {
@@ -493,7 +492,7 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                       MYF(0), table.str);
       goto err;
     }
-    *pos= EXTRA2_FIELD_DATA_TYPE_INFO;
+    *pos= EXTRA2_FOREIGN_KEY_INFO;
     pos= extra2_write_str(pos + 1, foreign_key_io.lex_cstring());
   }
 
@@ -1212,41 +1211,158 @@ err:
   DBUG_RETURN(error);
 } /* make_empty_rec */
 
-bool Foreign_key_io::append(List<Key> &keys)
+ulonglong Foreign_key_io::key_size(Foreign_key &key)
 {
-  List_iterator_fast<Key> it(keys);
-  while (const Key *key= it++)
+  ulonglong store_size= 0;
+  store_size+= string_size(key.constraint_name);
+  store_size+= string_size(key.ref_db);
+  store_size+= string_size(key.ref_table);
+  store_size+= net_length_size(key.ref_columns.elements);
+  List_iterator_fast<Key_part_spec> it(key.ref_columns);
+  while (Key_part_spec *kp= it++)
+    store_size+= string_size(kp->field_name) * 2;
+  return store_size;
+}
+
+bool Foreign_key_io::store(Foreign_key &key, uchar *&pos)
+{
+  /* FIXME: charset validation */
+  pos= store_string(pos, key.constraint_name);
+  pos= store_string(pos, key.name);
+  pos= store_string(pos, key.ref_db); // FIXME: if NULL use TABLE_SHARE::db
+  pos= store_string(pos, key.ref_table);
+  pos= store_length(pos, key.update_opt);
+  pos= store_length(pos, key.delete_opt);
+  pos= store_length(pos, key.columns.elements);
+  DBUG_ASSERT(key.columns.elements == key.ref_columns.elements);
+  List_iterator_fast<Key_part_spec> col_it(key.columns);
+  List_iterator_fast<Key_part_spec> ref_it(key.ref_columns);
+  while (Key_part_spec *kp= col_it++)
   {
-    if (key->type != Key::FOREIGN_KEY) {
-            continue;
-    }
-    if (append(*key))
-      return true;
+    pos= store_string(pos, kp->field_name);
+    Key_part_spec *kp2= ref_it++;
+    pos= store_string(pos, kp2->field_name);
   }
+  size_t new_length= (char *) pos - ptr();
+  DBUG_ASSERT(new_length < alloced_length());
+  DBUG_ASSERT(new_length - length() == key_size(key));
+  length((uint32) new_length);
   return false;
 }
 
-bool Foreign_key_io::append(const Key &key)
+bool Foreign_key_io::store(List<Key> &keys)
 {
-#if 0
-  BinaryStringBuffer<64> type_info;
-  if (def.type_handler()->
-            Column_definition_data_type_info_image(&type_info, def) ||
-      type_info.length() > 0xFFFF/*Some reasonable limit*/)
-    return true; // Error
-  if (!type_info.length())
-    return false;
-  size_t need_length= store_length_required_length(fieldnr) +
-                      store_length_required_length(type_info.length()) +
-                      type_info.length();
-  if (reserve(need_length))
-    return true; // Error
+  List_iterator_fast<Key> it(keys);
+  ulonglong fk_count= 0;
+  ulonglong store_size= net_length_size(fk_io_version);
+  while (Key *key= it++)
+  {
+    if (!key->foreign)
+      continue;
+    Foreign_key *fk= static_cast<Foreign_key *>(key);
+    fk_count++;
+    store_size+= key_size(*fk);
+  }
+  store_size+= net_length_size(fk_count);
+  if (reserve(store_size))
+  {
+    // FIXME: error
+    return true;
+  }
   uchar *pos= (uchar *) end();
-  pos= store_length(pos, fieldnr);
-  pos= store_string(pos, type_info.lex_cstring());
-  size_t new_length= (const char *) pos - ptr();
-  DBUG_ASSERT(new_length < alloced_length());
-  length((uint32) new_length);
-#endif
+  pos= store_length(pos, fk_io_version);
+  pos= store_length(pos, fk_count);
+  length((char *) pos - ptr());
+  it.init(keys);
+  while (Key *key= it++)
+  {
+    if (!key->foreign)
+      continue;
+    Foreign_key *fk= static_cast<Foreign_key *>(key);
+    store(*fk, pos);
+  }
+
   return false;
+}
+
+bool Foreign_key_io::parse(TABLE_SHARE *s, LEX_CUSTRING& image)
+{
+  Pos p(image);
+  size_t version, fk_count;
+  if (read_length(version, p) ||
+      read_length(fk_count, p))
+  {
+    // FIXME: error
+    return true;
+  }
+  if (version > fk_io_version)
+  {
+    // FIXME: error
+    return true;
+  }
+  if (fk_count && !s->foreign_keys)
+  {
+    s->foreign_keys= (FK_list *) alloc_root(&s->mem_root, sizeof(FK_list));
+    if (!s->foreign_keys)
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    s->foreign_keys->empty();
+  }
+  for (uint i= 0; i < fk_count; ++i)
+  {
+    FK_info *dst= new (&s->mem_root) FK_info();
+    if (s->foreign_keys->push_back(dst, &s->mem_root))
+    {
+mem_error:
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    if (read_string(&dst->foreign_id, &s->mem_root, p))
+      return true;
+    /* TODO: zero-valued fields where not needed
+    dst->foreign_db= &db;
+    dst->foreign_table= &table_name;
+    */
+    if (read_string(&dst->referenced_key_name, &s->mem_root, p))
+      return true;
+    if (read_string(&dst->referenced_db, &s->mem_root, p))
+      return true;
+    if (read_string(&dst->referenced_table, &s->mem_root, p))
+      return true;
+    size_t update_method, delete_method;
+    if (read_length(update_method, p))
+      return true;
+    if (read_length(delete_method, p))
+      return true;
+    if (update_method > FK_OPTION_SET_DEFAULT || delete_method > FK_OPTION_SET_DEFAULT)
+      return true;
+    dst->update_method= (enum_fk_option) update_method;
+    dst->delete_method= (enum_fk_option) delete_method;
+    size_t col_count;
+    if (read_length(col_count, p))
+      return true;
+    for (uint j= 0; j < col_count; ++j)
+    {
+      Lex_cstring *field_name= new (&s->mem_root) Lex_cstring;
+      if (!field_name ||
+          dst->foreign_fields.push_back(field_name, &s->mem_root))
+        goto mem_error;
+      if (read_string(field_name, &s->mem_root, p))
+        return true;
+      field_name= new (&s->mem_root) Lex_cstring;
+      if (!field_name ||
+          dst->referenced_fields.push_back(field_name, &s->mem_root))
+        goto mem_error;
+      if (read_string(field_name, &s->mem_root, p))
+        return true;
+    }
+    /* FIXME: update_method, delete_method
+    dst->update_method= src->update_opt;
+    dst->delete_method= src->delete_opt; */
+    dst->foreign_fields.empty();
+    dst->referenced_fields.empty();
+  }
+  return p.pos < p.end; // Error if some data is still left
 }
