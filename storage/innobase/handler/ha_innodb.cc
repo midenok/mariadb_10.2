@@ -12416,10 +12416,24 @@ create_table_info_t::create_foreign_keys()
 	ulint		      err_col;
 	const bool	      tmp_table = m_flags2 & DICT_TF2_TEMPORARY;
 	const CHARSET_INFO*   cs	= innobase_get_charset(m_thd);
-	const char*	      operation = "Create ";
 	const char*	      name	= m_table_name;
 
 	enum_sql_command sqlcom = enum_sql_command(thd_sql_command(m_thd));
+	const char*	 operation = sqlcom == SQLCOM_ALTER_TABLE
+					? "Alter " : "Create ";
+
+	if (tmp_table && m_form->s->foreign_keys->elements) {
+		ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT,
+				create_name,
+				"%s table `%s`.`%s` with foreign key "
+				"constraint failed. "
+				"Temporary tables can't have "
+				"foreign key constraints.",
+				operation, m_form->s->db.str,
+				m_form->s->table_name.str);
+
+		return (DB_CANNOT_ADD_CONSTRAINT);
+	}
 
 	if (sqlcom == SQLCOM_ALTER_TABLE) {
 		dict_table_t* table_to_alter;
@@ -12453,7 +12467,6 @@ create_table_info_t::create_foreign_keys()
 		create_name[bufend - create_name] = '\0';
 		number				  = highest_id_so_far + 1;
 		mem_heap_free(heap);
-		operation = "Alter ";
 	} else {
 		char* bufend = innobase_convert_name(create_name,
 						     MAX_TABLE_NAME_LEN, name,
@@ -12474,18 +12487,6 @@ create_table_info_t::create_foreign_keys()
 	}
 
 	while (FK_info* fk = key_it++) {
-		if (tmp_table) {
-			ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT,
-					create_name,
-					"%s table `%s`.`%s` with foreign key "
-					"constraint failed. "
-					"Temporary tables can't have "
-					"foreign key constraints.",
-					operation, m_form->s->db.str,
-					m_form->s->table_name.str);
-
-			return (DB_CANNOT_ADD_CONSTRAINT);
-		}
 
 		LEX_CSTRING*   col;
 		bool	       success;
