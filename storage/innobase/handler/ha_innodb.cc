@@ -6252,11 +6252,12 @@ no_such_table:
 		bool err = false;
 		mysql_mutex_lock(&table->s->LOCK_share);
 		if (!table->s->referenced_keys) {
-			DBUG_ASSERT(!table->s->foreign_keys);
+//			DBUG_ASSERT(!table->s->foreign_keys);
 			if (!m_prebuilt->table->foreign_set.empty()) {
 				table->s->foreign_keys = build_foreign_list(
 					thd, m_prebuilt->table->foreign_set,
 					err);
+				// FIXME: compare before and after build_foreign_list
 			}
 			if (!err
 			    && !m_prebuilt->table->referenced_set.empty()) {

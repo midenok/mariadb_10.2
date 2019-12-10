@@ -254,10 +254,15 @@ private:
   {
     return net_store_length(pos, length);
   }
-  static uchar *store_string(uchar *pos, const LEX_CSTRING &str)
+  static uchar *store_string(uchar *pos, const LEX_CSTRING &str, bool nullable= false)
   {
+    if (!nullable && !str.length)
+    {
+      DBUG_ASSERT(0);
+    }
     pos= store_length(pos, str.length);
-    memcpy(pos, str.str, str.length);
+    if (str.length)
+      memcpy(pos, str.str, str.length);
     return pos + str.length;
   }
   static ulonglong string_size(LEX_CSTRING &str)

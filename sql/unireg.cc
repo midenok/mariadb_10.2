@@ -1215,21 +1215,29 @@ ulonglong Foreign_key_io::key_size(Foreign_key &key)
 {
   ulonglong store_size= 0;
   store_size+= string_size(key.constraint_name);
+  store_size+= string_size(key.name);
   store_size+= string_size(key.ref_db);
   store_size+= string_size(key.ref_table);
+  store_size+= net_length_size(key.update_opt);
+  store_size+= net_length_size(key.delete_opt);
   store_size+= net_length_size(key.ref_columns.elements);
-  List_iterator_fast<Key_part_spec> it(key.ref_columns);
-  while (Key_part_spec *kp= it++)
-    store_size+= string_size(kp->field_name) * 2;
+  List_iterator_fast<Key_part_spec> col_it(key.columns);
+  List_iterator_fast<Key_part_spec> ref_it(key.ref_columns);
+  while (Key_part_spec *kp= col_it++)
+  {
+    store_size+= string_size(kp->field_name);
+    Key_part_spec *kp2= ref_it++;
+    store_size+= string_size(kp2->field_name);
+  }
   return store_size;
 }
 
 bool Foreign_key_io::store(Foreign_key &key, uchar *&pos)
 {
   /* FIXME: charset validation */
-  pos= store_string(pos, key.constraint_name);
-  pos= store_string(pos, key.name);
-  pos= store_string(pos, key.ref_db); // FIXME: if NULL use TABLE_SHARE::db
+  pos= store_string(pos, key.constraint_name, true);
+  pos= store_string(pos, key.name, true);
+  pos= store_string(pos, key.ref_db, true);
   pos= store_string(pos, key.ref_table);
   pos= store_length(pos, key.update_opt);
   pos= store_length(pos, key.delete_opt);
@@ -1329,6 +1337,8 @@ mem_error:
       return true;
     if (read_string(&dst->referenced_db, &s->mem_root, p))
       return true;
+    if (!dst->referenced_db.length)
+      dst->referenced_db.strdup(&s->mem_root, s->db);
     if (read_string(&dst->referenced_table, &s->mem_root, p))
       return true;
     size_t update_method, delete_method;
@@ -1358,11 +1368,6 @@ mem_error:
       if (read_string(field_name, &s->mem_root, p))
         return true;
     }
-    /* FIXME: update_method, delete_method
-    dst->update_method= src->update_opt;
-    dst->delete_method= src->delete_opt; */
-    dst->foreign_fields.empty();
-    dst->referenced_fields.empty();
   }
   return p.pos < p.end; // Error if some data is still left
 }
