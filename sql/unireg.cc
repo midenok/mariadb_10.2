@@ -1235,8 +1235,8 @@ ulonglong Foreign_key_io::key_size(Foreign_key &key)
 bool Foreign_key_io::store(Foreign_key &key, uchar *&pos)
 {
   /* FIXME: charset validation */
+  pos= store_string(pos, key.name);
   pos= store_string(pos, key.constraint_name, true);
-  pos= store_string(pos, key.name, true);
   pos= store_string(pos, key.ref_db, true);
   pos= store_string(pos, key.ref_table);
   pos= store_length(pos, key.update_opt);
