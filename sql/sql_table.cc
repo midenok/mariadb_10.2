@@ -3702,7 +3702,6 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                  ER_THD(thd, ER_KEY_REF_DO_NOT_MATCH_TABLE_REF));
 	DBUG_RETURN(TRUE);
       }
-      continue;
     }
     (*key_count)++;
     tmp=file->max_key_parts();
@@ -3714,33 +3713,30 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     if (check_ident_length(&key->name))
       DBUG_RETURN(TRUE);
     key_iterator2.rewind ();
-    if (!key->foreign)
+    while ((key2 = key_iterator2++) != key)
     {
-      while ((key2 = key_iterator2++) != key)
+      /*
+        foreign_key_prefix(key, key2) returns 0 if key or key2, or both, is
+        'generated', and a generated key is a prefix of the other key.
+        Then we do not need the generated shorter key.
+      */
+      if ((!key2->foreign &&
+            key2->name.str != ignore_key &&
+            !foreign_key_prefix(key, key2)))
       {
-	/*
-          foreign_key_prefix(key, key2) returns 0 if key or key2, or both, is
-          'generated', and a generated key is a prefix of the other key.
-          Then we do not need the generated shorter key.
-        */
-        if ((!key2->foreign &&
-             key2->name.str != ignore_key &&
-             !foreign_key_prefix(key, key2)))
+        /* TODO: issue warning message */
+        /* mark that the generated key should be ignored */
+        if (!key2->generated ||
+            (key->generated && key->columns.elements <
+              key2->columns.elements))
+          key->name.str= ignore_key;
+        else
         {
-          /* TODO: issue warning message */
-          /* mark that the generated key should be ignored */
-          if (!key2->generated ||
-              (key->generated && key->columns.elements <
-               key2->columns.elements))
-            key->name.str= ignore_key;
-          else
-          {
-            key2->name.str= ignore_key;
-            key_parts-= key2->columns.elements;
-            (*key_count)--;
-          }
-          break;
+          key2->name.str= ignore_key;
+          key_parts-= key2->columns.elements;
+          (*key_count)--;
         }
+        break;
       }
     }
     if (key->name.str != ignore_key)
@@ -6379,11 +6375,6 @@ remove_key:
                             ER_DUP_KEYNAME, ER_THD(thd, dup_primary_key
                             ? ER_MULTIPLE_PRI_KEY : ER_DUP_KEYNAME), keyname);
         key_it.remove();
-        if (key->foreign)
-        {
-          /* ADD FOREIGN KEY appends two items. */
-          key_it.remove();
-        }
         if (alter_info->key_list.is_empty())
           alter_info->flags&= ~(ALTER_ADD_INDEX | ALTER_ADD_FOREIGN_KEY);
       }

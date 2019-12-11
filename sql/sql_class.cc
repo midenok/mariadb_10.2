@@ -200,6 +200,22 @@ Foreign_key::Foreign_key(const Foreign_key &rhs, MEM_ROOT *mem_root)
   list_copy_and_replace_each_value(ref_columns, mem_root);
 }
 
+void Foreign_key::init(const LEX_CSTRING& _ref_db, const LEX_CSTRING& _ref_table,
+                       const LEX* lex)
+{
+  DBUG_ASSERT(lex);
+  ref_db= _ref_db;
+  ref_table= _ref_table;
+  ref_columns= lex->ref_list;
+  if (ref_columns.is_empty())
+  {
+    ref_columns= columns;
+  }
+  delete_opt= lex->fk_delete_opt;
+  update_opt= lex->fk_update_opt;
+  match_opt= lex->fk_match_option;
+}
+
 /*
   Test if a foreign key (= generated key) is a prefix of the given key
   (ignoring key name, key type and order of columns)

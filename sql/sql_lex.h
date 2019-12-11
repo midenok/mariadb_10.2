@@ -4616,11 +4616,10 @@ public:
 
   bool add_table_foreign_key(const LEX_CSTRING *name,
                              const LEX_CSTRING *constraint_name,
-                             Table_ident *table_name,
                              DDL_options ddl_options);
   bool add_column_foreign_key(const LEX_CSTRING *name,
                               const LEX_CSTRING *constraint_name,
-                              Table_ident *ref_table_name,
+                              Table_ident &ref_table_name,
                               DDL_options ddl_options);
 };
 

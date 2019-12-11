@@ -11172,27 +11172,10 @@ sp_condition_value *LEX::stmt_signal_value(const Lex_ident_sys_st &ident)
 
 bool LEX::add_table_foreign_key(const LEX_CSTRING *name,
                                 const LEX_CSTRING *constraint_name,
-                                Table_ident *ref_table_name,
                                 DDL_options ddl_options)
 {
-  Key_part_spec *key= new (thd->mem_root) Key_part_spec(name, 0);
-  if (unlikely(key == NULL))
-    return true;
-
-  if (ref_list.is_empty())
-  {
-    ref_list.push_back(key, thd->mem_root);
-  }
-
   last_key= new (thd->mem_root) Foreign_key(name,
-                                            key,
                                             constraint_name,
-                                            &ref_table_name->db,
-                                            &ref_table_name->table,
-                                            &ref_list,
-                                            fk_delete_opt,
-                                            fk_update_opt,
-                                            fk_match_option,
                                             ddl_options);
   if (unlikely(last_key == NULL))
     return true;
@@ -11210,7 +11193,7 @@ bool LEX::add_table_foreign_key(const LEX_CSTRING *name,
 
 bool LEX::add_column_foreign_key(const LEX_CSTRING *name,
                                  const LEX_CSTRING *constraint_name,
-                                 Table_ident *ref_table_name,
+                                 Table_ident &ref_table_name,
                                  DDL_options ddl_options)
 {
   if (last_field->vcol_info || last_field->vers_sys_field())
@@ -11218,9 +11201,15 @@ bool LEX::add_column_foreign_key(const LEX_CSTRING *name,
     thd->parse_error();
     return true;
   }
-  if (unlikely(add_table_foreign_key(name, constraint_name,
-                                     ref_table_name, ddl_options)))
+  if (unlikely(add_table_foreign_key(name, constraint_name, ddl_options)))
       return true;
-
+  DBUG_ASSERT(name);
+  DBUG_ASSERT(name->str);
+  Key_part_spec *key= new (thd->mem_root) Key_part_spec(name, 0);
+  if (unlikely(key == NULL))
+    return true;
+  last_key->columns.push_back(key);
+  Foreign_key &fk= static_cast<Foreign_key &>(*last_key);
+  fk.init(ref_table_name.db, ref_table_name.table, this);
   return false;
 }

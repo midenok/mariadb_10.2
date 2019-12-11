@@ -5718,7 +5718,7 @@ column_def:
         | field_spec opt_constraint references
           {
             if (unlikely(Lex->add_column_foreign_key(&($1->field_name), &$2,
-                                                     $3, DDL_options())))
+                                                     *$3, DDL_options())))
               MYSQL_YYABORT;
             $$= $1;
           }
@@ -5774,13 +5774,15 @@ key_def:
           {
             if (unlikely(Lex->check_add_key($4)))
               MYSQL_YYABORT;
+            if (unlikely(Lex->add_table_foreign_key($5.str ? &$5 : &$1,
+                                                    $1.str ? &$1 : &$5, $4)))
+               MYSQL_YYABORT;
             Lex->option_list= NULL;
           }
           '(' key_list ')' references
           {
-            if (unlikely(Lex->add_table_foreign_key($5.str ? &$5 : &$1,
-                                                    $1.str ? &$1 : &$5, $10, $4)))
-               MYSQL_YYABORT;
+            Foreign_key &fk= static_cast<Foreign_key &>(*Lex->last_key);
+            fk.init($10->db, $10->table, Lex);
           }
 	;
 
