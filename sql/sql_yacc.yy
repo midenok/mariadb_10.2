@@ -5772,11 +5772,7 @@ key_def:
           '(' key_list ')' normal_key_options { }
         | opt_constraint FOREIGN KEY_SYM opt_if_not_exists opt_ident
           {
-            if (unlikely(Lex->check_add_key($4)) ||
-                unlikely(!(Lex->last_key= (new (thd->mem_root)
-                                           Key(Key::MULTIPLE,
-                                           $1.str ? &$1 : &$5,
-                                           HA_KEY_ALG_UNDEF, true, $4)))))
+            if (unlikely(Lex->check_add_key($4)))
               MYSQL_YYABORT;
             Lex->option_list= NULL;
           }

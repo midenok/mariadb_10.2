@@ -11175,8 +11175,17 @@ bool LEX::add_table_foreign_key(const LEX_CSTRING *name,
                                 Table_ident *ref_table_name,
                                 DDL_options ddl_options)
 {
-  Key *key= new (thd->mem_root) Foreign_key(name,
-                                            &last_key->columns,
+  Key_part_spec *key= new (thd->mem_root) Key_part_spec(name, 0);
+  if (unlikely(key == NULL))
+    return true;
+
+  if (ref_list.is_empty())
+  {
+    ref_list.push_back(key, thd->mem_root);
+  }
+
+  last_key= new (thd->mem_root) Foreign_key(name,
+                                            key,
                                             constraint_name,
                                             &ref_table_name->db,
                                             &ref_table_name->table,
@@ -11185,14 +11194,9 @@ bool LEX::add_table_foreign_key(const LEX_CSTRING *name,
                                             fk_update_opt,
                                             fk_match_option,
                                             ddl_options);
-  if (unlikely(key == NULL))
+  if (unlikely(last_key == NULL))
     return true;
 
-  /*
-    handle_if_exists_options() expects the two keys in this order:
-    the Foreign_key, followed by its auto-generated Key.
-  */
-  alter_info.key_list.push_back(key, thd->mem_root);
   alter_info.key_list.push_back(last_key, thd->mem_root);
 
   option_list= NULL;
@@ -11214,25 +11218,9 @@ bool LEX::add_column_foreign_key(const LEX_CSTRING *name,
     thd->parse_error();
     return true;
   }
-  if (unlikely(!(last_key= (new (thd->mem_root)
-                            Key(Key::MULTIPLE, constraint_name,
-                            HA_KEY_ALG_UNDEF, true, ddl_options)))))
-    return true;
-  Key_part_spec *key= new (thd->mem_root) Key_part_spec(name, 0);
-  if (unlikely(key == NULL))
-    return true;
-  last_key->columns.push_back(key, thd->mem_root);
-  if (ref_list.is_empty())
-  {
-    ref_list.push_back(key, thd->mem_root);
-  }
-  if (unlikely(add_table_foreign_key(constraint_name, constraint_name,
+  if (unlikely(add_table_foreign_key(name, constraint_name,
                                      ref_table_name, ddl_options)))
       return true;
-  option_list= NULL;
-
-  /* Only used for ALTER TABLE. Ignored otherwise. */
-  alter_info.flags|= ALTER_ADD_FOREIGN_KEY;
 
   return false;
 }

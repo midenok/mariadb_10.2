@@ -12311,7 +12311,7 @@ create_table_info_t::create_foreign_keys()
 	}
 
 	while (Key* key = key_it++) {
-		if (key->type != Key::FOREIGN_KEY)
+		if (!key->foreign)
 			continue;
 
 		if (tmp_table) {

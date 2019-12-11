@@ -349,8 +349,9 @@ public:
 
 class Key :public Sql_alloc, public DDL_options {
 public:
-  enum Keytype { PRIMARY, UNIQUE, MULTIPLE, FULLTEXT, SPATIAL, FOREIGN_KEY};
+  enum Keytype { PRIMARY, UNIQUE, MULTIPLE, FULLTEXT, SPATIAL };
   enum Keytype type;
+  bool foreign;
   KEY_CREATE_INFO key_create_info;
   List<Key_part_spec> columns;
   LEX_CSTRING name;
@@ -361,7 +362,7 @@ public:
   Key(enum Keytype type_par, const LEX_CSTRING *name_arg,
       ha_key_alg algorithm_arg, bool generated_arg, DDL_options_st ddl_options)
     :DDL_options(ddl_options),
-     type(type_par), key_create_info(default_key_create_info),
+     type(type_par), foreign(false), key_create_info(default_key_create_info),
     name(*name_arg), option_list(NULL), generated(generated_arg),
     invisible(false)
   {
@@ -372,7 +373,7 @@ public:
       bool generated_arg, List<Key_part_spec> *cols,
       engine_option_value *create_opt, DDL_options_st ddl_options)
     :DDL_options(ddl_options),
-     type(type_par), key_create_info(*key_info_arg), columns(*cols),
+     type(type_par), foreign(false), key_create_info(*key_info_arg), columns(*cols),
     name(*name_arg), option_list(create_opt), generated(generated_arg),
     invisible(false)
   {}
@@ -399,22 +400,25 @@ public:
   List<Key_part_spec> ref_columns;
   enum enum_fk_option delete_opt, update_opt;
   enum fk_match_opt match_opt;
-  Foreign_key(const LEX_CSTRING *name_arg, List<Key_part_spec> *cols,
+  Foreign_key(const LEX_CSTRING *name_arg,
+              Key_part_spec *key,
               const LEX_CSTRING *constraint_name_arg,
 	      const LEX_CSTRING *ref_db_arg, const LEX_CSTRING *ref_table_arg,
               List<Key_part_spec> *ref_cols,
               enum_fk_option delete_opt_arg, enum_fk_option update_opt_arg,
               fk_match_opt match_opt_arg,
 	      DDL_options ddl_options)
-    :Key(FOREIGN_KEY, name_arg, &default_key_create_info, 0, cols, NULL,
+    :Key(MULTIPLE, name_arg, default_key_create_info.algorithm, false,
          ddl_options),
     constraint_name(*constraint_name_arg),
     ref_db(*ref_db_arg), ref_table(*ref_table_arg), ref_columns(*ref_cols),
     delete_opt(delete_opt_arg), update_opt(update_opt_arg),
     match_opt(match_opt_arg)
-   {
+  {
+    foreign= true;
     // We don't check for duplicate FKs.
     key_create_info.check_for_duplicate_indexes= false;
+    columns.push_back(key);
   }
  Foreign_key(const Foreign_key &rhs, MEM_ROOT *mem_root);
   /**

@@ -3687,7 +3687,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
   {
     DBUG_PRINT("info", ("key name: '%s'  type: %d", key->name.str ? key->name.str :
                         "(none)" , key->type));
-    if (key->type == Key::FOREIGN_KEY)
+    if (key->foreign)
     {
       fk_key_count++;
       Foreign_key *fk_key= (Foreign_key*) key;
@@ -3714,7 +3714,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     if (check_ident_length(&key->name))
       DBUG_RETURN(TRUE);
     key_iterator2.rewind ();
-    if (key->type != Key::FOREIGN_KEY)
+    if (!key->foreign)
     {
       while ((key2 = key_iterator2++) != key)
       {
@@ -3723,7 +3723,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           'generated', and a generated key is a prefix of the other key.
           Then we do not need the generated shorter key.
         */
-        if ((key2->type != Key::FOREIGN_KEY &&
+        if ((!key2->foreign &&
              key2->name.str != ignore_key &&
              !foreign_key_prefix(key, key2)))
         {
@@ -3772,7 +3772,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     DBUG_RETURN(TRUE);
   }
 
-  (*key_info_buffer)= key_info= (KEY*) thd->calloc(sizeof(KEY) * (*key_count));
+  (*key_info_buffer)= key_info= (KEY*) thd->calloc(sizeof(KEY) *
+                                                   (*key_count + fk_key_count));
   key_part_info=(KEY_PART_INFO*) thd->calloc(sizeof(KEY_PART_INFO)*key_parts);
   if (!*key_info_buffer || ! key_part_info)
     DBUG_RETURN(TRUE);				// Out of memory
@@ -3815,9 +3816,6 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                  sym_group_geom.name, sym_group_geom.needed_define);
 	DBUG_RETURN(TRUE);
 #endif
-    case Key::FOREIGN_KEY:
-      key_number--;				// Skip this key
-      continue;
     default:
       key_info->flags = HA_NOSAME;
       break;
@@ -3998,15 +3996,16 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
         break;
 
       case Key::MULTIPLE:
-        if (sql_field->type_handler()->Key_part_spec_init_multiple(column,
-                                                                   *sql_field,
-                                                                   file) ||
-            sql_field->check_vcol_for_key(thd) ||
-            key_add_part_check_null(file, key_info, sql_field, column))
-          DBUG_RETURN(TRUE);
-        break;
-
-      case Key::FOREIGN_KEY:
+        if (!key->foreign)
+        {
+          if (sql_field->type_handler()->Key_part_spec_init_multiple(column,
+                                                                    *sql_field,
+                                                                    file) ||
+              sql_field->check_vcol_for_key(thd) ||
+              key_add_part_check_null(file, key_info, sql_field, column))
+            DBUG_RETURN(TRUE);
+          break;
+        }
         if (sql_field->type_handler()->Key_part_spec_init_foreign(column,
                                                                   *sql_field,
                                                                   file) ||
@@ -4772,7 +4771,7 @@ handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
     Key *key;
     while ((key= key_iterator++))
     {
-      if (key->type == Key::FOREIGN_KEY)
+      if (key->foreign)
       {
         my_error(ER_FOREIGN_KEY_ON_PARTITIONED, MYF(0));
         goto err;
@@ -6326,7 +6325,7 @@ drop_create_field:
             continue;
         }
       }
-      if (key->type != Key::FOREIGN_KEY)
+      if (!key->foreign)
       {
         for (n_key=0; n_key < table->s->keys; n_key++)
         {
@@ -6380,7 +6379,7 @@ remove_key:
                             ER_DUP_KEYNAME, ER_THD(thd, dup_primary_key
                             ? ER_MULTIPLE_PRI_KEY : ER_DUP_KEYNAME), keyname);
         key_it.remove();
-        if (key->type == Key::FOREIGN_KEY)
+        if (key->foreign)
         {
           /* ADD FOREIGN KEY appends two items. */
           key_it.remove();
@@ -6391,7 +6390,7 @@ remove_key:
       else
       {
         DBUG_ASSERT(key->or_replace());
-        Alter_drop::drop_type type= (key->type == Key::FOREIGN_KEY) ?
+        Alter_drop::drop_type type= key->foreign ?
           Alter_drop::FOREIGN_KEY : Alter_drop::KEY;
         Alter_drop *ad= new Alter_drop(type, key->name.str, FALSE);
         if (ad != NULL)
@@ -8552,7 +8551,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     Key *key;
     while ((key=key_it++))			// Add new keys
     {
-      if (key->type == Key::FOREIGN_KEY &&
+      if (key->foreign &&
           ((Foreign_key *)key)->validate(new_create_list))
         goto err;
       new_key_list.push_back(key, thd->mem_root);
@@ -9059,7 +9058,7 @@ static bool fk_prepare_copy_alter_table(THD *thd, TABLE *table,
 
     while (Key *key= fk_list_it++)
     {
-      if (key->type != Key::FOREIGN_KEY)
+      if (!key->foreign)
         continue;
 
       Foreign_key *fk= static_cast<Foreign_key*>(key);

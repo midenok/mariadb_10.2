@@ -170,7 +170,7 @@ bool Key_part_spec::init_multiple_key_for_blob(const handler *file)
 */
 
 Key::Key(const Key &rhs, MEM_ROOT *mem_root)
-  :DDL_options(rhs),type(rhs.type),
+  :DDL_options(rhs), type(rhs.type), foreign(rhs.foreign),
   key_create_info(rhs.key_create_info),
   columns(rhs.columns, mem_root),
   name(rhs.name),
@@ -295,7 +295,7 @@ bool Foreign_key::validate(List<Create_field> &table_fields)
       my_error(ER_KEY_COLUMN_DOES_NOT_EXITS, MYF(0), column->field_name.str);
       DBUG_RETURN(TRUE);
     }
-    if (type == Key::FOREIGN_KEY && sql_field->vcol_info)
+    if (sql_field->vcol_info)
     {
       if (delete_opt == FK_OPTION_SET_NULL)
       {
