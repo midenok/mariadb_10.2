@@ -9325,7 +9325,7 @@ bool TABLE_SHARE::update_foreign_keys(THD *thd, Alter_info *alter_info)
   thd->mem_root= &mem_root;
   while (Key* key= key_it++)
   {
-    if (key->type != Key::FOREIGN_KEY)
+    if (!key->foreign)
       continue;
 
     Foreign_key *src= static_cast<Foreign_key*>(key);

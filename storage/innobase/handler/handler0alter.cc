@@ -2887,7 +2887,7 @@ innobase_get_foreign_key_info(
 	List_iterator<Key> key_iterator(alter_info->key_list);
 
 	while ((key=key_iterator++)) {
-		if (key->type != Key::FOREIGN_KEY) {
+		if (!key->foreign) {
 			continue;
 		}
 
