@@ -2822,7 +2822,7 @@ innobase_get_foreign_key_info(
 	*n_add_fk = 0;
 
 	for (Key& key : alter_info->key_list) {
-		if (key.type != Key::FOREIGN_KEY) {
+		if (!key.foreign) {
 			continue;
 		}
 
