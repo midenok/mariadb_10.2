@@ -3720,15 +3720,12 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
         'generated', and a generated key is a prefix of the other key.
         Then we do not need the generated shorter key.
       */
-      if ((!key2->foreign &&
-            key2->name.str != ignore_key &&
-            !foreign_key_prefix(key, key2)))
+      if ((key2->name.str != ignore_key && !foreign_key_prefix(key, key2)))
       {
         /* TODO: issue warning message */
         /* mark that the generated key should be ignored */
         if (!key2->generated ||
-            (key->generated && key->columns.elements <
-              key2->columns.elements))
+            (key->generated && key->columns.elements < key2->columns.elements))
           key->name.str= ignore_key;
         else
         {

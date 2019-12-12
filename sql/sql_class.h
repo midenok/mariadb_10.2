@@ -403,7 +403,7 @@ public:
   Foreign_key(const LEX_CSTRING *name_arg,
               const LEX_CSTRING *constraint_name_arg,
               DDL_options ddl_options)
-    : Key(MULTIPLE, name_arg, default_key_create_info.algorithm, false,
+    : Key(MULTIPLE, name_arg, default_key_create_info.algorithm, true,
          ddl_options), constraint_name(*constraint_name_arg)
   {
     foreign= true;

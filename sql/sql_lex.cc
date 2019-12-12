@@ -11170,12 +11170,12 @@ sp_condition_value *LEX::stmt_signal_value(const Lex_ident_sys_st &ident)
 }
 
 
-bool LEX::add_table_foreign_key(const LEX_CSTRING *name,
-                                const LEX_CSTRING *constraint_name,
+bool LEX::add_table_foreign_key(const LEX_CSTRING &name,
+                                const LEX_CSTRING &constraint_name,
                                 DDL_options ddl_options)
 {
-  last_key= new (thd->mem_root) Foreign_key(name,
-                                            constraint_name,
+  last_key= new (thd->mem_root) Foreign_key(&name,
+                                            &constraint_name,
                                             ddl_options);
   if (unlikely(last_key == NULL))
     return true;
@@ -11191,8 +11191,8 @@ bool LEX::add_table_foreign_key(const LEX_CSTRING *name,
 }
 
 
-bool LEX::add_column_foreign_key(const LEX_CSTRING *name,
-                                 const LEX_CSTRING *constraint_name,
+bool LEX::add_column_foreign_key(const LEX_CSTRING &name,
+                                 const LEX_CSTRING &constraint_name,
                                  Table_ident &ref_table_name,
                                  DDL_options ddl_options)
 {
@@ -11201,11 +11201,11 @@ bool LEX::add_column_foreign_key(const LEX_CSTRING *name,
     thd->parse_error();
     return true;
   }
-  if (unlikely(add_table_foreign_key(name, constraint_name, ddl_options)))
+  if (unlikely(add_table_foreign_key(constraint_name.str ? constraint_name : name,
+                                     constraint_name, ddl_options)))
       return true;
-  DBUG_ASSERT(name);
-  DBUG_ASSERT(name->str);
-  Key_part_spec *key= new (thd->mem_root) Key_part_spec(name, 0);
+  DBUG_ASSERT(name.str);
+  Key_part_spec *key= new (thd->mem_root) Key_part_spec(&name, 0);
   if (unlikely(key == NULL))
     return true;
   last_key->columns.push_back(key);
