@@ -3677,8 +3677,6 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
   bool primary_key=0,unique_key=0;
   Key *key, *key2;
   uint tmp, key_number;
-  /* special marker for keys to be ignored */
-  static char ignore_key[1];
 
   /* Calculate number of key segements */
   *key_count= 0;
@@ -3720,23 +3718,23 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
         'generated', and a generated key is a prefix of the other key.
         Then we do not need the generated shorter key.
       */
-      if ((key2->name.str != ignore_key && !foreign_key_prefix(key, key2)))
+      if ((!key2->ignore && !foreign_key_prefix(key, key2)))
       {
         /* TODO: issue warning message */
         /* mark that the generated key should be ignored */
         if (!key2->generated ||
             (key->generated && key->columns.elements < key2->columns.elements))
-          key->name.str= ignore_key;
+          key->ignore= true;
         else
         {
-          key2->name.str= ignore_key;
+          key2->ignore= true;
           key_parts-= key2->columns.elements;
           (*key_count)--;
         }
         break;
       }
     }
-    if (key->name.str != ignore_key)
+    if (!key->ignore)
       key_parts+=key->columns.elements;
     else
       (*key_count)--;
@@ -3779,12 +3777,12 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     Key_part_spec *column;
 
     is_hash_field_needed= false;
-    if (key->name.str == ignore_key)
+    if (key->ignore)
     {
       /* ignore redundant keys */
       do
 	key=key_iterator++;
-      while (key && key->name.str == ignore_key);
+      while (key && key->ignore);
       if (!key)
 	break;
     }
