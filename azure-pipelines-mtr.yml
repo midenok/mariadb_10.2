@@ -205,7 +205,7 @@ stages:
 
     - template: azure/tests/run-mtr-test.yml
       parameters:
-        MtrArgs: '--verbose-restart --force --retry=3 --max-save-core=0 --max-save-datadir=1 --parallel=auto --suite=spider,spider/bg,engines/funcs,engines/iuds --testcase-timeout=120 --mysqld=--open-files-limit=0 --mysqld=--log-warnings=1--vardir=$(MYSQL_VARDIR)'
+        MtrArgs: '--verbose-restart --force --retry=3 --max-save-core=0 --max-save-datadir=1 --parallel=auto --suite=spider,spider/bg,engines/funcs,engines/iuds --testcase-timeout=120 --mysqld=--open-files-limit=0 --mysqld=--log-warnings=1 --vardir=$(MYSQL_VARDIR)'
         TestName: 'MTR Engines test'
         tarname: 'mtr-engines-test.tar.gz'
         Artifact: Release
