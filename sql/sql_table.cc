@@ -62,8 +62,9 @@
 
 const char *primary_key_name="PRIMARY";
 
-static int check_if_keyname_exists(const char *name,KEY *start, KEY *end);
-static char *make_unique_key_name(THD *, const char *, KEY *, KEY *);
+static int check_if_keyname_exists(const char *name, KEY *start, KEY *end);
+static Lex_cstring
+make_unique_key_name(THD *thd, const LEX_CSTRING &field_name, KEY *start, KEY *end);
 static bool make_unique_constraint_name(THD *, LEX_CSTRING *, const char *,
                                         List<Virtual_column_info> *, uint *);
 static const char *make_unique_invisible_field_name(THD *, const char *,
@@ -3467,7 +3468,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                            handler *file, KEY **key_info_buffer,
                            uint *key_count, int create_table_mode)
 {
-  const char	*key_name;
+  Lex_cstring   key_name;
   Create_field	*sql_field,*dup_field;
   uint		field,null_fields,max_key_length;
   ulong		record_offset= 0;
@@ -3804,16 +3805,15 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     {
       if (key->foreign)
       {
-        if (!(key_name= key->name.str))
-          key_name=make_unique_key_name(thd, sql_field->field_name.str,
+        if (!(key_name= key->name).str)
+          key_name=make_unique_key_name(thd, sql_field->field_name,
                                         *key_info_buffer, key_info);
-        if (check_if_keyname_exists(key_name, *key_info_buffer, key_info))
+        if (check_if_keyname_exists(key_name.str, *key_info_buffer, key_info))
         {
-          my_error(ER_DUP_KEYNAME, MYF(0), key_name);
+          my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
           DBUG_RETURN(TRUE);
         }
-        key_info->name.str= (char*) key_name;
-        key_info->name.length= strlen(key_name);
+        key_info->name= key_name;
         key->name= key_info->name;
       }
       /* ignore redundant keys */
@@ -4186,20 +4186,18 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	  primary_key=1;
           if (!key->name.str)
           {
-            key->name.str= key_name;
-            key->name.length= strlen(key_name);
+            key->name= key_name;
           }
 	}
-	else if (!(key_name= key->name.str))
-	  key_name=make_unique_key_name(thd, sql_field->field_name.str,
+	else if (!(key_name= key->name).str)
+	  key_name=make_unique_key_name(thd, sql_field->field_name,
 					*key_info_buffer, key_info);
-	if (check_if_keyname_exists(key_name, *key_info_buffer, key_info))
+	if (check_if_keyname_exists(key_name.str, *key_info_buffer, key_info))
 	{
-	  my_error(ER_DUP_KEYNAME, MYF(0), key_name);
+	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
 	  DBUG_RETURN(TRUE);
 	}
-	key_info->name.str= (char*) key_name;
-        key_info->name.length= strlen(key_name);
+	key_info->name= key_name;
         key->name= key_info->name;
       } //  if (column_nr == 0)
     }
@@ -5366,15 +5364,16 @@ check_if_field_name_exists(const char *name, List<Create_field> * fields)
   return 0;
 }
 
-static char *
-make_unique_key_name(THD *thd, const char *field_name,KEY *start,KEY *end)
+static Lex_cstring
+make_unique_key_name(THD *thd, const LEX_CSTRING &field_name, KEY *start, KEY *end)
 {
   char buff[MAX_FIELD_NAME],*buff_end;
 
-  if (!check_if_keyname_exists(field_name,start,end) &&
-      my_strcasecmp(system_charset_info,field_name,primary_key_name))
-    return (char*) field_name;			// Use fieldname
-  buff_end=strmake(buff,field_name, sizeof(buff)-4);
+  if (!check_if_keyname_exists(field_name.str, start, end) &&
+      my_strcasecmp(system_charset_info, field_name.str, primary_key_name))
+    return field_name;
+
+  buff_end= strmake(buff, field_name.str, sizeof(buff) - 4);
 
   /*
     Only 3 chars + '\0' left, so need to limit to 2 digit
@@ -5385,9 +5384,15 @@ make_unique_key_name(THD *thd, const char *field_name,KEY *start,KEY *end)
     *buff_end= '_';
     int10_to_str(i, buff_end+1, 10);
     if (!check_if_keyname_exists(buff,start,end))
-      return thd->strdup(buff);
+    {
+      Lex_cstring ret;
+      ret.strdup(thd->mem_root, buff);
+      return ret;
+    }
   }
-  return (char*) "not_specified";		// Should never happen
+  DBUG_ASSERT(0);
+  static Lex_cstring not_specified("not_specified");
+  return not_specified;
 }
 
 /**

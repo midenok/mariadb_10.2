@@ -37,6 +37,11 @@ class Lex_cstring : public LEX_CSTRING, public Sql_alloc
     str= _str;
     length= _len;
   }
+  Lex_cstring(const char *_str)
+  {
+    str= _str;
+    length= strlen(str);
+  }
   Lex_cstring(const char *start, const char *end)
   {
     DBUG_ASSERT(start <= end);
