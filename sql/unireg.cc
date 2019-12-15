@@ -1281,7 +1281,7 @@ bool Foreign_key_io::store(List<Key> &keys)
   pos= store_length(pos, fk_io_version);
   pos= store_length(pos, fk_count);
   length((char *) pos - ptr());
-  it.init(keys);
+  it.rewind();
   while (Key *key= it++)
   {
     if (!key->foreign)

@@ -102,7 +102,6 @@ class Lex_cstring : public LEX_CSTRING, public Sql_alloc
   {
     return length > rhs.length || (length == rhs.length && memcmp(str, rhs.str, length) > 0);
   }
-
 };
 
 

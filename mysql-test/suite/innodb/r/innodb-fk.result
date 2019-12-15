@@ -135,7 +135,7 @@ Table	Create Table
   PRIMARY KEY (`id_depart`,`id_depart_in`),
   KEY `id_depart_in` (`id_depart_in`),
   CONSTRAINT `#departaments_tree_ibfk_1` FOREIGN KEY (`id_depart`) REFERENCES `#departaments` (`id_depart`),
-  CONSTRAINT `#departaments_tree_ibfk_2` FOREIGN KEY (`id_depart_in`) REFERENCES `#departaments` (`id_depart`)
+  CONSTRAINT `id_depart_in` FOREIGN KEY (`id_depart_in`) REFERENCES `#departaments` (`id_depart`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 DROP TABLE `#departaments_tree`;
 DROP TABLE `#departaments`;
@@ -148,7 +148,7 @@ KEY `a` (`a`),
 CONSTRAINT `boroda_ibfk_1` FOREIGN KEY (`a`) REFERENCES `boroda` (`id`)
 ) ENGINE=INNODB DEFAULT CHARSET=utf8;
 ALTER TABLE `boroda`
-  ADD FOREIGN KEY (`b`) REFERENCES `boroda`(`id`);
+  ADD FOREIGN KEY `boroda_ibfk_2` (`b`) REFERENCES `boroda`(`id`);
 ALTER TABLE `boroda` DROP FOREIGN KEY `boroda_ibfk_2`;
 RENAME TABLE `boroda` TO `#boroda`;
 ALTER TABLE `#boroda`
@@ -163,7 +163,7 @@ Table	Create Table
   KEY `a` (`a`),
   KEY `b` (`b`),
   CONSTRAINT `#boroda_ibfk_1` FOREIGN KEY (`a`) REFERENCES `#boroda` (`id`),
-  CONSTRAINT `#boroda_ibfk_2` FOREIGN KEY (`b`) REFERENCES `#boroda` (`id`)
+  CONSTRAINT `b` FOREIGN KEY (`b`) REFERENCES `#boroda` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 DROP TABLE `#boroda`;
 CREATE TABLE `boroda` (
@@ -186,7 +186,7 @@ bor#oda	CREATE TABLE `bor#oda` (
   PRIMARY KEY (`id`),
   KEY `a` (`a`),
   KEY `b` (`b`),
-  CONSTRAINT `bor#oda_ibfk_1` FOREIGN KEY (`a`) REFERENCES `bor#oda` (`id`),
-  CONSTRAINT `bor#oda_ibfk_2` FOREIGN KEY (`b`) REFERENCES `bor#oda` (`id`)
+  CONSTRAINT `b` FOREIGN KEY (`b`) REFERENCES `bor#oda` (`id`),
+  CONSTRAINT `bor#oda_ibfk_1` FOREIGN KEY (`a`) REFERENCES `bor#oda` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 DROP TABLE `bor#oda`;

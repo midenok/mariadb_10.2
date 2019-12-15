@@ -63,8 +63,8 @@
 const char *primary_key_name="PRIMARY";
 
 static Lex_cstring
-make_unique_key_name(THD *thd, const LEX_CSTRING &key_name,
-                     const std::set<Lex_cstring> &key_names);
+make_unique_key_name(THD* thd, const LEX_CSTRING& prefix,
+                     const std::set< Lex_cstring >& key_names);
 static bool make_unique_constraint_name(THD *, LEX_CSTRING *, const char *,
                                         List<Virtual_column_info> *, uint *);
 static const char *make_unique_invisible_field_name(THD *, const char *,
@@ -3804,24 +3804,32 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     is_hash_field_needed= false;
     if (key->ignore)
     {
-      if (key->foreign)
-      {
-        if (!(key_name= key->name).str)
-          key_name= make_unique_key_name(thd, sql_field->field_name, key_names);
-        if (key_names.find(key_name) != key_names.end())
-        {
-          my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
-          DBUG_RETURN(TRUE);
-        }
-        key->name= key_name;
-        key_names.insert(key_name);
-      }
       /* ignore redundant keys */
       do
-	key=key_iterator++;
+      {
+        if (key->foreign)
+        {
+          List_iterator_fast<Key_part_spec> cols(key->columns);
+          column= cols++;
+          it.rewind();
+          while ((sql_field=it++) &&
+                lex_string_cmp(system_charset_info, &column->field_name,
+                                &sql_field->field_name));
+          if (!sql_field)
+          {
+            my_error(ER_KEY_COLUMN_DOES_NOT_EXITS, MYF(0), column->field_name.str);
+            DBUG_RETURN(TRUE);
+          }
+          if (!(key_name= key->name).str)
+            key_name= make_unique_key_name(thd, sql_field->field_name, key_names);
+          key->name= key_name;
+          key_names.insert(key_name);
+        }
+        key=key_iterator++;
+      }
       while (key && key->ignore);
       if (!key)
-	break;
+        break;
     }
 
     switch (key->type) {
@@ -5347,30 +5355,34 @@ check_if_field_name_exists(const char *name, List<Create_field> * fields)
   return 0;
 }
 
+
+/**
+ Generate key name with given prefix and '_N' suffix where 1 < N < 100
+*/
 static Lex_cstring
-make_unique_key_name(THD *thd, const LEX_CSTRING &key_name,
+make_unique_key_name(THD *thd, const LEX_CSTRING &prefix,
                      const std::set<Lex_cstring> &key_names)
 {
   char buff[MAX_FIELD_NAME],*buff_end;
 
-  if ((key_names.find(key_name) == key_names.end()) &&
-      my_strcasecmp(system_charset_info, key_name.str, primary_key_name))
-    return key_name;
+  if ((key_names.find(prefix) == key_names.end()) &&
+      my_strcasecmp(system_charset_info, prefix.str, primary_key_name))
+    return prefix;
 
-  buff_end= strmake(buff, key_name.str, sizeof(buff) - 4);
+  buff_end= strmake(buff, prefix.str, sizeof(buff) - 4);
 
   /*
     Only 3 chars + '\0' left, so need to limit to 2 digit
     This is ok as we can't have more than 100 keys anyway
   */
-  for (uint i=2 ; i< 100; i++)
+  for (uint i= 2 ; i < 100; i++)
   {
     *buff_end= '_';
-    int10_to_str(i, buff_end+1, 10);
-    if (key_names.find(key_name) == key_names.end())
+    size_t n= int10_to_str(i, buff_end + 1, 10) - buff_end;
+    Lex_cstring ret(buff, prefix.length + n);
+    if (key_names.find(ret) == key_names.end())
     {
-      Lex_cstring ret;
-      ret.strdup(thd->mem_root, buff);
+      ret.strdup(thd->mem_root, ret);
       return ret;
     }
   }
