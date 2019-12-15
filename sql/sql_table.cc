@@ -2797,6 +2797,10 @@ static int sort_keys(KEY *a, KEY *b)
 {
   ulong a_flags= a->flags, b_flags= b->flags;
   
+  if ((a_flags ^ b_flags) & KEY_IGNORED)
+  {
+    return (a_flags & KEY_IGNORED) ? 1 : -1;
+  }
   /*
     Do not reorder LONG_HASH indexes, because they must match the order
     of their LONG_UNIQUE_HASH_FIELD's.
@@ -2833,6 +2837,10 @@ static int sort_keys(KEY *a, KEY *b)
   else if (b_flags & HA_NOSAME)
     return 1;					// Prefer b
 
+  if ((a_flags ^ b_flags) & KEY_FOREIGN)
+  {
+    return (a_flags & KEY_FOREIGN) ? 1 : -1;
+  }
   if ((a_flags ^ b_flags) & HA_FULLTEXT)
   {
     return (a_flags & HA_FULLTEXT) ? 1 : -1;
@@ -3698,7 +3706,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 
   List_iterator<Key> key_iterator(alter_info->key_list);
   List_iterator<Key> key_iterator2(alter_info->key_list);
-  uint key_parts=0, fk_key_count=0;
+  uint key_parts=0, fk_ignored=0;
   bool primary_key=0,unique_key=0;
   Key *key, *key2;
   uint tmp, key_number;
@@ -3712,7 +3720,6 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                         "(none)" , key->type));
     if (key->foreign)
     {
-      fk_key_count++;
       Foreign_key *fk_key= (Foreign_key*) key;
       if (fk_key->validate(alter_info->create_list))
         DBUG_RETURN(TRUE);
@@ -3755,6 +3762,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           key2->ignore= true;
           key_parts-= key2->columns.elements;
           (*key_count)--;
+          if (key2->foreign)
+            fk_ignored++;
         }
         break;
       }
@@ -3762,7 +3771,11 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     if (!key->ignore)
       key_parts+=key->columns.elements;
     else
+    {
       (*key_count)--;
+      if (key->foreign)
+        fk_ignored++;
+    }
     if (key->name.str && !tmp_table && (key->type != Key::PRIMARY) &&
 	!my_strcasecmp(system_charset_info, key->name.str, primary_key_name))
     {
@@ -3789,7 +3802,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
   }
 
   (*key_info_buffer)= key_info= (KEY*) thd->calloc(sizeof(KEY) *
-                                                   (*key_count + fk_key_count));
+                                                   (*key_count + fk_ignored));
   key_part_info=(KEY_PART_INFO*) thd->calloc(sizeof(KEY_PART_INFO)*key_parts);
   if (!*key_info_buffer || ! key_part_info)
     DBUG_RETURN(TRUE);				// Out of memory
@@ -3802,9 +3815,9 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     Key_part_spec *column;
 
     is_hash_field_needed= false;
-    if (key->ignore)
+    if (key->ignore && !key->foreign)
     {
-      /* ignore redundant keys */
+      /* ignore redundant keys except foreign which will be ignored later  */
       do
 	key=key_iterator++;
       while (key && key->ignore);
@@ -3838,6 +3851,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     }
     if (key->generated)
       key_info->flags|= HA_GENERATED_KEY;
+    if (key->ignore)
+      key_info->flags|= KEY_IGNORED;
 
     key_info->user_defined_key_parts=(uint8) key->columns.elements;
     key_info->key_part=key_part_info;
@@ -4190,7 +4205,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
         key_info->name.length= strlen(key_name);
         key->name= key_info->name;
       } //  if (column_nr == 0)
-    }
+    } // for (uint column_nr)
     if (!key_info->name.str || check_column_name(key_info->name.str))
     {
       my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), key_info->name.str);
@@ -4265,7 +4280,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     DBUG_RETURN(TRUE);
   }
   /* Sort keys in optimized order */
-  my_qsort((uchar*) *key_info_buffer, *key_count, sizeof(KEY),
+  my_qsort((uchar*) *key_info_buffer, *key_count + fk_ignored, sizeof(KEY),
 	   (qsort_cmp) sort_keys);
   create_info->null_bits= null_fields;
 
