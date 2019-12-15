@@ -62,8 +62,9 @@
 
 const char *primary_key_name="PRIMARY";
 
-static int check_if_keyname_exists(const char *name,KEY *start, KEY *end);
-static char *make_unique_key_name(THD *, const char *, KEY *, KEY *);
+static Lex_cstring
+make_unique_key_name(THD* thd, LEX_CSTRING prefix,
+                     const std::set< Lex_cstring >& key_names, bool foreign);
 static bool make_unique_constraint_name(THD *, LEX_CSTRING *, const char *,
                                         List<Virtual_column_info> *, uint *);
 static const char *make_unique_invisible_field_name(THD *, const char *,
@@ -74,7 +75,8 @@ static int copy_data_between_tables(THD *, TABLE *,TABLE *,
                                     Alter_info::enum_enable_or_disable,
                                     Alter_table_ctx *);
 static int mysql_prepare_create_table(THD *, HA_CREATE_INFO *, Alter_info *,
-                                      uint *, handler *, KEY **, uint *, int);
+                                      uint *, handler *, KEY **, uint *, int,
+                                      const LEX_CSTRING &table_name);
 static uint blob_length_by_type(enum_field_types type);
 static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
@@ -1827,7 +1829,7 @@ bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags)
     if (mysql_prepare_create_table(lpt->thd, lpt->create_info, lpt->alter_info,
                                    &lpt->db_options, lpt->table->file,
                                    &lpt->key_info_buffer, &lpt->key_count,
-                                   C_ALTER_TABLE))
+                                   C_ALTER_TABLE, lpt->table_name))
     {
       DBUG_RETURN(TRUE);
     }
@@ -3447,9 +3449,11 @@ static int
 mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                            Alter_info *alter_info, uint *db_options,
                            handler *file, KEY **key_info_buffer,
-                           uint *key_count, int create_table_mode)
+                           uint *key_count, int create_table_mode,
+                           const LEX_CSTRING &table_name)
 {
-  const char	*key_name;
+  Lex_cstring   key_name;
+  std::set<Lex_cstring> key_names;
   Create_field	*sql_field,*dup_field;
   uint		field,null_fields,max_key_length;
   ulong		record_offset= 0;
@@ -3680,7 +3684,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 
   List_iterator<Key> key_iterator(alter_info->key_list);
   List_iterator<Key> key_iterator2(alter_info->key_list);
-  uint key_parts=0, fk_key_count=0;
+  uint key_parts=0;
   bool primary_key=0,unique_key=0;
   Key *key, *key2;
   uint tmp, key_number;
@@ -3694,7 +3698,6 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                         "(none)" , key->type));
     if (key->foreign)
     {
-      fk_key_count++;
       Foreign_key *fk_key= (Foreign_key*) key;
       if (fk_key->validate(alter_info->create_list))
         DBUG_RETURN(TRUE);
@@ -3770,8 +3773,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     DBUG_RETURN(TRUE);
   }
 
-  (*key_info_buffer)= key_info= (KEY*) thd->calloc(sizeof(KEY) *
-                                                   (*key_count + fk_key_count));
+  (*key_info_buffer)= key_info= (KEY*) thd->calloc(sizeof(KEY) * (*key_count));
   key_part_info=(KEY_PART_INFO*) thd->calloc(sizeof(KEY_PART_INFO)*key_parts);
   if (!*key_info_buffer || ! key_part_info)
     DBUG_RETURN(TRUE);				// Out of memory
@@ -3788,10 +3790,18 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     {
       /* ignore redundant keys */
       do
-	key=key_iterator++;
+      {
+        if (key->foreign)
+        {
+          if (!key->name.str)
+            key->name= make_unique_key_name(thd, table_name, key_names, true);
+          key_names.insert(key->name);
+        }
+        key=key_iterator++;
+      }
       while (key && key->ignore);
       if (!key)
-	break;
+        break;
     }
 
     switch (key->type) {
@@ -4156,21 +4166,21 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	  primary_key=1;
           if (!key->name.str)
           {
-            key->name.str= key_name;
-            key->name.length= strlen(key_name);
+            key->name= key_name;
           }
 	}
-	else if (!(key_name= key->name.str))
-	  key_name=make_unique_key_name(thd, sql_field->field_name.str,
-					*key_info_buffer, key_info);
-	if (check_if_keyname_exists(key_name, *key_info_buffer, key_info))
+	else if (!(key_name= key->name).str)
+	  key_name= key->foreign ?
+            make_unique_key_name(thd, table_name, key_names, true) :
+            make_unique_key_name(thd, sql_field->field_name, key_names, false);
+	if (key_names.find(key_name) != key_names.end())
 	{
-	  my_error(ER_DUP_KEYNAME, MYF(0), key_name);
+	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
 	  DBUG_RETURN(TRUE);
 	}
-	key_info->name.str= (char*) key_name;
-        key_info->name.length= strlen(key_name);
+	key_info->name= key_name;
         key->name= key_info->name;
+        key_names.insert(key_name);
       } //  if (column_nr == 0)
     }
     if (!key_info->name.str || check_column_name(key_info->name.str))
@@ -4813,7 +4823,8 @@ handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
   }
 
   if (mysql_prepare_create_table(thd, create_info, alter_info, &db_options,
-                                 file, key_info, key_count, create_table_mode))
+                                 file, key_info, key_count, create_table_mode,
+                                 table_name))
     goto err;
   create_info->table_options=db_options;
 
@@ -5330,23 +5341,6 @@ err:
 }
 
 
-/*
-** Give the key name after the first field with an optional '_#' after
-   @returns
-    0        if keyname does not exists
-    [1..)    index + 1 of duplicate key name
-**/
-
-static int
-check_if_keyname_exists(const char *name, KEY *start, KEY *end)
-{
-  uint i= 1;
-  for (KEY *key=start; key != end ; key++, i++)
-    if (!my_strcasecmp(system_charset_info, name, key->name.str))
-      return i;
-  return 0;
-}
-
 /**
  Returns 1 if field name exists otherwise 0
 */
@@ -5363,28 +5357,65 @@ check_if_field_name_exists(const char *name, List<Create_field> * fields)
   return 0;
 }
 
-static char *
-make_unique_key_name(THD *thd, const char *field_name,KEY *start,KEY *end)
-{
-  char buff[MAX_FIELD_NAME],*buff_end;
 
-  if (!check_if_keyname_exists(field_name,start,end) &&
-      my_strcasecmp(system_charset_info,field_name,primary_key_name))
-    return (char*) field_name;			// Use fieldname
-  buff_end=strmake(buff,field_name, sizeof(buff)-4);
+/**
+ Generate key name with given prefix and '_N' suffix where 1 < N < 100
+*/
+static Lex_cstring
+make_unique_key_name(THD *thd, LEX_CSTRING prefix,
+                     const std::set<Lex_cstring> &key_names, bool foreign)
+{
+  char buf[MAX_FIELD_NAME - 1];
+  char *ptr= buf;
+  static const LEX_CSTRING fk_prefix= { C_STRING_WITH_LEN("fk_") };
+  DBUG_ASSERT(fk_prefix.length < sizeof(buf));
+
+  if (foreign)
+  {
+    memcpy(ptr, LEX_STRING_WITH_LEN(fk_prefix));
+    ptr+= fk_prefix.length;
+    prefix.length= std::min(sizeof(buf) - fk_prefix.length - 1, prefix.length);
+  }
+  else
+    prefix.length= std::min(sizeof(buf) - 1, prefix.length);
+
+  memcpy(ptr, prefix.str, prefix.length);
+  ptr+= prefix.length;
+  DBUG_ASSERT(ptr - buf + 1 < sizeof(buf));
+  *ptr= 0;
+  prefix.str= buf;
+  if (foreign)
+    prefix.length+= fk_prefix.length;
+
+  if ((key_names.find(prefix) == key_names.end()) &&
+      my_strcasecmp(system_charset_info, prefix.str, primary_key_name))
+  {
+    Lex_cstring ret(prefix);
+    ret.strdup(thd->mem_root, ret);
+    return ret;
+  }
 
   /*
     Only 3 chars + '\0' left, so need to limit to 2 digit
     This is ok as we can't have more than 100 keys anyway
   */
-  for (uint i=2 ; i< 100; i++)
+  if (prefix.length > sizeof(buf) - 4)
+    prefix.length= sizeof(buf) - 4;
+
+  for (uint i= 2 ; i < 100; i++)
   {
-    *buff_end= '_';
-    int10_to_str(i, buff_end+1, 10);
-    if (!check_if_keyname_exists(buff,start,end))
-      return thd->strdup(buff);
+    *ptr= '_';
+    size_t n= int10_to_str(i, ptr + 1, 10) - ptr;
+    Lex_cstring ret(buf, prefix.length + n);
+    if (key_names.find(ret) == key_names.end())
+    {
+      ret.strdup(thd->mem_root, ret);
+      return ret;
+    }
   }
-  return (char*) "not_specified";		// Should never happen
+  DBUG_ASSERT(0);
+  static Lex_cstring not_specified("not_specified");
+  return not_specified;
 }
 
 /**
@@ -7289,7 +7320,8 @@ bool mysql_compare_tables(TABLE *table,
                            C_ORDINARY_CREATE : C_ALTER_TABLE;
   if (mysql_prepare_create_table(thd, create_info, &tmp_alter_info,
                                  &db_options, table->file, &key_info_buffer,
-                                 &key_count, create_table_mode))
+                                 &key_count, create_table_mode,
+                                 table->s->table_name))
     DBUG_RETURN(1);
 
   /* Some very basic checks. */

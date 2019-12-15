@@ -37,6 +37,11 @@ class Lex_cstring : public LEX_CSTRING, public Sql_alloc
     str= _str;
     length= _len;
   }
+  Lex_cstring(const char *_str)
+  {
+    str= _str;
+    length= strlen(str);
+  }
   Lex_cstring(const char *start, const char *end)
   {
     DBUG_ASSERT(start <= end);
@@ -109,7 +114,6 @@ struct Lex_cstring_lt
   {
     return lhs.cmp(rhs) < 0;
   }
-
 };
 
 class Lex_cstring_strlen: public Lex_cstring
