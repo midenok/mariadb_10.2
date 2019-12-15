@@ -3698,7 +3698,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 
   List_iterator<Key> key_iterator(alter_info->key_list);
   List_iterator<Key> key_iterator2(alter_info->key_list);
-  uint key_parts=0, fk_key_count=0;
+  uint key_parts=0;
   bool primary_key=0,unique_key=0;
   Key *key, *key2;
   uint tmp, key_number;
@@ -3712,7 +3712,6 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                         "(none)" , key->type));
     if (key->foreign)
     {
-      fk_key_count++;
       Foreign_key *fk_key= (Foreign_key*) key;
       if (fk_key->validate(alter_info->create_list))
         DBUG_RETURN(TRUE);
@@ -3788,8 +3787,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     DBUG_RETURN(TRUE);
   }
 
-  (*key_info_buffer)= key_info= (KEY*) thd->calloc(sizeof(KEY) *
-                                                   (*key_count + fk_key_count));
+  (*key_info_buffer)= key_info= (KEY*) thd->calloc(sizeof(KEY) * (*key_count));
   key_part_info=(KEY_PART_INFO*) thd->calloc(sizeof(KEY_PART_INFO)*key_parts);
   if (!*key_info_buffer || ! key_part_info)
     DBUG_RETURN(TRUE);				// Out of memory
@@ -3804,6 +3802,20 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     is_hash_field_needed= false;
     if (key->ignore)
     {
+      if (key->foreign)
+      {
+        if (!(key_name= key->name.str))
+          key_name=make_unique_key_name(thd, sql_field->field_name.str,
+                                        *key_info_buffer, key_info);
+        if (check_if_keyname_exists(key_name, *key_info_buffer, key_info))
+        {
+          my_error(ER_DUP_KEYNAME, MYF(0), key_name);
+          DBUG_RETURN(TRUE);
+        }
+        key_info->name.str= (char*) key_name;
+        key_info->name.length= strlen(key_name);
+        key->name= key_info->name;
+      }
       /* ignore redundant keys */
       do
 	key=key_iterator++;
