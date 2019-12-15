@@ -62,9 +62,9 @@
 
 const char *primary_key_name="PRIMARY";
 
-static int check_if_keyname_exists(const char *name, KEY *start, KEY *end);
 static Lex_cstring
-make_unique_key_name(THD *thd, const LEX_CSTRING &field_name, KEY *start, KEY *end);
+make_unique_key_name(THD *thd, const LEX_CSTRING &key_name,
+                     const std::set<Lex_cstring> &key_names);
 static bool make_unique_constraint_name(THD *, LEX_CSTRING *, const char *,
                                         List<Virtual_column_info> *, uint *);
 static const char *make_unique_invisible_field_name(THD *, const char *,
@@ -3469,6 +3469,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                            uint *key_count, int create_table_mode)
 {
   Lex_cstring   key_name;
+  std::set<Lex_cstring> key_names;
   Create_field	*sql_field,*dup_field;
   uint		field,null_fields,max_key_length;
   ulong		record_offset= 0;
@@ -3806,15 +3807,14 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
       if (key->foreign)
       {
         if (!(key_name= key->name).str)
-          key_name=make_unique_key_name(thd, sql_field->field_name,
-                                        *key_info_buffer, key_info);
-        if (check_if_keyname_exists(key_name.str, *key_info_buffer, key_info))
+          key_name= make_unique_key_name(thd, sql_field->field_name, key_names);
+        if (key_names.find(key_name) != key_names.end())
         {
           my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
           DBUG_RETURN(TRUE);
         }
-        key_info->name= key_name;
-        key->name= key_info->name;
+        key->name= key_name;
+        key_names.insert(key_name);
       }
       /* ignore redundant keys */
       do
@@ -4190,15 +4190,15 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           }
 	}
 	else if (!(key_name= key->name).str)
-	  key_name=make_unique_key_name(thd, sql_field->field_name,
-					*key_info_buffer, key_info);
-	if (check_if_keyname_exists(key_name.str, *key_info_buffer, key_info))
+	  key_name= make_unique_key_name(thd, sql_field->field_name, key_names);
+	if (key_names.find(key_name) != key_names.end())
 	{
 	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
 	  DBUG_RETURN(TRUE);
 	}
 	key_info->name= key_name;
         key->name= key_info->name;
+        key_names.insert(key_name);
       } //  if (column_nr == 0)
     }
     if (!key_info->name.str || check_column_name(key_info->name.str))
@@ -5331,23 +5331,6 @@ err:
 }
 
 
-/*
-** Give the key name after the first field with an optional '_#' after
-   @returns
-    0        if keyname does not exists
-    [1..)    index + 1 of duplicate key name
-**/
-
-static int
-check_if_keyname_exists(const char *name, KEY *start, KEY *end)
-{
-  uint i= 1;
-  for (KEY *key=start; key != end ; key++, i++)
-    if (!my_strcasecmp(system_charset_info, name, key->name.str))
-      return i;
-  return 0;
-}
-
 /**
  Returns 1 if field name exists otherwise 0
 */
@@ -5365,15 +5348,16 @@ check_if_field_name_exists(const char *name, List<Create_field> * fields)
 }
 
 static Lex_cstring
-make_unique_key_name(THD *thd, const LEX_CSTRING &field_name, KEY *start, KEY *end)
+make_unique_key_name(THD *thd, const LEX_CSTRING &key_name,
+                     const std::set<Lex_cstring> &key_names)
 {
   char buff[MAX_FIELD_NAME],*buff_end;
 
-  if (!check_if_keyname_exists(field_name.str, start, end) &&
-      my_strcasecmp(system_charset_info, field_name.str, primary_key_name))
-    return field_name;
+  if ((key_names.find(key_name) == key_names.end()) &&
+      my_strcasecmp(system_charset_info, key_name.str, primary_key_name))
+    return key_name;
 
-  buff_end= strmake(buff, field_name.str, sizeof(buff) - 4);
+  buff_end= strmake(buff, key_name.str, sizeof(buff) - 4);
 
   /*
     Only 3 chars + '\0' left, so need to limit to 2 digit
@@ -5383,7 +5367,7 @@ make_unique_key_name(THD *thd, const LEX_CSTRING &field_name, KEY *start, KEY *e
   {
     *buff_end= '_';
     int10_to_str(i, buff_end+1, 10);
-    if (!check_if_keyname_exists(buff,start,end))
+    if (key_names.find(key_name) == key_names.end())
     {
       Lex_cstring ret;
       ret.strdup(thd->mem_root, buff);
