@@ -63,8 +63,8 @@
 const char *primary_key_name="PRIMARY";
 
 static Lex_cstring
-make_unique_key_name(THD* thd, const LEX_CSTRING& prefix,
-                     const std::set< Lex_cstring >& key_names);
+make_unique_key_name(THD* thd, LEX_CSTRING prefix,
+                     const std::set< Lex_cstring >& key_names, bool foreign);
 static bool make_unique_constraint_name(THD *, LEX_CSTRING *, const char *,
                                         List<Virtual_column_info> *, uint *);
 static const char *make_unique_invisible_field_name(THD *, const char *,
@@ -3821,7 +3821,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
             DBUG_RETURN(TRUE);
           }
           if (!(key_name= key->name).str)
-            key_name= make_unique_key_name(thd, sql_field->field_name, key_names);
+            key_name= make_unique_key_name(thd, sql_field->field_name,
+                                           key_names, true);
           key->name= key_name;
           key_names.insert(key_name);
         }
@@ -4198,7 +4199,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           }
 	}
 	else if (!(key_name= key->name).str)
-	  key_name= make_unique_key_name(thd, sql_field->field_name, key_names);
+	  key_name= make_unique_key_name(thd, sql_field->field_name, key_names,
+                                         key->foreign);
 	if (key_names.find(key_name) != key_names.end())
 	{
 	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
@@ -5360,26 +5362,51 @@ check_if_field_name_exists(const char *name, List<Create_field> * fields)
  Generate key name with given prefix and '_N' suffix where 1 < N < 100
 */
 static Lex_cstring
-make_unique_key_name(THD *thd, const LEX_CSTRING &prefix,
-                     const std::set<Lex_cstring> &key_names)
+make_unique_key_name(THD *thd, LEX_CSTRING prefix,
+                     const std::set<Lex_cstring> &key_names, bool foreign)
 {
-  char buff[MAX_FIELD_NAME],*buff_end;
+  char buf[MAX_FIELD_NAME - 1];
+  char *ptr= buf;
+  static const LEX_CSTRING fk_prefix= { C_STRING_WITH_LEN("fk_") };
+  DBUG_ASSERT(fk_prefix.length < sizeof(buf));
+
+  if (foreign)
+  {
+    memcpy(ptr, LEX_STRING_WITH_LEN(fk_prefix));
+    ptr+= fk_prefix.length;
+    prefix.length= std::min(sizeof(buf) - fk_prefix.length - 1, prefix.length);
+  }
+  else
+    prefix.length= std::min(sizeof(buf) - 1, prefix.length);
+
+  memcpy(ptr, prefix.str, prefix.length);
+  ptr+= prefix.length;
+  DBUG_ASSERT(ptr - buf + 1 < sizeof(buf));
+  *ptr= 0;
+  prefix.str= buf;
+  if (foreign)
+    prefix.length+= fk_prefix.length;
 
   if ((key_names.find(prefix) == key_names.end()) &&
       my_strcasecmp(system_charset_info, prefix.str, primary_key_name))
-    return prefix;
-
-  buff_end= strmake(buff, prefix.str, sizeof(buff) - 4);
+  {
+    Lex_cstring ret(prefix);
+    ret.strdup(thd->mem_root, ret);
+    return ret;
+  }
 
   /*
     Only 3 chars + '\0' left, so need to limit to 2 digit
     This is ok as we can't have more than 100 keys anyway
   */
+  if (prefix.length > sizeof(buf) - 4)
+    prefix.length= sizeof(buf) - 4;
+
   for (uint i= 2 ; i < 100; i++)
   {
-    *buff_end= '_';
-    size_t n= int10_to_str(i, buff_end + 1, 10) - buff_end;
-    Lex_cstring ret(buff, prefix.length + n);
+    *ptr= '_';
+    size_t n= int10_to_str(i, ptr + 1, 10) - ptr;
+    Lex_cstring ret(buf, prefix.length + n);
     if (key_names.find(ret) == key_names.end())
     {
       ret.strdup(thd->mem_root, ret);
