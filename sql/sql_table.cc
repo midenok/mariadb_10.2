@@ -3809,20 +3809,23 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
       {
         if (key->foreign)
         {
-          List_iterator_fast<Key_part_spec> cols(key->columns);
-          column= cols++;
-          it.rewind();
-          while ((sql_field=it++) &&
-                lex_string_cmp(system_charset_info, &column->field_name,
-                                &sql_field->field_name));
-          if (!sql_field)
-          {
-            my_error(ER_KEY_COLUMN_DOES_NOT_EXITS, MYF(0), column->field_name.str);
-            DBUG_RETURN(TRUE);
-          }
           if (!(key_name= key->name).str)
+          {
+            List_iterator_fast<Key_part_spec> cols(key->columns);
+            column= cols++;
+            it.rewind();
+            while ((sql_field=it++) &&
+                  lex_string_cmp(system_charset_info, &column->field_name,
+                                  &sql_field->field_name));
+            if (!sql_field)
+            {
+              my_error(ER_KEY_COLUMN_DOES_NOT_EXITS, MYF(0),
+                       column->field_name.str);
+              DBUG_RETURN(TRUE);
+            }
             key_name= make_unique_key_name(thd, sql_field->field_name,
                                            key_names, true);
+          }
           key->name= key_name;
           key_names.insert(key_name);
         }
@@ -8619,6 +8622,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   }
   {
     Key *key;
+    std::set<Lex_cstring> key_names;
     while ((key=key_it++))			// Add new keys
     {
       if (key->foreign)
@@ -8636,10 +8640,17 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
             t.lowercase(thd->mem_root);
           refs_to_close.insert(t);
         }
+        if (!key->name.str)
+        {
+          Key_part_spec *column= key->columns.head();
+          key->name= make_unique_key_name(thd, column->field_name,
+                                          key_names, true);
+        }
       }
+      DBUG_ASSERT(key->name.str);
+      key_names.insert(key->name);
       new_key_list.push_back(key, thd->mem_root);
-      if (key->name.str &&
-	  !my_strcasecmp(system_charset_info, key->name.str, primary_key_name))
+      if (!my_strcasecmp(system_charset_info, key->name.str, primary_key_name))
       {
 	my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), key->name.str);
         goto err;
