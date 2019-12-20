@@ -47,7 +47,7 @@ t2	CREATE TABLE `t2` (
   `b` int(11) DEFAULT NULL,
   PRIMARY KEY (`a`),
   KEY `ind` (`b`),
-  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`a`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `fk_t2` FOREIGN KEY (`b`) REFERENCES `t1` (`a`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 INSERT INTO t1 VALUES (1, 80);
 INSERT INTO t1 VALUES (2, 81);
@@ -74,7 +74,7 @@ a	b
 54	4
 55	5
 INSERT INTO t2 VALUES (56, 6);
-ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`a`) ON DELETE CASCADE ON UPDATE CASCADE)
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`b`) REFERENCES `t1` (`a`) ON DELETE CASCADE ON UPDATE CASCADE)
 ALTER TABLE t1 CHANGE a id INT;
 SELECT id, b FROM t1 ORDER BY id;
 id	b
@@ -92,9 +92,9 @@ a	b
 55	5
 # Operations on child table
 INSERT INTO t2 VALUES (56, 6);
-ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`id`) ON DELETE CASCADE ON UPDATE CASCADE)
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`b`) REFERENCES `t1` (`id`) ON DELETE CASCADE ON UPDATE CASCADE)
 UPDATE t2 SET b = 99 WHERE a = 51;
-ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`id`) ON DELETE CASCADE ON UPDATE CASCADE)
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`b`) REFERENCES `t1` (`id`) ON DELETE CASCADE ON UPDATE CASCADE)
 DELETE FROM t2 WHERE a = 53;
 SELECT id, b FROM t1 ORDER BY id;
 id	b
@@ -181,7 +181,7 @@ CREATE DATABASE best default character set latin1;
 CREATE TABLE t3 (a INT PRIMARY KEY,
 CONSTRAINT t2_ibfk_1 FOREIGN KEY (a) REFERENCES t1(a)) ENGINE=InnoDB;
 CREATE TABLE best.t2 (a INT PRIMARY KEY, b TEXT, FULLTEXT INDEX(b),
-FOREIGN KEY (a) REFERENCES test.t1(a)) ENGINE=InnoDB;
+FOREIGN KEY t2_ibfk_1 (a) REFERENCES test.t1(a)) ENGINE=InnoDB;
 RENAME TABLE best.t2 TO test.t2;
 ERROR 42S01: Table 't2' already exists
 SHOW CREATE TABLE best.t2;
@@ -345,8 +345,8 @@ t2	CREATE TABLE `t2` (
   `ref_id` int(11) NOT NULL DEFAULT 0,
   `f` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `ref_id` (`ref_id`),
-  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`ref_id`) REFERENCES `t1` (`id`) ON DELETE CASCADE
+  KEY `fk_t2` (`ref_id`),
+  CONSTRAINT `fk_t2` FOREIGN KEY (`ref_id`) REFERENCES `t1` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 connection con1;
 BEGIN;
@@ -477,10 +477,10 @@ connection default;
 DELETE IGNORE FROM t1 WHERE b = 1;
 Warnings:
 Warning	152	InnoDB: Cannot delete/update rows with cascading foreign key constraints that exceed max depth of 20. Please drop extra constraints and try again
-Warning	1296	Got error 193 '`test`.`t1`, CONSTRAINT `t1_ibfk_1` FOREIGN KEY (`a`) REFERENCES `t1` (`b`) ON DELETE CASCADE' from InnoDB
+Warning	1296	Got error 193 '`test`.`t1`, CONSTRAINT `fk_t1` FOREIGN KEY (`a`) REFERENCES `t1` (`b`) ON DELETE CASCADE' from InnoDB
 Warning	152	InnoDB: Cannot delete/update rows with cascading foreign key constraints that exceed max depth of 20. Please drop extra constraints and try again
-Warning	1296	Got error 193 '`test`.`t1`, CONSTRAINT `t1_ibfk_1` FOREIGN KEY (`a`) REFERENCES `t1` (`b`) ON DELETE CASCADE' from InnoDB
-SELECT a FROM t1 FORCE INDEX(a);
+Warning	1296	Got error 193 '`test`.`t1`, CONSTRAINT `fk_t1` FOREIGN KEY (`a`) REFERENCES `t1` (`b`) ON DELETE CASCADE' from InnoDB
+SELECT a FROM t1 FORCE INDEX(fk_t1);
 a
 0
 0
@@ -533,10 +533,10 @@ Table	Create Table
 t2	CREATE TABLE `t2` (
   `x` int(11) DEFAULT NULL,
   `y` int(11) DEFAULT NULL,
-  KEY `x` (`x`),
+  KEY `fk_t2` (`x`),
   KEY `fk` (`y`),
   CONSTRAINT `fk` FOREIGN KEY (`y`) REFERENCES `t1` (`y`),
-  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`x`) REFERENCES `t1` (`x`)
+  CONSTRAINT `fk_t2` FOREIGN KEY (`x`) REFERENCES `t1` (`x`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 create table t3 (z int);
 alter table t3 add x int references t1(x), add y int constraint fk2 references t1(y);
@@ -546,10 +546,10 @@ t3	CREATE TABLE `t3` (
   `z` int(11) DEFAULT NULL,
   `x` int(11) DEFAULT NULL,
   `y` int(11) DEFAULT NULL,
-  KEY `x` (`x`),
+  KEY `fk_t3` (`x`),
   KEY `fk2` (`y`),
   CONSTRAINT `fk2` FOREIGN KEY (`y`) REFERENCES `t1` (`y`),
-  CONSTRAINT `t3_ibfk_1` FOREIGN KEY (`x`) REFERENCES `t1` (`x`)
+  CONSTRAINT `fk_t3` FOREIGN KEY (`x`) REFERENCES `t1` (`x`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 drop tables t3, t2, t1;
 # End of 10.5 tests

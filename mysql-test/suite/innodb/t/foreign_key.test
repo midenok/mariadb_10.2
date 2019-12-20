@@ -483,7 +483,7 @@ START TRANSACTION WITH CONSISTENT SNAPSHOT;
 connection default;
 DELETE IGNORE FROM t1 WHERE b = 1;
 
-SELECT a FROM t1 FORCE INDEX(a);
+SELECT a FROM t1 FORCE INDEX(fk_t1);
 # This would wrongly return the empty result if
 # the "goto rollback_to_savept" in row_mysql_handle_errors() is reverted.
 SELECT * FROM t1;
