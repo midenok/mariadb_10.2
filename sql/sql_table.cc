@@ -63,8 +63,13 @@
 const char *primary_key_name="PRIMARY";
 
 static Lex_cstring
-make_unique_key_name(THD* thd, LEX_CSTRING prefix,
-                     const std::set< Lex_cstring >& key_names, bool foreign);
+make_unique_key_name(THD* thd, const LEX_CSTRING& prefix,
+                     const std::set< Lex_cstring >& key_names);
+static Lex_cstring
+make_unique_fk_name(THD* thd, LEX_CSTRING prefix,
+                    const std::set< Lex_cstring >& key_names,
+                    const LEX_CSTRING &table_name);
+
 static bool make_unique_constraint_name(THD *, LEX_CSTRING *, const char *,
                                         List<Virtual_column_info> *, uint *);
 static const char *make_unique_invisible_field_name(THD *, const char *,
@@ -75,7 +80,8 @@ static int copy_data_between_tables(THD *, TABLE *,TABLE *,
                                     Alter_info::enum_enable_or_disable,
                                     Alter_table_ctx *);
 static int mysql_prepare_create_table(THD *, HA_CREATE_INFO *, Alter_info *,
-                                      uint *, handler *, KEY **, uint *, int);
+                                      uint *, handler *, KEY **, uint *, int,
+                                      const LEX_CSTRING &table_name);
 static uint blob_length_by_type(enum_field_types type);
 static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
@@ -1826,7 +1832,7 @@ bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags)
     if (mysql_prepare_create_table(lpt->thd, lpt->create_info, lpt->alter_info,
                                    &lpt->db_options, lpt->table->file,
                                    &lpt->key_info_buffer, &lpt->key_count,
-                                   C_ALTER_TABLE))
+                                   C_ALTER_TABLE, lpt->table_name))
     {
       DBUG_RETURN(TRUE);
     }
@@ -3466,7 +3472,8 @@ static int
 mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                            Alter_info *alter_info, uint *db_options,
                            handler *file, KEY **key_info_buffer,
-                           uint *key_count, int create_table_mode)
+                           uint *key_count, int create_table_mode,
+                           const LEX_CSTRING &table_name)
 {
   Lex_cstring   key_name;
   std::set<Lex_cstring> key_names;
@@ -3821,8 +3828,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
             DBUG_RETURN(TRUE);
           }
           if (!(key_name= key->name).str)
-            key_name= make_unique_key_name(thd, sql_field->field_name,
-                                           key_names, true);
+            key_name= make_unique_fk_name(thd, sql_field->field_name,
+                                          key_names, table_name);
           key->name= key_name;
           key_names.insert(key_name);
         }
@@ -4199,8 +4206,9 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           }
 	}
 	else if (!(key_name= key->name).str)
-	  key_name= make_unique_key_name(thd, sql_field->field_name, key_names,
-                                         key->foreign);
+	  key_name= key->foreign ?
+            make_unique_fk_name(thd, sql_field->field_name, key_names, table_name) :
+            make_unique_key_name(thd, sql_field->field_name, key_names);
 	if (key_names.find(key_name) != key_names.end())
 	{
 	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
@@ -4830,7 +4838,8 @@ handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
   }
 
   if (mysql_prepare_create_table(thd, create_info, alter_info, &db_options,
-                                 file, key_info, key_count, create_table_mode))
+                                 file, key_info, key_count, create_table_mode,
+                                 table_name))
     goto err;
   create_info->table_options=db_options;
 
@@ -5361,31 +5370,59 @@ check_if_field_name_exists(const char *name, List<Create_field> * fields)
 /**
  Generate key name with given prefix and '_N' suffix where 1 < N < 100
 */
+
 static Lex_cstring
-make_unique_key_name(THD *thd, LEX_CSTRING prefix,
-                     const std::set<Lex_cstring> &key_names, bool foreign)
+make_unique_key_name(THD *thd, const LEX_CSTRING &key_name,
+                     const std::set<Lex_cstring> &key_names)
+{
+  char buff[MAX_FIELD_NAME],*buff_end;
+
+  if ((key_names.find(key_name) == key_names.end()) &&
+      my_strcasecmp(system_charset_info, key_name.str, primary_key_name))
+    return key_name;
+
+  buff_end= strmake(buff, key_name.str, sizeof(buff) - 4);
+
+  /*
+    Only 3 chars + '\0' left, so need to limit to 2 digit
+    This is ok as we can't have more than 100 keys anyway
+  */
+  for (uint i=2 ; i< 100; i++)
+  {
+    *buff_end= '_';
+    int10_to_str(i, buff_end+1, 10);
+    if (key_names.find(key_name) == key_names.end())
+    {
+      Lex_cstring ret;
+      ret.strdup(thd->mem_root, buff);
+      return ret;
+    }
+  }
+  DBUG_ASSERT(0);
+  static Lex_cstring not_specified("not_specified");
+  return not_specified;
+}
+
+static Lex_cstring
+make_unique_fk_name(THD *thd, LEX_CSTRING prefix,
+                    const std::set<Lex_cstring> &key_names,
+                    const LEX_CSTRING &table_name)
 {
   char buf[MAX_FIELD_NAME - 1];
   char *ptr= buf;
   static const LEX_CSTRING fk_prefix= { C_STRING_WITH_LEN("fk_") };
   DBUG_ASSERT(fk_prefix.length < sizeof(buf));
 
-  if (foreign)
-  {
-    memcpy(ptr, LEX_STRING_WITH_LEN(fk_prefix));
-    ptr+= fk_prefix.length;
-    prefix.length= std::min(sizeof(buf) - fk_prefix.length - 1, prefix.length);
-  }
-  else
-    prefix.length= std::min(sizeof(buf) - 1, prefix.length);
+  memcpy(ptr, LEX_STRING_WITH_LEN(fk_prefix));
+  ptr+= fk_prefix.length;
+  prefix.length= std::min(sizeof(buf) - fk_prefix.length - 1, prefix.length);
 
   memcpy(ptr, prefix.str, prefix.length);
   ptr+= prefix.length;
   DBUG_ASSERT(ptr - buf + 1 < sizeof(buf));
   *ptr= 0;
   prefix.str= buf;
-  if (foreign)
-    prefix.length+= fk_prefix.length;
+  prefix.length+= fk_prefix.length;
 
   if ((key_names.find(prefix) == key_names.end()) &&
       my_strcasecmp(system_charset_info, prefix.str, primary_key_name))
@@ -7320,7 +7357,8 @@ bool mysql_compare_tables(TABLE *table,
                            C_ORDINARY_CREATE : C_ALTER_TABLE;
   if (mysql_prepare_create_table(thd, create_info, &tmp_alter_info,
                                  &db_options, table->file, &key_info_buffer,
-                                 &key_count, create_table_mode))
+                                 &key_count, create_table_mode,
+                                 table->s->table_name))
     DBUG_RETURN(1);
 
   /* Some very basic checks. */
