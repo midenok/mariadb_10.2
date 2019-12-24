@@ -64,7 +64,7 @@ const char *primary_key_name="PRIMARY";
 
 static Lex_cstring
 make_unique_key_name(THD* thd, LEX_CSTRING prefix,
-                     const std::set< Lex_cstring >& key_names, bool foreign);
+                     const Lex_cstring_set& key_names, bool foreign);
 static bool make_unique_constraint_name(THD *, LEX_CSTRING *, const char *,
                                         List<Virtual_column_info> *, uint *);
 static const char *make_unique_invisible_field_name(THD *, const char *,
@@ -3451,7 +3451,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                            const LEX_CSTRING &table_name)
 {
   Lex_cstring   key_name;
-  std::set<Lex_cstring> key_names;
+  Lex_cstring_set key_names;
   Create_field	*sql_field,*dup_field;
   uint		field,null_fields,max_key_length;
   ulong		record_offset= 0;
@@ -5361,7 +5361,7 @@ check_if_field_name_exists(const char *name, List<Create_field> * fields)
 */
 static Lex_cstring
 make_unique_key_name(THD *thd, LEX_CSTRING prefix,
-                     const std::set<Lex_cstring> &key_names, bool foreign)
+                     const Lex_cstring_set &key_names, bool foreign)
 {
   char buf[MAX_FIELD_NAME - 1];
   char *ptr= buf;
