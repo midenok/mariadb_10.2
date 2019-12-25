@@ -8,6 +8,12 @@
 drop table if exists t1,t2;
 --enable_warnings
 
+create table t2 (
+  a int unique, c int unique);
+
+create table t3 (
+  a int unique, c int unique, d int unique);
+
 create table t1 (
 	a int not null references t2,
 	b int not null constraint t2_c references t2 (c),
@@ -22,7 +28,7 @@ create table t1 (
 
 create index a on t1 (a);
 create unique index b on t1 (a,b);
-drop table t1;
+drop tables t2, t3, t1;
 
 # End of 4.1 tests
 

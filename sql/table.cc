@@ -9346,7 +9346,7 @@ public:
 };
 
 // Used in CREATE TABLE
-bool TABLE_SHARE::update_referenced_tables(THD *thd, Alter_info *alter_info,
+bool TABLE_SHARE::update_referenced_shares(THD *thd, Alter_info *alter_info,
                                            Table_ident_set &ref_tables)
 {
   if (foreign_keys.is_empty())
@@ -9390,17 +9390,23 @@ bool TABLE_SHARE::update_referenced_tables(THD *thd, Alter_info *alter_info,
       return true;
     }
 
-    MDL_request_list::Iterator it(mdl_list);
     List_iterator_fast<Key> key_it(alter_info->key_list);
-    while (MDL_request *req= it++)
+    for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
     {
-      const char *ref_db= req->key.db_name();
-      const char *ref_table= req->key.name();
-      Share_lock share_lock(thd, ref_db, ref_table);
-      TDC_element *el= share_lock.element;
-      if (!el)
+      const char *ref_db= it->db.str;
+      const char *ref_table= it->table.str;
+      TABLE_LIST tl;
+      tl.init_one_table(&it->db, &it->table, NULL, TL_WRITE_ALLOW_WRITE);
+      Share_acquire share_acquire(thd, tl);
+      TABLE_SHARE *ref_share= share_acquire.share;
+      if (!ref_share)
+      {
+        if (thd->variables.check_foreign())
+          return true;
         continue;
-      Mutex_lock share_mutex(&el->share->LOCK_share);
+      }
+
+      Mutex_lock share_mutex(&ref_share->LOCK_share);
       key_it.rewind();
       while (Key* key= key_it++)
       {
@@ -9414,18 +9420,18 @@ bool TABLE_SHARE::update_referenced_tables(THD *thd, Alter_info *alter_info,
           continue;
 
         FOREIGN_KEY_INFO *dst= (FOREIGN_KEY_INFO *) alloc_root(
-          &el->share->mem_root, sizeof(FOREIGN_KEY_INFO));
-        if (unlikely(el->share->referenced_keys.push_back(dst, &el->share->mem_root)))
+          &ref_share->mem_root, sizeof(FOREIGN_KEY_INFO));
+        if (unlikely(ref_share->referenced_keys.push_back(dst, &ref_share->mem_root)))
         {
           my_error(ER_OUT_OF_RESOURCES, MYF(0));
           return true;
         }
-        dst->foreign_id.strdup(&el->share->mem_root, src->constraint_name);
-        dst->foreign_db.strdup(&el->share->mem_root, db);
-        dst->foreign_table.strdup(&el->share->mem_root, table_name);
-        dst->referenced_key_name.strdup(&el->share->mem_root, src->name);
-        dst->referenced_db.strdup(&el->share->mem_root, src_db);
-        dst->referenced_table.strdup(&el->share->mem_root, src->ref_table);
+        dst->foreign_id.strdup(&ref_share->mem_root, src->constraint_name);
+        dst->foreign_db.strdup(&ref_share->mem_root, db);
+        dst->foreign_table.strdup(&ref_share->mem_root, table_name);
+        dst->referenced_key_name.strdup(&ref_share->mem_root, src->name);
+        dst->referenced_db.strdup(&ref_share->mem_root, src_db);
+        dst->referenced_table.strdup(&ref_share->mem_root, src->ref_table);
         dst->update_method= src->update_opt;
         dst->delete_method= src->delete_opt;
         dst->foreign_fields.empty();
@@ -9435,10 +9441,10 @@ bool TABLE_SHARE::update_referenced_tables(THD *thd, Alter_info *alter_info,
         List_iterator_fast<Key_part_spec> col_it(src->columns);
         while ((col= col_it++))
         {
-          Lex_cstring *field_name= new (&el->share->mem_root) Lex_cstring;
+          Lex_cstring *field_name= new (&ref_share->mem_root) Lex_cstring;
           if (unlikely(!field_name ||
-                      field_name->strdup(&el->share->mem_root, col->field_name) ||
-                      dst->foreign_fields.push_back(field_name, &el->share->mem_root)))
+                      field_name->strdup(&ref_share->mem_root, col->field_name) ||
+                      dst->foreign_fields.push_back(field_name, &ref_share->mem_root)))
           {
             my_error(ER_OUT_OF_RESOURCES, MYF(0));
             return true;
@@ -9448,10 +9454,10 @@ bool TABLE_SHARE::update_referenced_tables(THD *thd, Alter_info *alter_info,
         col_it.init(src->ref_columns);
         while ((col= col_it++))
         {
-          Lex_cstring *field_name= new (&el->share->mem_root) Lex_cstring;
+          Lex_cstring *field_name= new (&ref_share->mem_root) Lex_cstring;
           if (unlikely(!field_name ||
-                      field_name->strdup(&el->share->mem_root, col->field_name) ||
-                      dst->referenced_fields.push_back(field_name, &el->share->mem_root)))
+                      field_name->strdup(&ref_share->mem_root, col->field_name) ||
+                      dst->referenced_fields.push_back(field_name, &ref_share->mem_root)))
           {
             my_error(ER_OUT_OF_RESOURCES, MYF(0));
             return true;

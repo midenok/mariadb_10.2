@@ -114,6 +114,23 @@ public:
 };
 
 
+class Share_acquire
+{
+public:
+  TABLE_SHARE *share;
+
+  Share_acquire(THD *thd, TABLE_LIST &tl)
+  {
+    share= tdc_acquire_share(thd, &tl, GTS_TABLE);
+  }
+  ~Share_acquire()
+  {
+    if (share)
+      tdc_release_share(share);
+  }
+};
+
+
 /**
   Create a table cache key for non-temporary table.
 
