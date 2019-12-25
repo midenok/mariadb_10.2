@@ -592,6 +592,10 @@ typedef struct system_variables
   sql_mode_t sql_mode; ///< which non-standard SQL behaviour should be enabled
   sql_mode_t old_behavior; ///< which old SQL behaviour should be enabled
   ulonglong option_bits; ///< OPTION_xxx constants, e.g. OPTION_PROFILING
+  bool check_foreign()
+  {
+      return !((bool) option_bits & OPTION_NO_FOREIGN_KEY_CHECKS);
+  }
   ulonglong join_buff_space_limit;
   ulonglong log_slow_filter; 
   ulonglong log_slow_verbosity; 
