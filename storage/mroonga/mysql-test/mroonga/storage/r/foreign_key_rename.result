@@ -23,7 +23,7 @@ articles2	CREATE TABLE `articles2` (
 ) ENGINE=Mroonga DEFAULT CHARSET=latin1
 SELECT * FROM information_schema.referential_constraints;
 CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	UNIQUE_CONSTRAINT_CATALOG	UNIQUE_CONSTRAINT_SCHEMA	UNIQUE_CONSTRAINT_NAME	MATCH_OPTION	UPDATE_RULE	DELETE_RULE	TABLE_NAME	REFERENCED_TABLE_NAME
-def	test	comment	def	test	PRIMARY	NONE	RESTRICT	RESTRICT	articles2	comments2
+def	test	fk_articles	def	test	NULL	NONE	???	???	articles2	comments
 def	mysql	fk_help_relation	def	mysql	NULL	NONE	???	???	help_relation	help_topic
 def	mysql	fk_help_relation_2	def	mysql	NULL	NONE	???	???	help_relation	help_keyword
 DROP TABLE articles2;
