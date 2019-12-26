@@ -200,7 +200,7 @@ bool TABLE_SHARE::dd_check_frm()
   if (extra2.read(frm_image, extra2_len))
     return true;
 
-  size_t len= extra2.length();
+  size_t len= extra2.store_size();
 
   return false;
 }
@@ -334,6 +334,7 @@ bool Extra2_info::read(const uchar *frm_image, size_t extra2_length)
     if (pos != e2end)
       DBUG_RETURN(true);
   }
+  DBUG_ASSERT(store_size() == extra2_length);
   DBUG_RETURN(false);
 }
 
