@@ -1614,7 +1614,7 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
 
   MEM_ROOT *old_root= thd->mem_root;
   Virtual_column_info **table_check_constraints;
-  extra2_fields extra2;
+  Extra2_info extra2;
 
   DBUG_ENTER("TABLE_SHARE::init_from_binary_frm_image");
 
@@ -1644,7 +1644,7 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
   /* Length of the MariaDB extra2 segment in the form file. */
   len = uint2korr(frm_image+4);
 
-  if (dd_read_extra2(frm_image, len, &extra2))
+  if (extra2.read(frm_image, len))
     goto err;
 
   tabledef_version.length= extra2.version.length;
