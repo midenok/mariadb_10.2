@@ -175,6 +175,37 @@ err:
 }
 
 
+bool TABLE_SHARE::dd_check_frm()
+{
+  const uchar* frm_image;
+  size_t frm_length;
+  Extra2_info extra2;
+
+  if (read_frm_image(&frm_image, &frm_length))
+    return true;
+
+  Scope_alloc free_frm_image((void *)frm_image);
+
+  if (frm_length < FRM_HEADER_SIZE + FRM_FORMINFO_SIZE)
+    return true;
+
+  if (!is_binary_frm_header(frm_image))
+    return true;
+
+  uint extra2_len= uint2korr(frm_image + 4);
+
+  if (frm_length < FRM_HEADER_SIZE + extra2_len)
+    return true;
+
+  if (extra2.read(frm_image, extra2_len))
+    return true;
+
+  size_t len= extra2.length();
+
+  return false;
+}
+
+
 /*
   Regenerate a metadata locked table.
 
