@@ -653,6 +653,7 @@ struct TABLE_SHARE
   {
     return !referenced_keys.is_empty();
   }
+  bool dd_check_frm();
 
   Virtual_column_info **check_constraints;
   uint	*blob_field;			/* Index to blobs in Field arrray*/

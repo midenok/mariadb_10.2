@@ -9246,6 +9246,7 @@ public:
 bool TABLE_SHARE::update_referenced_shares(THD *thd, Alter_info *alter_info,
                                            Table_ident_set &ref_tables)
 {
+  dd_check_frm();
   if (foreign_keys.is_empty())
     return false;
 

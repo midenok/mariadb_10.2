@@ -125,6 +125,20 @@ public:
 };
 
 
+class Scope_alloc
+{
+  void *alloc;
+public:
+  Scope_alloc(void *_alloc) : alloc(_alloc)
+  {
+    DBUG_ASSERT(alloc);
+  }
+  ~Scope_alloc()
+  {
+    my_free(alloc);
+  }
+};
+
 /* Functions to compare if two lex strings are equal */
 
 static inline bool lex_string_cmp(CHARSET_INFO *charset, const LEX_CSTRING *a,
