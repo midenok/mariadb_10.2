@@ -30,7 +30,7 @@ enum Table_type
   TABLE_TYPE_VIEW
 };
 
-struct extra2_fields
+struct Extra2_info
 {
   LEX_CUSTRING version;
   LEX_CUSTRING options;
@@ -43,6 +43,20 @@ struct extra2_fields
   LEX_CUSTRING foreign_key_info;
   void reset()
   { bzero((void*)this, sizeof(*this)); }
+  size_t length() const
+  {
+    return
+      version.length +
+      options.length +
+      engine.length +
+      gis.length +
+      field_flags.length +
+      system_period.length +
+      application_period.length +
+      field_data_type_info.length +
+      foreign_key_info.length;
+  }
+  bool read(const uchar* frm_image, size_t extra2_length);
 };
 
 /*
@@ -63,6 +77,5 @@ static inline bool dd_frm_is_view(THD *thd, char *path)
 }
 
 bool dd_recreate_table(THD *thd, const char *db, const char *table_name);
-size_t dd_extra2_len(const uchar **extra2, const uchar *extra2_end);
-bool dd_read_extra2(const uchar *frm_image, size_t len, extra2_fields *fields);
+size_t dd_extra2_len(const uchar** pos, const uchar* end);
 #endif // DATADICT_INCLUDED
