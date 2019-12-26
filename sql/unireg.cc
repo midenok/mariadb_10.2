@@ -55,7 +55,7 @@ static bool make_empty_rec(THD *, uchar *, uint, List<Create_field> &, uint,
   if (  0 < length <= 255)      one byte
   if (256 < length <= 65535)    zero byte, then two bytes, low-endian
 */
-static uchar *extra2_write_len(uchar *pos, size_t len)
+static uchar * extra2_write_len(uchar *pos, size_t len)
 {
   if (len <= 255)
     *pos++= (uchar)len;

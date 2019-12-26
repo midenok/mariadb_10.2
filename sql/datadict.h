@@ -43,18 +43,27 @@ struct Extra2_info
   LEX_CUSTRING foreign_key_info;
   void reset()
   { bzero((void*)this, sizeof(*this)); }
-  size_t length() const
+  template <class S>
+  size_t store_size(const S &f) const
+  {
+    if (f.length == 0)
+      return 0;
+    DBUG_ASSERT(f.length <= 65535);
+    // 1 byte is for type; 1 or 3 bytes for length
+    return f.length + (f.length <= 255 ? 2 : 4);
+  }
+  size_t store_size() const
   {
     return
-      version.length +
-      options.length +
-      engine.length +
-      gis.length +
-      field_flags.length +
-      system_period.length +
-      application_period.length +
-      field_data_type_info.length +
-      foreign_key_info.length;
+      store_size(version) +
+      store_size(options) +
+      store_size(engine) +
+      store_size(gis) +
+      store_size(field_flags) +
+      store_size(system_period) +
+      store_size(application_period) +
+      store_size(field_data_type_info) +
+      store_size(foreign_key_info);
   }
   bool read(const uchar* frm_image, size_t extra2_length);
 };
