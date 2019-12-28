@@ -9375,41 +9375,9 @@ bool release_ref_shares(THD *thd, TABLE_LIST *t)
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
                                              t->table_name.str,
                                              MDL_INTENTION_EXCLUSIVE));
-  Local_da da(thd);
-  bool opened= false;
-  Open_tables_backup save_open_tables;
-  if (!t->table) /* TODO: Temporary until MDEV-21051 Store FK info in FRM files */
-  {
-    thd->reset_n_backup_open_tables_state(&save_open_tables);
-    Open_table_context ctx(thd, MYSQL_OPEN_IGNORE_REPAIR|MYSQL_OPEN_HAS_MDL_LOCK);
-
-    enum enum_open_type save_open_type= t->open_type;
-    uint save_req_object= t->i_s_requested_object;
-    t->open_type= OT_BASE_ONLY;
-    t->i_s_requested_object= OPEN_TABLE_ONLY;
-    bool res= open_table(thd, t, &ctx);
-    t->open_type= save_open_type;
-    t->i_s_requested_object= save_req_object;
-    if (res || t->view)
-    {
-      t->table= NULL;
-      close_thread_tables(thd);
-      thd->restore_backup_open_tables_state(&save_open_tables);
-      return false;
-    }
-    opened= true;
-  }
-
   DBUG_ASSERT(!t->view);
-  TABLE_SHARE *share= tdc_acquire_share(thd, t, GTS_TABLE, NULL);
-
-  if (opened)
-  {
-    t->table= NULL;
-    close_thread_tables(thd);
-    thd->restore_backup_open_tables_state(&save_open_tables);
-  }
-
+  Share_acquire s(thd, *t);
+  TABLE_SHARE *share= s.share;
   if (!share)
   {
     if (thd->is_error() && thd->get_stmt_da()->sql_errno() == ER_WRONG_OBJECT)
@@ -9419,25 +9387,26 @@ bool release_ref_shares(THD *thd, TABLE_LIST *t)
     return true;
   }
 
-  da.finish();
-
   Table_ident_set tables;
 
   if (!share->foreign_keys.is_empty() && share->foreign_keys.get(thd, tables, false))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
-    tdc_release_share(share);
     return true;
   }
 
   if (!share->referenced_keys.is_empty() && share->referenced_keys.get(thd, tables, true))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
-    tdc_release_share(share);
     return true;
   }
 
-  tdc_release_share(share);
+  /* For DROP remove table from referenced_keys of referenced tables,
+     prohibit if foreign_keys is not empty.
+     For RENAME rename table in foreign_keys of this and referenced tables,
+     rename table in referenced_keys of this and foreign tables.
+     In case of failed operation everything must reverted back.
+  */
 
   if (!tables.empty())
   {
@@ -9451,7 +9420,6 @@ bool release_ref_shares(THD *thd, TABLE_LIST *t)
       if (!req)
       {
         my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        tdc_release_share(share);
         return true;
       }
       req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
