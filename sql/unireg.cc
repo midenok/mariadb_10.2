@@ -32,6 +32,7 @@
 #include "sql_class.h"                  // THD, Internal_error_handler
 #include "create_options.h"
 #include "discover.h"
+#include "datadict.h"
 #include <m_ctype.h>
 
 #define FCOMP			17		/* Bytes for a packed field */
@@ -50,66 +51,6 @@ static size_t packed_fields_length(List<Create_field> &);
 static bool make_empty_rec(THD *, uchar *, uint, List<Create_field> &, uint,
                            ulong);
 
-/*
-  write the length as
-  if (  0 < length <= 255)      one byte
-  if (256 < length <= 65535)    zero byte, then two bytes, low-endian
-*/
-static uchar * extra2_write_len(uchar *pos, size_t len)
-{
-  if (len <= 255)
-    *pos++= (uchar)len;
-  else
-  {
-    /*
-      At the moment we support options_len up to 64K.
-      We can easily extend it in the future, if the need arises.
-    */
-    DBUG_ASSERT(len <= 65535);
-    int2store(pos + 1, len);
-    pos+= 3;
-  }
-  return pos;
-}
-
-static uchar* extra2_write_str(uchar *pos, const LEX_CSTRING &str)
-{
-  pos= extra2_write_len(pos, str.length);
-  memcpy(pos, str.str, str.length);
-  return pos + str.length;
-}
-
-static uchar *extra2_write(uchar *pos, enum extra2_frm_value_type type,
-                           const LEX_CSTRING &str)
-{
-  *pos++ = type;
-  return extra2_write_str(pos, str);
-}
-
-static uchar *extra2_write(uchar *pos, enum extra2_frm_value_type type,
-                           const LEX_CUSTRING &str)
-{
-  return extra2_write(pos, type, *reinterpret_cast<const LEX_CSTRING*>(&str));
-}
-
-static uchar *extra2_write_field_properties(uchar *pos,
-                   List<Create_field> &create_fields)
-{
-  List_iterator<Create_field> it(create_fields);
-  *pos++= EXTRA2_FIELD_FLAGS;
-  /*
-   always first 2  for field visibility
-  */
-  pos= extra2_write_len(pos, create_fields.elements);
-  while (Create_field *cf= it++)
-  {
-    uchar flags= cf->invisible;
-    if (cf->flags & VERS_UPDATE_UNVERSIONED_FLAG)
-      flags|= VERS_OPTIMIZED_UPDATE;
-    *pos++= flags;
-  }
-  return pos;
-}
 
 static uint16
 get_fieldno_by_name(HA_CREATE_INFO *create_info, List<Create_field> &create_fields,
@@ -495,6 +436,18 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
     pos= extra2_write_str(pos + 1, foreign_key_io.lex_cstring());
   }
 
+  if (create_info->versioned())
+  {
+    *pos++= EXTRA2_PERIOD_FOR_SYSTEM_TIME;
+    *pos++= 2 * frm_fieldno_size;
+    store_frm_fieldno(pos, get_fieldno_by_name(create_info, create_fields,
+                                       create_info->vers_info.as_row.start));
+    pos+= frm_fieldno_size;
+    store_frm_fieldno(pos, get_fieldno_by_name(create_info, create_fields,
+                                       create_info->vers_info.as_row.end));
+    pos+= frm_fieldno_size;
+  }
+
   // PERIOD
   if (create_info->period_info.is_set())
   {
@@ -508,18 +461,6 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
     pos+= frm_fieldno_size;
     store_frm_fieldno(pos, get_fieldno_by_name(create_info, create_fields,
                                        create_info->period_info.period.end));
-    pos+= frm_fieldno_size;
-  }
-
-  if (create_info->versioned())
-  {
-    *pos++= EXTRA2_PERIOD_FOR_SYSTEM_TIME;
-    *pos++= 2 * frm_fieldno_size;
-    store_frm_fieldno(pos, get_fieldno_by_name(create_info, create_fields,
-                                       create_info->vers_info.as_row.start));
-    pos+= frm_fieldno_size;
-    store_frm_fieldno(pos, get_fieldno_by_name(create_info, create_fields,
-                                       create_info->vers_info.as_row.end));
     pos+= frm_fieldno_size;
   }
 
