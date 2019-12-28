@@ -124,18 +124,25 @@ public:
   { }
 };
 
-
-class Scope_alloc
+class Scope_malloc
 {
-  void *alloc;
+  void * addr;
+
 public:
-  Scope_alloc(void *_alloc) : alloc(_alloc)
+  template <class PTR>
+  Scope_malloc(PTR alloced) : addr((void *)alloced)
   {
-    DBUG_ASSERT(alloc);
+    DBUG_ASSERT(addr);
   }
-  ~Scope_alloc()
+  template <class PTR>
+  Scope_malloc(PTR &assign, size_t Size, myf MyFlags= 0)
   {
-    my_free(alloc);
+    addr= my_malloc(Size, MyFlags);
+    assign= (PTR) addr;
+  }
+  ~Scope_malloc()
+  {
+    my_free(addr);
   }
 };
 
