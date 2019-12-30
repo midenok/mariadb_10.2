@@ -380,7 +380,7 @@ TABLE_SHARE *alloc_table_share(const char *db, const char *table_name,
 
   NOTES
     This is different from alloc_table_share() because temporary tables
-    don't have to be shared between threads or put into the table def
+    dap on't have to be shared between threads or put into the table def
     cache, so we can do some things notable simpler and faster
 
     If table is not put in thd->temporary_tables (happens only when
@@ -2152,9 +2152,9 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
                                        extra2.field_data_type_info))
     goto err;
 
-  if (extra2.foreign_key_info.length &&
-      foreign_key_io.parse(this, extra2.foreign_key_info))
-    goto err;
+//   if (extra2.foreign_key_info.length &&
+//       foreign_key_io.parse(this, extra2.foreign_key_info))
+//     goto err;
 
   for (i=0 ; i < share->fields; i++, strpos+=field_pack_length, field_ptr++)
   {
@@ -9225,7 +9225,6 @@ public:
 bool TABLE_SHARE::update_referenced_shares(THD *thd, Alter_info *alter_info,
                                            Table_ident_set &ref_tables)
 {
-  dd_check_frm();
   if (foreign_keys.is_empty())
     return false;
 

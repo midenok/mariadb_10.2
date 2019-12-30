@@ -5084,6 +5084,8 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
 
     if (!frm_only)
     {
+      if (frm->str && dd_check_frm(frm))
+        goto err;
       if (ha_create_table(thd, path, db.str, table_name.str, create_info,
                           alter_info, frm))
       {
