@@ -149,4 +149,5 @@ static inline bool dd_frm_is_view(THD *thd, char *path)
 
 bool dd_recreate_table(THD *thd, const char *db, const char *table_name);
 size_t dd_extra2_len(const uchar** pos, const uchar* end);
+bool dd_check_frm(LEX_CUSTRING *frm);
 #endif // DATADICT_INCLUDED

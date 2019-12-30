@@ -313,7 +313,7 @@ bool Extra2_info::read(const uchar *frm_image, size_t frm_size)
 /*
   write the length as
   if (  0 < length <= 255)      one byte
-  if (256 < length <= 65535)    zero byte, then two bytes, low-endian
+  if (256 < length < 65535)    zero byte, then two bytes, low-endian
 */
 uchar *
 extra2_write_len(uchar *pos, size_t len)
@@ -322,13 +322,10 @@ extra2_write_len(uchar *pos, size_t len)
     *pos++= (uchar)len;
   else
   {
-    /*
-      At the moment we support options_len up to 64K.
-      We can easily extend it in the future, if the need arises.
-    */
-    DBUG_ASSERT(len <= 65535);
-    int2store(pos + 1, len);
-    pos+= 3;
+    DBUG_ASSERT(len <= 0xffff - FRM_HEADER_SIZE - 8);
+    *pos++= 0;
+    int2store(pos, len);
+    pos+= 2;
   }
   return pos;
 }
@@ -364,6 +361,7 @@ extra2_write_field_properties(uchar *pos, List<Create_field> &create_fields)
 uchar *
 Extra2_info::write(uchar *frm_image, size_t frm_size)
 {
+  // FIXME: what to do with frm_size here (and in read())?
   uchar *pos;
   /* write the extra2 segment */
   pos = frm_image + FRM_HEADER_SIZE;
@@ -398,6 +396,7 @@ Extra2_info::write(uchar *frm_image, size_t frm_size)
 
   write_size= pos - frm_image - FRM_HEADER_SIZE;
   DBUG_ASSERT(write_size == store_size());
+  DBUG_ASSERT(write_size <= 0xffff - FRM_HEADER_SIZE - 4);
 
 #if 0
   int4store(pos, filepos); // end of the extra2 segment
@@ -450,6 +449,55 @@ bool TABLE_SHARE::dd_check_frm()
 
   memcpy((void *)pos, rest_src + 4, rest_size - 4);
   int res= memcmp(frm_src, frm_dst, frm_size);
+
+  return false;
+}
+
+bool dd_check_frm(LEX_CUSTRING *frm)
+{
+  const uchar * frm_src= frm->str;
+  uchar * frm_dst;
+  uchar * pos;
+  size_t frm_size= frm->length;
+  Extra2_info extra2;
+
+  Scope_malloc frm_src_freer(frm_src);
+
+  if (frm_size < FRM_HEADER_SIZE + FRM_FORMINFO_SIZE)
+    return true;
+
+  if (!is_binary_frm_header(frm_src))
+    return true;
+
+  if (extra2.read(frm_src, frm_size))
+    return true;
+
+  const uchar * const rest_src= frm_src + FRM_HEADER_SIZE + extra2.read_size;
+  const size_t rest_size= frm_size - FRM_HEADER_SIZE - extra2.read_size;
+  ulong forminfo_off= uint4korr(rest_src);
+
+  // add/change some extra2 data here
+  extra2.foreign_key_info.str= (uchar *) my_malloc(65400, MY_WME);
+  extra2.foreign_key_info.length= 65400;
+
+  const ulong extra2_increase= extra2.store_size() - extra2.read_size;
+  frm_size+= extra2_increase;
+  frm_dst= (uchar *) malloc(frm_size);
+  memcpy((void *)frm_dst, (void *)frm_src, FRM_HEADER_SIZE);
+
+  if (!(pos= extra2.write(frm_dst, frm_size)))
+    return true;
+
+  forminfo_off+= extra2_increase;
+  int4store(pos, forminfo_off);
+  pos+= 4;
+  int2store(frm_dst + 4, extra2.write_size);
+  int2store(frm_dst + 6, FRM_HEADER_SIZE + extra2.write_size + 4); // Position to key information
+  int4store(frm_dst + 10, frm_size);
+
+  memcpy((void *)pos, rest_src + 4, rest_size - 4);
+  frm->str= frm_dst;
+  frm->length= frm_size;
 
   return false;
 }
