@@ -108,12 +108,13 @@ static int thr_lock_errno_to_mysql[]=
 static int
 lock_tables_check(THD *thd, TABLE **tables, uint count, uint flags)
 {
-  uint system_count, i;
+  uint i;
   bool is_superuser, log_table_write_query;
 
   DBUG_ENTER("lock_tables_check");
 
-  system_count= 0;
+  uint system_w= 0;
+  uint system_rw= 0;
   is_superuser= thd->security_ctx->master_access & SUPER_ACL;
   log_table_write_query= (is_log_table_write_query(thd->lex->sql_command)
                          || ((flags & MYSQL_LOCK_LOG_TABLE) != 0));
@@ -147,11 +148,15 @@ lock_tables_check(THD *thd, TABLE **tables, uint count, uint flags)
       }
     }
 
+    if (t->s->table_category == TABLE_CATEGORY_SYSTEM)
+    {
+      system_rw++;
+      if (t->reginfo.lock_type >= TL_WRITE_ALLOW_WRITE)
+        system_w++;
+    }
+
     if (t->reginfo.lock_type >= TL_WRITE_ALLOW_WRITE)
     {
-      if (t->s->table_category == TABLE_CATEGORY_SYSTEM)
-        system_count++;
-
       if (t->db_stat & HA_READ_ONLY)
       {
         my_error(ER_OPEN_AS_READONLY, MYF(0), t->alias.c_ptr_safe());
@@ -188,11 +193,11 @@ lock_tables_check(THD *thd, TABLE **tables, uint count, uint flags)
   }
 
   /*
-    Locking of system tables is restricted:
+    Write-locking of system tables is restricted:
     locking a mix of system and non-system tables in the same lock
     is prohibited, to prevent contention.
   */
-  if ((system_count > 0) && (system_count < count))
+  if ((system_w > 0) && (system_rw < count))
   {
     my_error(ER_WRONG_LOCK_OF_SYSTEM_TABLE, MYF(0));
     DBUG_RETURN(1);
