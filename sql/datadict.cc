@@ -229,83 +229,84 @@ bool Extra2_info::read(const uchar *frm_image, size_t frm_size)
 
   DBUG_ENTER("read_extra2");
 
-  if (*pos != '/')   // old frm had '/' there
+  if (*pos == '/')   // old frm had '/' there
+    DBUG_RETURN(false);
+
+  const uchar *e2end= pos + read_size;
+  while (pos + 3 <= e2end)
   {
-    const uchar *e2end= pos + read_size;
-    while (pos + 3 <= e2end)
-    {
-      extra2_frm_value_type type= (extra2_frm_value_type)*pos++;
-      size_t length= dd_extra2_len(&pos, e2end);
-      if (!length)
-        DBUG_RETURN(true);
-      switch (type) {
-        case EXTRA2_TABLEDEF_VERSION:
-          if (version.str) // see init_from_sql_statement_string()
-          {
-            if (length != version.length)
-              DBUG_RETURN(true);
-          }
-          else
-          {
-            version.str= pos;
-            version.length= length;
-          }
-          break;
-        case EXTRA2_ENGINE_TABLEOPTS:
-          if (options.str)
-            DBUG_RETURN(true);
-          options.str= pos;
-          options.length= length;
-          break;
-        case EXTRA2_DEFAULT_PART_ENGINE:
-          engine.set((const char*)pos, length);
-          break;
-        case EXTRA2_GIS:
-          if (gis.str)
-            DBUG_RETURN(true);
-          gis.str= pos;
-          gis.length= length;
-          break;
-        case EXTRA2_PERIOD_FOR_SYSTEM_TIME:
-          if (system_period.str || length != 2 * frm_fieldno_size)
-            DBUG_RETURN(true);
-          system_period.str = pos;
-          system_period.length= length;
-          break;
-        case EXTRA2_FIELD_FLAGS:
-          if (field_flags.str)
-            DBUG_RETURN(true);
-          field_flags.str= pos;
-          field_flags.length= length;
-          break;
-        case EXTRA2_APPLICATION_TIME_PERIOD:
-          if (application_period.str)
-            DBUG_RETURN(true);
-          application_period.str= pos;
-          application_period.length= length;
-          break;
-        case EXTRA2_FIELD_DATA_TYPE_INFO:
-          if (field_data_type_info.str)
-            DBUG_RETURN(true);
-          field_data_type_info.str= pos;
-          field_data_type_info.length= length;
-          break;
-        case EXTRA2_FOREIGN_KEY_INFO:
-          if (foreign_key_info.str)
-            DBUG_RETURN(true);
-          foreign_key_info.str= pos;
-          foreign_key_info.length= length;
-          break;
-        default:
-          /* abort frm parsing if it's an unknown but important extra2 value */
-          if (type >= EXTRA2_ENGINE_IMPORTANT)
-            DBUG_RETURN(true);
-      }
-      pos+= length;
-    }
-    if (pos != e2end)
+    extra2_frm_value_type type= (extra2_frm_value_type)*pos++;
+    size_t length= dd_extra2_len(&pos, e2end);
+    if (!length)
       DBUG_RETURN(true);
+    switch (type) {
+      case EXTRA2_TABLEDEF_VERSION:
+        if (version.str) // see init_from_sql_statement_string()
+        {
+          if (length != version.length)
+            DBUG_RETURN(true);
+        }
+        else
+        {
+          version.str= pos;
+          version.length= length;
+        }
+        break;
+      case EXTRA2_ENGINE_TABLEOPTS:
+        if (options.str)
+          DBUG_RETURN(true);
+        options.str= pos;
+        options.length= length;
+        break;
+      case EXTRA2_DEFAULT_PART_ENGINE:
+        engine.set((const char*)pos, length);
+        break;
+      case EXTRA2_GIS:
+        if (gis.str)
+          DBUG_RETURN(true);
+        gis.str= pos;
+        gis.length= length;
+        break;
+      case EXTRA2_PERIOD_FOR_SYSTEM_TIME:
+        if (system_period.str || length != 2 * frm_fieldno_size)
+          DBUG_RETURN(true);
+        system_period.str = pos;
+        system_period.length= length;
+        break;
+      case EXTRA2_FIELD_FLAGS:
+        if (field_flags.str)
+          DBUG_RETURN(true);
+        field_flags.str= pos;
+        field_flags.length= length;
+        break;
+      case EXTRA2_APPLICATION_TIME_PERIOD:
+        if (application_period.str)
+          DBUG_RETURN(true);
+        application_period.str= pos;
+        application_period.length= length;
+        break;
+      case EXTRA2_FIELD_DATA_TYPE_INFO:
+        if (field_data_type_info.str)
+          DBUG_RETURN(true);
+        field_data_type_info.str= pos;
+        field_data_type_info.length= length;
+        break;
+      case EXTRA2_FOREIGN_KEY_INFO:
+        if (foreign_key_info.str)
+          DBUG_RETURN(true);
+        foreign_key_info.str= pos;
+        foreign_key_info.length= length;
+        break;
+      default:
+        /* abort frm parsing if it's an unknown but important extra2 value */
+        if (type >= EXTRA2_ENGINE_IMPORTANT)
+          DBUG_RETURN(true);
+    }
+    pos+= length;
   }
+  if (pos != e2end)
+    DBUG_RETURN(true);
+
   DBUG_ASSERT(store_size() == read_size);
   DBUG_RETURN(false);
 }
@@ -461,6 +462,8 @@ bool dd_check_frm(LEX_CUSTRING *frm)
   size_t frm_size= frm->length;
   Extra2_info extra2;
 
+  DBUG_ASSERT(frm_size > 0);
+
   Scope_malloc frm_src_freer(frm_src);
 
   if (frm_size < FRM_HEADER_SIZE + FRM_FORMINFO_SIZE)
@@ -477,16 +480,21 @@ bool dd_check_frm(LEX_CUSTRING *frm)
   ulong forminfo_off= uint4korr(rest_src);
 
   // add/change some extra2 data here
-  extra2.foreign_key_info.str= (uchar *) my_malloc(65400, MY_WME);
+  Scope_malloc(extra2.foreign_key_info.str, 65400, MY_WME);
   extra2.foreign_key_info.length= 65400;
 
   const ulong extra2_increase= extra2.store_size() - extra2.read_size;
   frm_size+= extra2_increase;
-  frm_dst= (uchar *) malloc(frm_size);
+  frm_dst= (uchar *) my_malloc(frm_size, MY_WME);
   memcpy((void *)frm_dst, (void *)frm_src, FRM_HEADER_SIZE);
 
   if (!(pos= extra2.write(frm_dst, frm_size)))
+  {
+    memcpy((void *)frm_dst, (void *)frm_src, frm->length);
+    frm->str= frm_dst;
+    frm->length= frm_size;
     return true;
+  }
 
   forminfo_off+= extra2_increase;
   int4store(pos, forminfo_off);
