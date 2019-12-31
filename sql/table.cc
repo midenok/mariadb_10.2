@@ -9371,6 +9371,8 @@ void TABLE_SHARE::revert_referenced_shares(THD *thd, Table_ident_set &ref_tables
 // Used in DROP TABLE and RENAME TABLE
 bool release_ref_shares(THD *thd, TABLE_LIST *t)
 {
+  // FIXME:
+  return false;
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
                                              t->table_name.str,
                                              MDL_INTENTION_EXCLUSIVE));
