@@ -2170,9 +2170,9 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
                                        extra2.field_data_type_info))
     goto err;
 
-//   if (extra2.foreign_key_info.length &&
-//       foreign_key_io.parse(this, extra2.foreign_key_info))
-//     goto err;
+  if (extra2.foreign_key_info.length &&
+      foreign_key_io.parse(thd, this, extra2.foreign_key_info))
+    goto err;
 
   for (i=0 ; i < share->fields; i++, strpos+=field_pack_length, field_ptr++)
   {
@@ -9290,7 +9290,7 @@ bool TABLE_SHARE::update_referenced_shares(THD *thd, Alter_info *alter_info,
       const char *ref_db= it->db.str;
       const char *ref_table= it->table.str;
       TABLE_LIST tl;
-      tl.init_one_table(&it->db, &it->table, NULL, TL_WRITE_ALLOW_WRITE);
+      tl.init_one_table(&it->db, &it->table, NULL, TL_IGNORE);
       Share_acquire share_acquire(thd, tl);
       TABLE_SHARE *ref_share= share_acquire.share;
       if (!ref_share)
@@ -9383,68 +9383,6 @@ void TABLE_SHARE::revert_referenced_shares(THD *thd, Table_ident_set &ref_tables
       }
     }
   }
-}
-
-
-/* Used in DROP TABLE: remove table from referenced_keys of referenced tables,
-   prohibit if foreign_keys is not empty. */
-bool fk_process_drop(THD *thd, TABLE_LIST *t)
-{
-  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
-                                             t->table_name.str,
-                                             MDL_INTENTION_EXCLUSIVE));
-  DBUG_ASSERT(!t->view);
-  Share_acquire s(thd, *t);
-  TABLE_SHARE *share= s.share;
-  if (!share)
-    return true;
-  if (!share->referenced_keys.is_empty())
-  {
-    // FIXME: error
-    return true;
-  }
-  if (share->foreign_keys.is_empty())
-    return false;
-  Table_ident_set tables;
-  List_iterator_fast<FK_info> it(share->foreign_keys);
-  while (FK_info *fk= it++)
-  {
-    if (0 == cmp(fk->referenced_db, t->db) &&
-        0 == cmp(fk->referenced_table, t->table_name))
-      continue;
-    if (tables.insert(fk->referenced_db, fk->referenced_table))
-      return true;
-  }
-  if (tables.empty())
-    return false;
-  MDL_request_list mdl_list;
-  Table_ident_set::const_iterator ref_it;
-  for (ref_it= tables.begin(); ref_it != tables.end(); ++ref_it)
-  {
-    MDL_request *req= new (thd->mem_root) MDL_request;
-    if (!req)
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    }
-    req->init(MDL_key::TABLE, ref_it->db.str, ref_it->table.str, MDL_EXCLUSIVE,
-              MDL_STATEMENT);
-    mdl_list.push_front(req);
-  }
-  if (thd->mdl_context.acquire_locks(&mdl_list, thd->variables.lock_wait_timeout))
-  {
-    my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
-    return true;
-  }
-  for (ref_it= tables.begin(); ref_it != tables.end(); ++ref_it)
-  {
-    TABLE_LIST ref;
-    ref.init_one_table(&ref_it->db, &ref_it->table, &ref_it->table, TL_IGNORE);
-    Share_acquire ref_s(thd, ref);
-    TABLE_SHARE *share= s.share;
-  }
-
-  return false;
 }
 
 

@@ -123,6 +123,14 @@ public:
   {
     share= tdc_acquire_share(thd, &tl, GTS_TABLE);
   }
+  Share_acquire(const Share_acquire &src) :
+    share(src.share)
+  {}
+  Share_acquire(Share_acquire &&src) :
+    share(src.share)
+  {
+    src.share= NULL;
+  }
   ~Share_acquire()
   {
     if (share)

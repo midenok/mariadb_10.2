@@ -406,7 +406,7 @@ Extra2_info::write(uchar *frm_image, size_t frm_size)
 }
 
 
-bool TABLE_SHARE::dd_check_frm()
+bool TABLE_SHARE::fk_write_shadow_frm()
 {
   const uchar * frm_src;
   uchar * frm_dst;
@@ -454,8 +454,10 @@ bool TABLE_SHARE::dd_check_frm()
   return false;
 }
 
+// FIXME: remove
 bool dd_check_frm(LEX_CUSTRING *frm)
 {
+  DBUG_ASSERT(0);
   const uchar * frm_src= frm->str;
   uchar * frm_dst;
   uchar * pos;

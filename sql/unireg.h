@@ -216,7 +216,7 @@ private:
   }
 public:
   Foreign_key_io() {}
-  bool parse(TABLE_SHARE *s, LEX_CUSTRING &image);
+  bool parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING &image);
 
   /* write */
 private:

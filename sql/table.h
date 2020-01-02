@@ -652,7 +652,7 @@ struct TABLE_SHARE
   {
     return !referenced_keys.is_empty();
   }
-  bool dd_check_frm();
+  bool fk_write_shadow_frm();
 
   Virtual_column_info **check_constraints;
   uint	*blob_field;			/* Index to blobs in Field arrray*/
@@ -1112,9 +1112,8 @@ public:
   bool is_truncated_value() { return truncated_value; }
 };
 
+// FIXME: move to sql_table
 bool release_ref_shares(THD *thd, TABLE_LIST *t);
-bool fk_process_drop(THD *thd, TABLE_LIST *t);
-
 
 /* Information for one open table */
 enum index_hint_type
