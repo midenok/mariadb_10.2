@@ -81,6 +81,8 @@ static uint blob_length_by_type(enum_field_types type);
 static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
                                   const HA_CREATE_INFO *create_info);
+static bool fk_process_drop(THD *thd, TABLE_LIST *t,
+                            std::vector<Share_acquire> shares);
 
 /**
   @brief Helper function for explain_filename
@@ -2445,7 +2447,8 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     {
       char *end;
       int frm_delete_error= 0;
-      if (fk_process_drop(thd, table))
+      std::vector<Share_acquire> shares;
+      if (fk_process_drop(thd, table, shares))
       {
         error= 1;
         goto err;
@@ -5084,8 +5087,6 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
 
     if (!frm_only)
     {
-      if (frm->str && dd_check_frm(frm))
-        goto err;
       if (ha_create_table(thd, path, db.str, table_name.str, create_info,
                           alter_info, frm))
       {
@@ -11611,4 +11612,75 @@ end_with_restore_list:
 wsrep_error_label:
   DBUG_RETURN(true);
 #endif
+}
+
+
+/* Used in DROP TABLE: remove table from referenced_keys of referenced tables,
+   prohibit if foreign_keys is not empty. */
+bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> shares)
+{
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
+                                             t->table_name.str,
+                                             MDL_INTENTION_EXCLUSIVE));
+  DBUG_ASSERT(!t->view);
+  Share_acquire s(thd, *t);
+  TABLE_SHARE *share= s.share;
+  if (!share)
+    return true;
+  if (!share->referenced_keys.is_empty())
+  {
+    // FIXME: error
+    return true;
+  }
+  if (share->foreign_keys.is_empty())
+    return false;
+  Table_ident_set tables;
+  List_iterator_fast<FK_info> it(share->foreign_keys);
+  while (FK_info *fk= it++)
+  {
+    if (0 == cmp(fk->referenced_db, t->db) &&
+        0 == cmp(fk->referenced_table, t->table_name))
+      continue;
+    if (tables.insert(fk->referenced_db, fk->referenced_table))
+      return true;
+  }
+  if (tables.empty())
+    return false;
+  MDL_request_list mdl_list;
+  Table_ident_set::const_iterator ref_it;
+  for (ref_it= tables.begin(); ref_it != tables.end(); ++ref_it)
+  {
+    MDL_request *req= new (thd->mem_root) MDL_request;
+    if (!req)
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    req->init(MDL_key::TABLE, ref_it->db.str, ref_it->table.str, MDL_EXCLUSIVE,
+              MDL_STATEMENT);
+    mdl_list.push_front(req);
+  }
+  if (thd->mdl_context.acquire_locks(&mdl_list, thd->variables.lock_wait_timeout))
+  {
+    my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
+    return true;
+  }
+
+  for (const Table_ident &ref_ti: tables)
+  {
+    TABLE_LIST tl;
+    tl.init_one_table(&ref_ti.db, &ref_ti.table, &ref_ti.table, TL_IGNORE);
+    Share_acquire ref(thd, tl);
+    if (!ref.share)
+      return true;
+    shares.push_back(std::move(ref));
+  }
+
+  for (Share_acquire &ref: shares)
+  {
+    // TODO: check if this ref does not release share
+    ref.share->fk_write_shadow_frm();
+  }
+
+  return false;
 }

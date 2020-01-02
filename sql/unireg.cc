@@ -1216,7 +1216,7 @@ bool Foreign_key_io::store(List<Key> &keys)
   store_size+= net_length_size(fk_count);
   if (reserve(store_size))
   {
-    // FIXME: error
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
     return true;
   }
   uchar *pos= (uchar *) end();
@@ -1235,19 +1235,28 @@ bool Foreign_key_io::store(List<Key> &keys)
   return false;
 }
 
-bool Foreign_key_io::parse(TABLE_SHARE *s, LEX_CUSTRING& image)
+bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
 {
   Pos p(image);
   size_t version, fk_count;
-  if (read_length(version, p) ||
-      read_length(fk_count, p))
+  if (read_length(version, p))
   {
-    // FIXME: error
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                        "Foreign_key_io failed to read binary data version");
+    return true;
+  }
+  if (read_length(fk_count, p))
+  {
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                        "Foreign_key_io failed to read foreign key count");
     return true;
   }
   if (version > fk_io_version)
   {
-    // FIXME: error
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                        "Foreign_key_io does not support %d version of binary data", version);
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
+                        "Foreign_key_io max supported version is %d", fk_io_version);
     return true;
   }
   for (uint i= 0; i < fk_count; ++i)
