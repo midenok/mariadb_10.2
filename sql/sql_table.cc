@@ -1445,8 +1445,8 @@ bool write_ddl_log_entry(DDL_LOG_ENTRY *ddl_log_entry,
 
   @details This is the last write in the ddl log. The previous log entries
   have already been written but not yet synched to disk.
-  We write a couple of log entries that describes action to perform.
-  This entries are set-up in a linked list, however only when a first
+  We write a couple of log entries that describe action to perform.
+  These entries are set-up in a linked list, however only when a first
   execute entry is put as the first entry these will be executed.
   This routine writes this first.
 
@@ -2445,7 +2445,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     {
       char *end;
       int frm_delete_error= 0;
-      if (release_ref_shares(thd, table))
+      if (fk_process_drop(thd, table))
       {
         error= 1;
         goto err;

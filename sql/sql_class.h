@@ -6367,7 +6367,31 @@ struct Table_ident_lt
   }
 };
 class Table_ident_set : public std::set<Table_ident, Table_ident_lt>
-{};
+{
+public:
+  bool insert(Table_ident elem)
+  {
+    try
+    {
+      std::set<Table_ident, Table_ident_lt>::insert(elem);
+    }
+    catch (std::bad_alloc())
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    catch (...)
+    {
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
+      return true;
+    }
+    return false;
+  }
+  bool insert(Lex_cstring &db, Lex_cstring &table)
+  {
+    return insert(Table_ident(db, table));
+  }
+};
 
 
 class Qualified_column_ident: public Table_ident
