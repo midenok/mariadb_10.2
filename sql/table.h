@@ -1113,6 +1113,7 @@ public:
 };
 
 bool release_ref_shares(THD *thd, TABLE_LIST *t);
+bool fk_process_drop(THD *thd, TABLE_LIST *t);
 
 
 /* Information for one open table */
