@@ -413,20 +413,33 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   uchar * pos;
   size_t frm_size;
   Extra2_info extra2;
+  Foreign_key_io foreign_key_io;
 
   if (read_frm_image(&frm_src, &frm_size))
+  {
+    // FIXME: error
     return true;
+  }
 
-  Scope_malloc frm_src_freer(frm_src);
+  Scope_malloc frm_src_freer(frm_src); // read_frm_image() passed ownership to us
 
   if (frm_size < FRM_HEADER_SIZE + FRM_FORMINFO_SIZE)
+  {
+    // FIXME: error
     return true;
+  }
 
   if (!is_binary_frm_header(frm_src))
+  {
+    // FIXME: error
     return true;
+  }
 
   if (extra2.read(frm_src, frm_size))
+  {
+    // FIXME: error
     return true;
+  }
 
   const uchar * const rest_src= frm_src + FRM_HEADER_SIZE + extra2.read_size;
   const size_t rest_size= frm_size - FRM_HEADER_SIZE - extra2.read_size;
@@ -434,22 +447,28 @@ bool TABLE_SHARE::fk_write_shadow_frm()
 
   // add/change some extra2 data here
 
-  const ulong extra2_increase= extra2.store_size() - extra2.read_size;
+  Scope_malloc(extra2.foreign_key_info.str, 65400, MY_WME);
+  extra2.foreign_key_info.length= 65400;
 
-  Scope_malloc frm_dst_allocer(frm_dst, frm_size + extra2_increase, MY_WME);
+  const ulong extra2_increase= extra2.store_size() - extra2.read_size;
+  frm_size+= extra2_increase;
+  frm_dst= (uchar *) my_malloc(frm_size, MY_WME);
   memcpy((void *)frm_dst, (void *)frm_src, FRM_HEADER_SIZE);
 
   if (!(pos= extra2.write(frm_dst, frm_size)))
+  {
+    // FIXME: error
     return true;
+  }
 
   forminfo_off+= extra2_increase;
   int4store(pos, forminfo_off);
   pos+= 4;
   int2store(frm_dst + 4, extra2.write_size);
   int2store(frm_dst + 6, FRM_HEADER_SIZE + extra2.write_size + 4); // Position to key information
+  int4store(frm_dst + 10, frm_size);
 
   memcpy((void *)pos, rest_src + 4, rest_size - 4);
-  int res= memcmp(frm_src, frm_dst, frm_size);
 
   return false;
 }

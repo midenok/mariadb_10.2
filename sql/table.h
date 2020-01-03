@@ -1694,6 +1694,7 @@ enum enum_schema_table_state
 
 enum enum_fk_option { FK_OPTION_UNDEF= 0, FK_OPTION_RESTRICT, FK_OPTION_CASCADE,
                FK_OPTION_SET_NULL, FK_OPTION_NO_ACTION, FK_OPTION_SET_DEFAULT};
+class Foreign_key;
 
 class FK_info : public Sql_alloc
 {
@@ -1713,10 +1714,8 @@ public:
   FK_info() :
     update_method(FK_OPTION_UNDEF),
     delete_method(FK_OPTION_UNDEF)
-  {
-    foreign_fields.empty();
-    referenced_fields.empty();
-  }
+  {}
+  bool assign(Foreign_key &fk);
 };
 
 typedef class FK_info FOREIGN_KEY_INFO;

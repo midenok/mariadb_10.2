@@ -179,9 +179,10 @@ public:
 */
 
 LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
-                              HA_CREATE_INFO *create_info,
-                              List<Create_field> &create_fields,
-                              uint keys, KEY *key_info, handler *db_file)
+                             HA_CREATE_INFO *create_info,
+                             List<Create_field> &create_fields,
+                             uint keys, KEY *key_info,  FK_list &foreign_keys,
+                             handler *db_file)
 {
   LEX_CSTRING str_db_type;
   uint reclength, key_info_length, i;
@@ -264,7 +265,7 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                     MYF(0), table.str);
     DBUG_RETURN(frm);
   }
-  if (foreign_key_io.store(create_info->alter_info->key_list))
+  if (foreign_key_io.store(foreign_keys))
   {
     my_printf_error(ER_CANT_CREATE_TABLE,
                     "Cannot create table %`s: "
@@ -1151,65 +1152,59 @@ err:
   DBUG_RETURN(error);
 } /* make_empty_rec */
 
-ulonglong Foreign_key_io::key_size(Foreign_key &key)
+ulonglong Foreign_key_io::key_size(FK_info &fk)
 {
   ulonglong store_size= 0;
-  store_size+= string_size(key.constraint_name);
-  store_size+= string_size(key.name);
-  store_size+= string_size(key.ref_db);
-  store_size+= string_size(key.ref_table);
-  store_size+= net_length_size(key.update_opt);
-  store_size+= net_length_size(key.delete_opt);
-  store_size+= net_length_size(key.ref_columns.elements);
-  List_iterator_fast<Key_part_spec> col_it(key.columns);
-  List_iterator_fast<Key_part_spec> ref_it(key.ref_columns);
-  while (Key_part_spec *kp= col_it++)
+  store_size+= string_size(fk.foreign_id);
+  store_size+= string_size(fk.referenced_key_name);
+  store_size+= string_size(fk.referenced_db);
+  store_size+= string_size(fk.referenced_table);
+  store_size+= net_length_size(fk.update_method);
+  store_size+= net_length_size(fk.delete_method);
+  store_size+= net_length_size(fk.foreign_fields.elements);
+  DBUG_ASSERT(fk.foreign_fields.elements == fk.referenced_fields.elements);
+  List_iterator_fast<Lex_cstring> ref_it(fk.referenced_fields);
+  for (Lex_cstring &fcol: fk.foreign_fields)
   {
-    store_size+= string_size(kp->field_name);
-    Key_part_spec *kp2= ref_it++;
-    store_size+= string_size(kp2->field_name);
+    store_size+= string_size(fcol);
+    Lex_cstring *ref_col= ref_it++;
+    store_size+= string_size(*ref_col);
   }
   return store_size;
 }
 
-bool Foreign_key_io::store(Foreign_key &key, uchar *&pos)
+void Foreign_key_io::store(FK_info &fk, uchar *&pos)
 {
-  /* FIXME: charset validation */
-  pos= store_string(pos, key.name);
-  pos= store_string(pos, key.constraint_name, true);
-  pos= store_string(pos, key.ref_db, true);
-  pos= store_string(pos, key.ref_table);
-  pos= store_length(pos, key.update_opt);
-  pos= store_length(pos, key.delete_opt);
-  pos= store_length(pos, key.columns.elements);
-  DBUG_ASSERT(key.columns.elements == key.ref_columns.elements);
-  List_iterator_fast<Key_part_spec> col_it(key.columns);
-  List_iterator_fast<Key_part_spec> ref_it(key.ref_columns);
-  while (Key_part_spec *kp= col_it++)
+  /* FIXME: charset validation? */
+  pos= store_string(pos, fk.foreign_id);
+  pos= store_string(pos, fk.referenced_key_name, true);
+  pos= store_string(pos, fk.referenced_db, true);
+  pos= store_string(pos, fk.referenced_table);
+  pos= store_length(pos, fk.update_method);
+  pos= store_length(pos, fk.delete_method);
+  pos= store_length(pos, fk.foreign_fields.elements);
+  DBUG_ASSERT(fk.foreign_fields.elements == fk.referenced_fields.elements);
+  List_iterator_fast<Lex_cstring> ref_it(fk.referenced_fields);
+  for (Lex_cstring &fcol: fk.foreign_fields)
   {
-    pos= store_string(pos, kp->field_name);
-    Key_part_spec *kp2= ref_it++;
-    pos= store_string(pos, kp2->field_name);
+    pos= store_string(pos, fcol);
+    Lex_cstring *ref_col= ref_it++;
+    pos= store_string(pos, *ref_col);
   }
   size_t new_length= (char *) pos - ptr();
   DBUG_ASSERT(new_length < alloced_length());
-  DBUG_ASSERT(new_length - length() == key_size(key));
+  DBUG_ASSERT(new_length - length() == key_size(fk));
   length((uint32) new_length);
-  return false;
 }
 
-bool Foreign_key_io::store(List<Key> &keys)
+bool Foreign_key_io::store(FK_list &fk_list)
 {
-  List_iterator_fast<Key> it(keys);
   ulonglong fk_count= 0;
   ulonglong store_size= net_length_size(fk_io_version);
-  while (Key *key= it++)
+  for (FK_info &fk: fk_list)
   {
-    if (!key->foreign)
-      continue;
-    Foreign_key *fk= static_cast<Foreign_key *>(key);
     fk_count++;
-    store_size+= key_size(*fk);
+    store_size+= key_size(fk);
   }
   if (!fk_count)
     return false;
@@ -1223,14 +1218,8 @@ bool Foreign_key_io::store(List<Key> &keys)
   pos= store_length(pos, fk_io_version);
   pos= store_length(pos, fk_count);
   length((char *) pos - ptr());
-  it.rewind();
-  while (Key *key= it++)
-  {
-    if (!key->foreign)
-      continue;
-    Foreign_key *fk= static_cast<Foreign_key *>(key);
-    store(*fk, pos);
-  }
+  for (FK_info &fk: fk_list)
+    store(fk, pos);
 
   return false;
 }
