@@ -158,7 +158,8 @@
 LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                              HA_CREATE_INFO *create_info,
                              List<Create_field> &create_fields,
-                             uint keys, KEY *key_info, handler *db_file);
+                             uint keys, KEY *key_info, FK_list &foreign_keys,
+                             handler *db_file);
 
 #define FRM_HEADER_SIZE 64
 #define FRM_FORMINFO_SIZE 288
@@ -235,15 +236,15 @@ private:
       memcpy(pos, str.str, str.length);
     return pos + str.length;
   }
-  static ulonglong string_size(LEX_CSTRING &str)
+  static ulonglong string_size(Lex_cstring str)
   {
     return net_length_size(str.length) + str.length;
   }
 
 public:
-  ulonglong key_size(Foreign_key &key);
-  bool store(Foreign_key &key, uchar *&pos);
-  bool store(List<Key> &keys);
+  ulonglong key_size(FK_info &fk);
+  void store(FK_info &fk, uchar *&pos);
+  bool store(FK_list &fk_list);
 };
 
 #endif

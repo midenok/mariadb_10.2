@@ -75,8 +75,8 @@ static int copy_data_between_tables(THD *, TABLE *,TABLE *,
                                     Alter_info::enum_enable_or_disable,
                                     Alter_table_ctx *);
 static int mysql_prepare_create_table(THD *, HA_CREATE_INFO *, Alter_info *,
-                                      uint *, handler *, KEY **, uint *, int,
-                                      const LEX_CSTRING &table_name);
+                                      uint *, handler *, KEY **, FK_list &,
+                                      uint *, int, const LEX_CSTRING &table_name);
 static uint blob_length_by_type(enum_field_types type);
 static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
@@ -1828,10 +1828,11 @@ bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags)
   strxmov(shadow_frm_name, shadow_path, reg_ext, NullS);
   if (flags & WFRM_WRITE_SHADOW)
   {
+    FK_list foreign_keys;
     if (mysql_prepare_create_table(lpt->thd, lpt->create_info, lpt->alter_info,
                                    &lpt->db_options, lpt->table->file,
-                                   &lpt->key_info_buffer, &lpt->key_count,
-                                   C_ALTER_TABLE, lpt->table_name))
+                                   &lpt->key_info_buffer, foreign_keys,
+                                   &lpt->key_count, C_ALTER_TABLE, lpt->table_name))
     {
       DBUG_RETURN(TRUE);
     }
@@ -1855,6 +1856,7 @@ bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags)
                                       lpt->create_info,
                                       lpt->alter_info->create_list,
                                       lpt->key_count, lpt->key_info_buffer,
+                                      foreign_keys,
                                       lpt->table->file);
     if (!frm.str)
     {
@@ -3452,6 +3454,7 @@ static int
 mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                            Alter_info *alter_info, uint *db_options,
                            handler *file, KEY **key_info_buffer,
+                           FK_list &foreign_keys,
                            uint *key_count, int create_table_mode,
                            const LEX_CSTRING &table_name)
 {
@@ -3796,9 +3799,12 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
       {
         if (key->foreign)
         {
-          if (!key->name.str)
-            key->name= make_unique_key_name(thd, table_name, key_names, true);
-          key_names.insert(key->name);
+          key_name= key->name.str ? key->name :
+            make_unique_key_name(thd, table_name, key_names, true);
+          FK_info *fk_info= new (thd->mem_root) FK_info();
+          fk_info->assign(*(Foreign_key *) key);
+          foreign_keys.push_back(fk_info);
+          key_names.insert(key_name);
         }
         key=key_iterator++;
       }
@@ -4181,8 +4187,13 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
 	  DBUG_RETURN(TRUE);
 	}
+	if (key->foreign)
+        {
+          FK_info *fk_info= new (thd->mem_root) FK_info();
+          fk_info->assign(*(Foreign_key *) key);
+          foreign_keys.push_back(fk_info);
+        }
 	key_info->name= key_name;
-        key->name= key_info->name;
         key_names.insert(key_name);
       } //  if (column_nr == 0)
     }
@@ -4593,6 +4604,7 @@ handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
 {
   uint		db_options;
   handler       *file;
+  FK_list       foreign_keys;
   DBUG_ENTER("mysql_create_frm_image");
 
   if (!alter_info->create_list.elements)
@@ -4826,14 +4838,14 @@ handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
   }
 
   if (mysql_prepare_create_table(thd, create_info, alter_info, &db_options,
-                                 file, key_info, key_count, create_table_mode,
-                                 table_name))
+                                 file, key_info, foreign_keys, key_count,
+                                 create_table_mode, table_name))
     goto err;
   create_info->table_options=db_options;
 
   *frm= build_frm_image(thd, table_name, create_info,
                         alter_info->create_list, *key_count,
-                        *key_info, file);
+                        *key_info, foreign_keys, file);
 
   if (frm->str)
     DBUG_RETURN(file);
@@ -7317,13 +7329,14 @@ bool mysql_compare_tables(TABLE *table,
   Alter_info tmp_alter_info(*alter_info, thd->mem_root);
   uint db_options= 0; /* not used */
   KEY *key_info_buffer= NULL;
+  FK_list foreign_keys;
 
   /* Create the prepared information. */
   int create_table_mode= table->s->tmp_table == NO_TMP_TABLE ?
                            C_ORDINARY_CREATE : C_ALTER_TABLE;
   if (mysql_prepare_create_table(thd, create_info, &tmp_alter_info,
                                  &db_options, table->file, &key_info_buffer,
-                                 &key_count, create_table_mode,
+                                 foreign_keys, &key_count, create_table_mode,
                                  table->s->table_name))
     DBUG_RETURN(1);
 

@@ -9442,6 +9442,31 @@ bool release_ref_shares(THD *thd, TABLE_LIST *t)
   return false;
 }
 
+bool FK_info::assign(Foreign_key& fk)
+{
+  DBUG_ASSERT(fk.foreign);
+  DBUG_ASSERT(fk.type == Key::MULTIPLE);
+
+  foreign_id= fk.name;
+  referenced_db= fk.ref_db;
+  referenced_table= fk.ref_table;
+  update_method= fk.update_opt;
+  delete_method= fk.delete_opt;
+  referenced_key_name= fk.constraint_name;
+
+  List_iterator_fast<Key_part_spec> ref_it(fk.ref_columns);
+
+  for (const Key_part_spec &kp: fk.columns)
+  {
+    if (foreign_fields.push_back((Lex_cstring *)(&kp.field_name)))
+      return true;
+    Key_part_spec *kp2= ref_it++;
+    if (referenced_fields.push_back((Lex_cstring *)(&kp.field_name)))
+      return true;
+  }
+  return false;
+}
+
 bool TABLE_SHARE::check_foreign_keys(THD *thd)
 {
   List_iterator_fast<FOREIGN_KEY_INFO> ref_it;
