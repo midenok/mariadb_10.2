@@ -446,6 +446,7 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   ulong forminfo_off= uint4korr(rest_src);
 
   // add/change some extra2 data here
+  foreign_key_io.store(foreign_keys, &referenced_keys);
 
   Scope_malloc(extra2.foreign_key_info.str, 65400, MY_WME);
   extra2.foreign_key_info.length= 65400;

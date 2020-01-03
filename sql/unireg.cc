@@ -1152,7 +1152,7 @@ err:
   DBUG_RETURN(error);
 } /* make_empty_rec */
 
-ulonglong Foreign_key_io::key_size(FK_info &fk)
+ulonglong Foreign_key_io::fk_size(FK_info &fk)
 {
   ulonglong store_size= 0;
   store_size+= string_size(fk.foreign_id);
@@ -1173,7 +1173,17 @@ ulonglong Foreign_key_io::key_size(FK_info &fk)
   return store_size;
 }
 
-void Foreign_key_io::store(FK_info &fk, uchar *&pos)
+ulonglong Foreign_key_io::hint_size(FK_info &rk)
+{
+  ulonglong store_size= 0;
+  DBUG_ASSERT(rk.foreign_db.str);
+  DBUG_ASSERT(rk.foreign_table.str);
+  store_size+= string_size(rk.foreign_db);
+  store_size+= string_size(rk.foreign_table);
+  return store_size;
+}
+
+void Foreign_key_io::store_fk(FK_info &fk, uchar *&pos)
 {
   /* FIXME: charset validation? */
   pos= store_string(pos, fk.foreign_id);
@@ -1191,24 +1201,40 @@ void Foreign_key_io::store(FK_info &fk, uchar *&pos)
     Lex_cstring *ref_col= ref_it++;
     pos= store_string(pos, *ref_col);
   }
-  size_t new_length= (char *) pos - ptr();
-  DBUG_ASSERT(new_length < alloced_length());
-  DBUG_ASSERT(new_length - length() == key_size(fk));
-  length((uint32) new_length);
+  DBUG_ASSERT((char *) pos - ptr() - length() == fk_size(fk));
 }
 
-bool Foreign_key_io::store(FK_list &fk_list)
+void Foreign_key_io::store_hint(FK_info &rk, uchar *&pos)
 {
-  ulonglong fk_count= 0;
+  pos= store_string(pos, rk.foreign_db);
+  pos= store_string(pos, rk.foreign_table);
+}
+
+bool Foreign_key_io::store(FK_list &foreign_keys, FK_list *referenced_keys)
+{
+  ulonglong fk_count= 0, rk_count= 0;
+
+  if (foreign_keys.is_empty() && (!referenced_keys || referenced_keys->is_empty()))
+    return false;
+
   ulonglong store_size= net_length_size(fk_io_version);
-  for (FK_info &fk: fk_list)
+  for (FK_info &fk: foreign_keys)
   {
     fk_count++;
-    store_size+= key_size(fk);
+    store_size+= fk_size(fk);
   }
-  if (!fk_count)
-    return false;
   store_size+= net_length_size(fk_count);
+
+  if (referenced_keys)
+  {
+    for (FK_info &rk: *referenced_keys)
+    {
+      rk_count++;
+      store_size+= hint_size(rk);
+    }
+  }
+  store_size+= net_length_size(rk_count);
+
   if (reserve(store_size))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
@@ -1216,18 +1242,28 @@ bool Foreign_key_io::store(FK_list &fk_list)
   }
   uchar *pos= (uchar *) end();
   pos= store_length(pos, fk_io_version);
-  pos= store_length(pos, fk_count);
-  length((char *) pos - ptr());
-  for (FK_info &fk: fk_list)
-    store(fk, pos);
 
+  pos= store_length(pos, fk_count);
+  for (FK_info &fk: foreign_keys)
+    store_fk(fk, pos);
+
+  pos= store_length(pos, rk_count);
+  if (referenced_keys)
+  {
+    for (FK_info &rk: *referenced_keys)
+      store_hint(rk, pos);
+  }
+
+  size_t new_length= (char *) pos - ptr();
+  DBUG_ASSERT(new_length < alloced_length());
+  length((uint32) new_length);
   return false;
 }
 
 bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
 {
   Pos p(image);
-  size_t version, fk_count;
+  size_t version, fk_count, rk_count;
   if (read_length(version, p))
   {
     push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
@@ -1298,6 +1334,12 @@ mem_error:
       if (read_string(field_name, &s->mem_root, p))
         return true;
     }
+  }
+  if (read_length(fk_count, p))
+  {
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                        "Foreign_key_io failed to read foreign key count");
+    return true;
   }
   return p.pos < p.end; // Error if some data is still left
 }

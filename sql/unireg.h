@@ -227,10 +227,7 @@ private:
   }
   static uchar *store_string(uchar *pos, const LEX_CSTRING &str, bool nullable= false)
   {
-    if (!nullable && !str.length)
-    {
-      DBUG_ASSERT(0);
-    }
+    DBUG_ASSERT(nullable || !str.length);
     pos= store_length(pos, str.length);
     if (str.length)
       memcpy(pos, str.str, str.length);
@@ -242,9 +239,11 @@ private:
   }
 
 public:
-  ulonglong key_size(FK_info &fk);
-  void store(FK_info &fk, uchar *&pos);
-  bool store(FK_list &fk_list);
+  ulonglong fk_size(FK_info &fk);
+  ulonglong hint_size(FK_info &rk);
+  void store_fk(FK_info &fk, uchar *&pos);
+  void store_hint(FK_info &rk, uchar *&pos);
+  bool store(FK_list &foreign_keys, FK_list *referenced_keys= NULL);
 };
 
 #endif
