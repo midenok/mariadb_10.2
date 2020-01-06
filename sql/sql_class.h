@@ -50,6 +50,7 @@
 #include "session_tracker.h"
 #include "backup.h"
 #include "xa.h"
+#include <vector>
 
 extern "C"
 void set_thd_stage_info(void *thd,
@@ -6366,6 +6367,7 @@ struct Table_ident_lt
     return lhs.db.cmp(rhs.db) < 0 || lhs.table.cmp(rhs.table) < 0;
   }
 };
+
 class Table_ident_set : public std::set<Table_ident, Table_ident_lt>
 {
 public:
@@ -6392,6 +6394,34 @@ public:
     return insert(Table_ident(db, table));
   }
 };
+
+class Table_ident_vector : public std::vector<Table_ident>
+{
+public:
+  bool push_back(Table_ident elem)
+  {
+    try
+    {
+      std::vector<Table_ident>::push_back(elem);
+    }
+    catch (std::bad_alloc())
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    catch (...)
+    {
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_vector");
+      return true;
+    }
+    return false;
+  }
+  bool push_back(Lex_cstring &db, Lex_cstring &table)
+  {
+    return push_back(Table_ident(db, table));
+  }
+};
+
 
 
 class Qualified_column_ident: public Table_ident
