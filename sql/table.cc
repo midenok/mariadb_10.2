@@ -9467,6 +9467,49 @@ bool FK_info::assign(Foreign_key& fk)
   return false;
 }
 
+FK_info * FK_info::clone(MEM_ROOT *mem_root) const
+{
+  FK_info *dst= new (mem_root) FK_info();
+  if (!dst)
+    return NULL;
+
+  if (dst->foreign_id.strdup(mem_root, foreign_id))
+    return NULL;
+  if (dst->referenced_db.strdup(mem_root, referenced_db))
+    return NULL;
+  if (dst->referenced_table.strdup(mem_root, referenced_table))
+    return NULL;
+  dst->update_method= update_method;
+  dst->delete_method= delete_method;
+  if (dst->referenced_key_name.strdup(mem_root, foreign_id))
+    return NULL;
+
+  for (const Lex_cstring &src_f: foreign_fields)
+  {
+    Lex_cstring *dst_f= new (mem_root) Lex_cstring();
+    if (!dst_f)
+      return NULL;
+    if (dst_f->strdup(mem_root, src_f))
+      return NULL;
+    if (dst->foreign_fields.push_back(dst_f, mem_root))
+      return NULL;
+  }
+
+  for (const Lex_cstring &src_f: referenced_fields)
+  {
+    Lex_cstring *dst_f= new (mem_root) Lex_cstring();
+    if (!dst_f)
+      return NULL;
+    if (dst_f->strdup(mem_root, src_f))
+      return NULL;
+    if (dst->referenced_fields.push_back(dst_f, mem_root))
+      return NULL;
+  }
+
+  DBUG_ASSERT(foreign_fields.elements == referenced_fields.elements);
+  return dst;
+}
+
 bool TABLE_SHARE::check_foreign_keys(THD *thd)
 {
   List_iterator_fast<FOREIGN_KEY_INFO> ref_it;
