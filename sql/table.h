@@ -1716,6 +1716,7 @@ public:
     delete_method(FK_OPTION_UNDEF)
   {}
   bool assign(Foreign_key &fk);
+  FK_info * clone(MEM_ROOT *mem_root) const;
 };
 
 typedef class FK_info FOREIGN_KEY_INFO;

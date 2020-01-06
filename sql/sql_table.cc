@@ -3803,6 +3803,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
             make_unique_key_name(thd, table_name, key_names, true);
           FK_info *fk_info= new (thd->mem_root) FK_info();
           fk_info->assign(*(Foreign_key *) key);
+          fk_info->foreign_id= key_name;
           foreign_keys.push_back(fk_info);
           key_names.insert(key_name);
         }
@@ -4191,6 +4192,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
         {
           FK_info *fk_info= new (thd->mem_root) FK_info();
           fk_info->assign(*(Foreign_key *) key);
+          fk_info->foreign_id= key_name;
           foreign_keys.push_back(fk_info);
         }
 	key_info->name= key_name;

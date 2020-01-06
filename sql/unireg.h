@@ -200,19 +200,19 @@ private:
     out= (uint32_t) num;
     return false;
   }
-  static bool read_string(Lex_cstring *to, MEM_ROOT *mem_root, Pos &p)
+  static bool read_string(Lex_cstring &to, MEM_ROOT *mem_root, Pos &p)
   {
-    if (read_length(to->length, p) || p.pos + to->length > p.end)
+    if (read_length(to.length, p) || p.pos + to.length > p.end)
       return true; // Not enough data
-    if (!to->length)
+    if (!to.length)
       return false;
-    to->str= strmake_root(mem_root, (char *)p.pos, to->length);
-    if (!to->str)
+    to.str= strmake_root(mem_root, (char *) p.pos, to.length);
+    if (!to.str)
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
-    p.pos+= to->length;
+    p.pos+= to.length;
     return false;
   }
 public:
@@ -227,7 +227,7 @@ private:
   }
   static uchar *store_string(uchar *pos, const LEX_CSTRING &str, bool nullable= false)
   {
-    DBUG_ASSERT(nullable || !str.length);
+    DBUG_ASSERT(nullable || str.length);
     pos= store_length(pos, str.length);
     if (str.length)
       memcpy(pos, str.str, str.length);

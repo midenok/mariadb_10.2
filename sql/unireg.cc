@@ -33,6 +33,7 @@
 #include "create_options.h"
 #include "discover.h"
 #include "datadict.h"
+#include "table_cache.h"                // Share_acquire
 #include <m_ctype.h>
 
 #define FCOMP			17		/* Bytes for a packed field */
@@ -1185,6 +1186,9 @@ ulonglong Foreign_key_io::hint_size(FK_info &rk)
 
 void Foreign_key_io::store_fk(FK_info &fk, uchar *&pos)
 {
+#ifndef DBUG_OFF
+  uchar *old_pos= pos;
+#endif
   /* FIXME: charset validation? */
   pos= store_string(pos, fk.foreign_id);
   pos= store_string(pos, fk.referenced_key_name, true);
@@ -1201,7 +1205,7 @@ void Foreign_key_io::store_fk(FK_info &fk, uchar *&pos)
     Lex_cstring *ref_col= ref_it++;
     pos= store_string(pos, *ref_col);
   }
-  DBUG_ASSERT((char *) pos - ptr() - length() == fk_size(fk));
+  DBUG_ASSERT(pos - old_pos == fk_size(fk));
 }
 
 void Foreign_key_io::store_hint(FK_info &rk, uchar *&pos)
@@ -1264,6 +1268,8 @@ bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
 {
   Pos p(image);
   size_t version, fk_count, rk_count;
+  Lex_cstring hint_db, hint_table;
+
   if (read_length(version, p))
   {
     push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
@@ -1289,23 +1295,22 @@ bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
     FK_info *dst= new (&s->mem_root) FK_info();
     if (s->foreign_keys.push_back(dst, &s->mem_root))
     {
-mem_error:
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
-    if (read_string(&dst->foreign_id, &s->mem_root, p))
+    if (read_string(dst->foreign_id, &s->mem_root, p))
       return true;
     /* TODO: zero-valued fields where not needed
     dst->foreign_db= &db;
     dst->foreign_table= &table_name;
     */
-    if (read_string(&dst->referenced_key_name, &s->mem_root, p))
+    if (read_string(dst->referenced_key_name, &s->mem_root, p))
       return true;
-    if (read_string(&dst->referenced_db, &s->mem_root, p))
+    if (read_string(dst->referenced_db, &s->mem_root, p))
       return true;
     if (!dst->referenced_db.length)
       dst->referenced_db.strdup(&s->mem_root, s->db);
-    if (read_string(&dst->referenced_table, &s->mem_root, p))
+    if (read_string(dst->referenced_table, &s->mem_root, p))
       return true;
     size_t update_method, delete_method;
     if (read_length(update_method, p))
@@ -1324,22 +1329,83 @@ mem_error:
       Lex_cstring *field_name= new (&s->mem_root) Lex_cstring;
       if (!field_name ||
           dst->foreign_fields.push_back(field_name, &s->mem_root))
-        goto mem_error;
-      if (read_string(field_name, &s->mem_root, p))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+      if (read_string(*field_name, &s->mem_root, p))
         return true;
       field_name= new (&s->mem_root) Lex_cstring;
       if (!field_name ||
           dst->referenced_fields.push_back(field_name, &s->mem_root))
-        goto mem_error;
-      if (read_string(field_name, &s->mem_root, p))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+      if (read_string(*field_name, &s->mem_root, p))
         return true;
     }
   }
-  if (read_length(fk_count, p))
+  if (read_length(rk_count, p))
   {
     push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
-                        "Foreign_key_io failed to read foreign key count");
+                        "Foreign_key_io failed to read reference hints count");
     return true;
+  }
+  for (uint i= 0; i < rk_count; ++i)
+  {
+    if (read_string(hint_db, &s->mem_root, p))
+      return true;
+    if (read_string(hint_table, &s->mem_root, p))
+      return true;
+    TABLE_LIST tl;
+    tl.init_one_table(&hint_db, &hint_table, &hint_table, TL_IGNORE);
+    Share_acquire fs(thd, tl);
+    if (!fs.share)
+    {
+      if (true /* FIXME: ENOTFOUND */)
+      {
+        push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                            "Reference hint to non-existent table skipped");
+        continue;
+      }
+      return true;
+    }
+    size_t refs_was= s->referenced_keys.elements;
+    for (FK_info &fk: fs.share->foreign_keys)
+    {
+      // FIXME: fs locale comparison (for all places in patch)
+      if (cmp(fk.referenced_db, s->db) || cmp(fk.referenced_table, s->table_name))
+        continue;
+      for (Lex_cstring &fld: fk.referenced_fields)
+      {
+        uint i;
+        for (i= 0; i < s->fields ; i++)
+        {
+          if (0 == cmp(s->field[i]->field_name, fld))
+            break;
+        }
+        if (i == s->fields)
+        {
+          push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                              "Missing field `%s` hint table `%s.%s` refers to",
+                              fld.str, hint_db.str, hint_table.str);
+          return true;
+        }
+      }
+      FK_info *dst= fk.clone(&s->mem_root);
+      if (s->referenced_keys.push_back(dst, &s->mem_root))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+    }
+    if (s->referenced_keys.elements == refs_was)
+    {
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
+                          "Table `%s.%s` has no foreign keys to `%s.%s`",
+                          hint_db.str, hint_table.str, s->db.str, s->table_name.str);
+    }
   }
   return p.pos < p.end; // Error if some data is still left
 }
