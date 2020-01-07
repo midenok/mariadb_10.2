@@ -7624,6 +7624,7 @@ check_if_ok_to_rename:
 
 	if (ha_alter_info->handler_flags
 	    & ALTER_DROP_FOREIGN_KEY) {
+		// FIXME: remove in MDEV-21052
 		DBUG_ASSERT(ha_alter_info->alter_info->drop_list.elements > 0);
 
 		drop_fk = static_cast<dict_foreign_t**>(

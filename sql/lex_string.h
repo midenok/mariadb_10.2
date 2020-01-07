@@ -167,6 +167,10 @@ static inline bool cmp(const LEX_CSTRING a, const LEX_CSTRING b)
 {
   return a.length != b.length || memcmp(a.str, b.str, a.length);
 }
+static inline bool cmp_ident(const LEX_CSTRING a, const LEX_CSTRING b)
+{
+  return lex_string_cmp(system_charset_info, &a, &b);
+}
 
 /*
   Compare if two LEX_CSTRING are equal. Assumption is that

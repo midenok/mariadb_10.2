@@ -44,9 +44,6 @@
 #include <mysql/psi/mysql_table.h>
 #include "sql_sequence.h"
 #include "mem_root_array.h"
-#include <set>
-
-typedef std::set<Lex_cstring, Lex_cstring_lt> Lex_cstring_set;
 
 class Alter_info;
 class Virtual_column_info;
@@ -1051,6 +1048,7 @@ public:
   bool get(THD *thd, Table_ident_set &result, LEX_CSTRING &fk_name, bool foreign);
   /* Get all referenced or foreign tables. */
   bool get(THD *thd, Table_ident_set &result, bool foreign);
+  bool assign(const FK_list &src, MEM_ROOT *mem_root);
 };
 typedef bool (stat_print_fn)(THD *thd, const char *type, size_t type_len,
                              const char *file, size_t file_len,
@@ -4915,7 +4913,7 @@ void ha_commit_checkpoint_request(void *cookie, void (*pre_hook)(void *));
 int ha_create_table(THD *thd, const char *path,
                     const char *db, const char *table_name,
                     HA_CREATE_INFO *create_info, Alter_info *alter_info,
-                    LEX_CUSTRING *frm);
+                    LEX_CUSTRING *frm, bool fk_update_refs= false);
 int ha_delete_table(THD *thd, handlerton *db_type, const char *path,
                     const LEX_CSTRING *db, const LEX_CSTRING *alias, bool generate_warning);
 void ha_prepare_for_backup();

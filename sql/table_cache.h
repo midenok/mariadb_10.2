@@ -126,7 +126,8 @@ public:
   Share_acquire(const Share_acquire &src) :
     share(src.share)
   {}
-  Share_acquire(Share_acquire &&src) :
+  // NB: noexcept is needed to work in STL containers
+  Share_acquire(Share_acquire &&src) noexcept :
     share(src.share)
   {
     src.share= NULL;

@@ -50,6 +50,7 @@
 #include "session_tracker.h"
 #include "backup.h"
 #include "xa.h"
+#include <set>
 #include <vector>
 
 extern "C"
@@ -409,6 +410,35 @@ public:
          ddl_options), constraint_name(*constraint_name_arg)
   {
     foreign= true;
+  }
+  Foreign_key(const FK_info &src, MEM_ROOT *mem_root)
+    : Key(MULTIPLE, &src.foreign_id, default_key_create_info.algorithm, true,
+          DDL_options()),
+    constraint_name(src.referenced_key_name),
+    ref_db(src.referenced_db),
+    ref_table(src.referenced_table),
+    delete_opt(src.delete_method),
+    update_opt(src.update_method)
+  {
+    for (const Lex_cstring &src_f: src.foreign_fields)
+    {
+      Key_part_spec *kp= new (mem_root) Key_part_spec(&src_f, 0);
+      if (!kp || columns.push_back(kp, mem_root))
+        return;
+    }
+
+    for (const Lex_cstring &src_f: src.referenced_fields)
+    {
+      Key_part_spec *kp= new (mem_root) Key_part_spec(&src_f, 0);
+      if (!kp || ref_columns.push_back(kp, mem_root))
+        return;
+    }
+
+    foreign= true; // false means failed initialization
+  }
+  bool failed() const
+  {
+    return !foreign;
   }
   void init(const LEX_CSTRING &_ref_db, const LEX_CSTRING &_ref_table,
             const LEX *lex);
@@ -6422,6 +6452,29 @@ public:
   }
 };
 
+
+class Lex_cstring_set: public std::set<Lex_cstring, Lex_cstring_lt>
+{
+public:
+  bool insert(Lex_cstring elem)
+  {
+    try
+    {
+      std::set<Lex_cstring, Lex_cstring_lt>::insert(elem);
+    }
+    catch (std::bad_alloc())
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    catch (...)
+    {
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
+      return true;
+    }
+    return false;
+  }
+};
 
 
 class Qualified_column_ident: public Table_ident
