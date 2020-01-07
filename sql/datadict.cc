@@ -445,15 +445,14 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   const size_t rest_size= frm_size - FRM_HEADER_SIZE - extra2.read_size;
   ulong forminfo_off= uint4korr(rest_src);
 
-  // add/change some extra2 data here
   foreign_key_io.store(foreign_keys, &referenced_keys);
-
-  Scope_malloc(extra2.foreign_key_info.str, 65400, MY_WME);
-  extra2.foreign_key_info.length= 65400;
 
   const ulong extra2_increase= extra2.store_size() - extra2.read_size;
   frm_size+= extra2_increase;
-  frm_dst= (uchar *) my_malloc(frm_size, MY_WME);
+  Scope_malloc frm_dst_freer(frm_dst, frm_size, MY_WME);
+  if (!frm_dst)
+    return true;
+
   memcpy((void *)frm_dst, (void *)frm_src, FRM_HEADER_SIZE);
 
   if (!(pos= extra2.write(frm_dst, frm_size)))
@@ -468,8 +467,13 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   int2store(frm_dst + 4, extra2.write_size);
   int2store(frm_dst + 6, FRM_HEADER_SIZE + extra2.write_size + 4); // Position to key information
   int4store(frm_dst + 10, frm_size);
-
   memcpy((void *)pos, rest_src + 4, rest_size - 4);
+
+  if (write_frm_image(frm_dst, frm_size))
+  {
+    // FIXME: error
+    return true;
+  }
 
   return false;
 }

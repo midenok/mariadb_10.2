@@ -8438,6 +8438,14 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     goto err;
   }
 
+
+  /*
+    Collect all foreign keys which isn't in drop list.
+  */
+  for (const FK_info &fk: table->s->foreign_keys)
+  {
+  }
+
   /*
     Collect all keys which isn't in drop list. Add only those
     for which some fields exists.
@@ -11646,7 +11654,7 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> shares)
     return true;
   if (!share->referenced_keys.is_empty())
   {
-    // FIXME: error
+    my_error(ER_ROW_IS_REFERENCED, MYF(0));
     return true;
   }
   if (share->foreign_keys.is_empty())
