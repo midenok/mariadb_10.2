@@ -12,7 +12,8 @@ create table t2 (
   a int unique, c int unique);
 
 create table t3 (
-  a int unique, c int unique, d int unique);
+  a int unique, c int unique, d int unique,
+  r int references t3(d));
 
 create table t1 (
 	a int not null references t2,

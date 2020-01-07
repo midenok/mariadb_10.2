@@ -82,7 +82,7 @@ static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
                                   const HA_CREATE_INFO *create_info);
 static bool fk_process_drop(THD *thd, TABLE_LIST *t,
-                            std::vector<Share_acquire> shares);
+                            std::vector<Share_acquire> &shares);
 
 /**
   @brief Helper function for explain_filename
@@ -3805,7 +3805,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           fk_info->assign(*(Foreign_key *) key);
           fk_info->foreign_id= key_name;
           foreign_keys.push_back(fk_info);
-          key_names.insert(key_name);
+          if (key_names.insert(key_name))
+            DBUG_RETURN(TRUE);				// Out of memory
         }
         key=key_iterator++;
       }
@@ -4196,7 +4197,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           foreign_keys.push_back(fk_info);
         }
 	key_info->name= key_name;
-        key_names.insert(key_name);
+        if (key_names.insert(key_name))
+          DBUG_RETURN(TRUE);				// Out of memory
       } //  if (column_nr == 0)
     }
     if (!key_info->name.str || check_column_name(key_info->name.str))
@@ -5104,7 +5106,7 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
     if (!frm_only)
     {
       if (ha_create_table(thd, path, db.str, table_name.str, create_info,
-                          alter_info, frm))
+                          alter_info, frm, true))
       {
         file->ha_create_partitioning_metadata(path, NULL, CHF_DELETE_FLAG);
         deletefrm(path);
@@ -8035,6 +8037,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List<Create_field> new_create_list;
   /* New key definitions are added here */
   List<Key> new_key_list;
+  FK_list new_fk_list;
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
   List_iterator<Create_field> def_it(alter_info->create_list);
   List_iterator<Alter_column> alter_it(alter_info->alter_list);
@@ -8043,11 +8046,12 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List_iterator<Create_field> field_it(new_create_list);
   List<Key_part_spec> key_parts;
   List<Virtual_column_info> new_constraint_list;
+  Lex_cstring_set fk_names;
   uint db_create_options= (table->s->db_create_options
                            & ~(HA_OPTION_PACK_RECORD));
   Item::func_processor_rename column_rename_param;
   uint used_fields, dropped_sys_vers_fields= 0;
-  KEY *key_info=table->key_info;
+  KEY *key_info;
   bool rc= TRUE;
   bool modified_primary_key= FALSE;
   bool vers_system_invisible= false;
@@ -8057,6 +8061,13 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   bool drop_period= false;
   Table_ident_set refs_to_close;
   DBUG_ENTER("mysql_prepare_alter_table");
+
+  if (new_fk_list.copy(&table->s->foreign_keys, thd->mem_root) ||
+      list_copy_and_replace_each_value(new_fk_list, thd->mem_root))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    DBUG_RETURN(1);
+  }
 
   /*
     Merge incompatible changes flag in case of upgrade of a table from an
@@ -8206,21 +8217,31 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     if (def && field->invisible < INVISIBLE_SYSTEM)
     {						// Field is changed
       def->field=field;
-      if (mdl_ref_tables && (alter_info->flags & ALTER_RENAME_COLUMN) &&
-          0 != my_strcasecmp(system_charset_info, def->change.str,
-                             def->field_name.str))
+      if ((alter_info->flags & ALTER_RENAME_COLUMN) &&
+          0 != cmp_ident(def->change, def->field_name))
       {
-        if (!table->s->foreign_keys.is_empty() &&
-            table->s->foreign_keys.get(thd, refs_to_close, def->change, true))
+        for (FK_info &fk: new_fk_list)
         {
-          my_error(ER_OUT_OF_RESOURCES, MYF(0));
-          DBUG_RETURN(1);
+          for (Lex_cstring &fld: fk.foreign_fields)
+          {
+            if (0 == cmp_ident(fld, def->change))
+              fld= def->field_name;
+          }
         }
-        if (!table->s->referenced_keys.is_empty() &&
-            table->s->referenced_keys.get(thd, refs_to_close, def->change, false))
+        if (mdl_ref_tables) // FIXME: rework
         {
-          my_error(ER_OUT_OF_RESOURCES, MYF(0));
-          DBUG_RETURN(1);
+          if (!table->s->foreign_keys.is_empty() &&
+              table->s->foreign_keys.get(thd, refs_to_close, def->change, true))
+          {
+            my_error(ER_OUT_OF_RESOURCES, MYF(0));
+            DBUG_RETURN(1);
+          }
+          if (!table->s->referenced_keys.is_empty() &&
+              table->s->referenced_keys.get(thd, refs_to_close, def->change, false))
+          {
+            my_error(ER_OUT_OF_RESOURCES, MYF(0));
+            DBUG_RETURN(1);
+          }
         }
       }
       /*
@@ -8442,18 +8463,63 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   /*
     Collect all foreign keys which isn't in drop list.
   */
-  for (const FK_info &fk: table->s->foreign_keys)
+  for (const FK_info &fk: new_fk_list)
   {
+    Foreign_key *key;
+    Alter_drop *drop;
+    DBUG_ASSERT(fk.foreign_id.str);
+    if (fk_names.insert(fk.foreign_id))
+      goto err;
+    drop_it.rewind();
+    while ((drop= drop_it++))
+    {
+      if (drop->type == Alter_drop::FOREIGN_KEY &&
+          0 == my_strcasecmp(system_charset_info, fk.foreign_id.str, drop->name))
+        break;
+    }
+    if (drop)
+    {
+      if (!table->s->tmp_table)
+      {
+        key_info= table->key_info;
+        for (uint i= 0 ; i < table->s->keys ; i++, key_info++)
+        {
+          const char *key_name= key_info->name.str;
+          if (0 == my_strcasecmp(system_charset_info, key_name, drop->name))
+          {
+            delete_statistics_for_index(thd, table, key_info, FALSE);
+            break;
+          }
+        }
+      }
+      alter_info->tmp_drop_list.push_back(drop); // FIXME: remove in MDEV-21052
+      drop_it.remove();
+      continue;
+    }
+    key= new Foreign_key(fk, thd->mem_root);
+    if (!key || key->failed())
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      goto err;
+    }
+    if (new_key_list.push_back(key, thd->mem_root))
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      goto err;
+    }
   }
 
   /*
     Collect all keys which isn't in drop list. Add only those
     for which some fields exists.
   */
+  key_info= table->key_info;
   for (uint i=0 ; i < table->s->keys ; i++,key_info++)
   {
     bool long_hash_key= false;
     if (key_info->flags & HA_INVISIBLE_KEY)
+      continue;
+    if (fk_names.find(key_info->name) != fk_names.end())
       continue;
     const char *key_name= key_info->name.str;
     Alter_drop *drop;
@@ -8805,23 +8871,14 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
 
   if (alter_info->drop_list.elements)
   {
-    Alter_drop *drop;
-    drop_it.rewind();
-    while ((drop=drop_it++)) {
-      switch (drop->type) {
-      case Alter_drop::KEY:
-      case Alter_drop::COLUMN:
-      case Alter_drop::CHECK_CONSTRAINT:
-      case Alter_drop::PERIOD:
-        my_error(ER_CANT_DROP_FIELD_OR_KEY, MYF(0), drop->type_name(),
-                 alter_info->drop_list.head()->name);
-        goto err;
-      case Alter_drop::FOREIGN_KEY:
-        // Leave the DROP FOREIGN KEY names in the alter_info->drop_list.
-        break;
-      }
-    }
+    my_error(ER_CANT_DROP_FIELD_OR_KEY, MYF(0),
+             alter_info->drop_list.head()->type_name(),
+             alter_info->drop_list.head()->name);
+    goto err;
   }
+
+  // FIXME: remove in MDEV-21052
+  alter_info->drop_list= alter_info->tmp_drop_list;
 
   if (mdl_ref_tables && !refs_to_close.empty())
   {
@@ -11642,7 +11699,7 @@ wsrep_error_label:
 
 /* Used in DROP TABLE: remove table from referenced_keys of referenced tables,
    prohibit if foreign_keys is not empty. */
-bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> shares)
+bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> &shares)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
                                              t->table_name.str,
@@ -11672,8 +11729,7 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> shares)
   if (tables.empty())
     return false;
   MDL_request_list mdl_list;
-  Table_ident_set::const_iterator ref_it;
-  for (ref_it= tables.begin(); ref_it != tables.end(); ++ref_it)
+  for (const Table_ident &ref: tables)
   {
     MDL_request *req= new (thd->mem_root) MDL_request;
     if (!req)
@@ -11681,7 +11737,7 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> shares)
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
-    req->init(MDL_key::TABLE, ref_it->db.str, ref_it->table.str, MDL_EXCLUSIVE,
+    req->init(MDL_key::TABLE, ref.db.str, ref.table.str, MDL_EXCLUSIVE,
               MDL_STATEMENT);
     mdl_list.push_front(req);
   }
@@ -11690,6 +11746,9 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> shares)
     my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
     return true;
   }
+
+  // NB: we don't want needless reallocs and reconstruction of objects inside
+  shares.reserve(tables.size());
 
   for (const Table_ident &ref_ti: tables)
   {
@@ -11701,9 +11760,18 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> shares)
     shares.push_back(std::move(ref));
   }
 
+  List_iterator<FK_info> ref_it;
   for (Share_acquire &ref: shares)
   {
-    // TODO: check if this ref does not release share
+    ref_it.init(ref.share->referenced_keys);
+    while (FK_info *rk= ref_it++)
+    {
+      if (0 == cmp(rk->foreign_db, share->db) &&
+          0 == cmp(rk->foreign_table, share->table_name))
+      {
+        ref_it.remove();
+      }
+    }
     ref.share->fk_write_shadow_frm();
   }
 

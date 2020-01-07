@@ -5136,7 +5136,7 @@ int handler::calculate_checksum()
 int ha_create_table(THD *thd, const char *path,
                     const char *db, const char *table_name,
                     HA_CREATE_INFO *create_info, Alter_info *alter_info,
-                    LEX_CUSTRING *frm)
+                    LEX_CUSTRING *frm, bool fk_update_refs)
 {
   int error= 1;
   TABLE table;
@@ -5171,7 +5171,8 @@ int ha_create_table(THD *thd, const char *path,
       goto err;
   }
 
-  if (alter_info && share.update_referenced_shares(thd, alter_info, ref_tables))
+  if (fk_update_refs &&
+      share.update_referenced_shares(thd, alter_info, ref_tables))
     goto err;
 
   share.m_psi= PSI_CALL_get_table_share(temp_table, &share);
