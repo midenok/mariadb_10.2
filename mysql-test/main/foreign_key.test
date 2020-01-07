@@ -28,7 +28,11 @@ create table t1 (
 
 create index a on t1 (a);
 create unique index b on t1 (a,b);
-drop tables t2, t3, t1;
+--error ER_ROW_IS_REFERENCED
+drop tables t2;
+--error ER_ROW_IS_REFERENCED
+drop tables t3;
+drop tables t1, t2, t3;
 
 # End of 4.1 tests
 

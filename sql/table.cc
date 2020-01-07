@@ -9243,15 +9243,15 @@ public:
 bool TABLE_SHARE::update_referenced_shares(THD *thd, Alter_info *alter_info,
                                            Table_ident_set &ref_tables)
 {
+  DBUG_ASSERT(alter_info);
   if (foreign_keys.is_empty())
     return false;
 
-  List_iterator_fast<FOREIGN_KEY_INFO> fk_it(foreign_keys);
-  while (FOREIGN_KEY_INFO *fk= fk_it++)
+  for (FOREIGN_KEY_INFO &fk: foreign_keys)
   {
-    if (!cmp(&fk->referenced_db, &db) && !cmp(&fk->referenced_table, &table_name))
+    if (!cmp(&fk.referenced_db, &db) && !cmp(&fk.referenced_table, &table_name))
       continue; // subject table name is already prelocked by caller DDL
-    ref_tables.insert(Table_ident(fk->referenced_db, fk->referenced_table));
+    ref_tables.insert(Table_ident(fk.referenced_db, fk.referenced_table));
   }
 
   if (ref_tables.empty())
@@ -9260,8 +9260,7 @@ bool TABLE_SHARE::update_referenced_shares(THD *thd, Alter_info *alter_info,
   MDL_request_list mdl_list;
   Tmp_mem_root tmp_root;
 
-  Table_ident_set::const_iterator it;
-  for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
+  for (const Table_ident &ref: ref_tables)
   {
     MDL_request *req= new (&tmp_root) MDL_request;
     if (!req)
@@ -9269,97 +9268,68 @@ bool TABLE_SHARE::update_referenced_shares(THD *thd, Alter_info *alter_info,
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
-    req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
+    req->init(MDL_key::TABLE, ref.db.str, ref.table.str, MDL_EXCLUSIVE,
               MDL_STATEMENT);
     mdl_list.push_front(req);
   }
 
-  if (!mdl_list.is_empty())
+  DBUG_ASSERT(!mdl_list.is_empty());
+
+  if (thd->mdl_context.acquire_locks(&mdl_list,
+                                  thd->variables.lock_wait_timeout))
   {
-    if (thd->mdl_context.acquire_locks(&mdl_list,
-                                    thd->variables.lock_wait_timeout))
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
+                        "Could not lock referenced tables");
+    return true;
+  }
+
+  // update referenced_keys of ref_tables
+  for (const Table_ident &ref: ref_tables)
+  {
+    const char *ref_db= ref.db.str;
+    const char *ref_table= ref.table.str;
+    TABLE_LIST tl;
+    tl.init_one_table(&ref.db, &ref.table, NULL, TL_IGNORE);
+    Share_acquire share_acquire(thd, tl);
+    TABLE_SHARE *ref_share= share_acquire.share;
+    if (!ref_share)
     {
-      push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
-                          "Could not lock referenced tables");
-      return true;
+      if (thd->variables.check_foreign())
+        return true;
+      continue;
     }
 
-    List_iterator_fast<Key> key_it(alter_info->key_list);
-    for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
+    Mutex_lock share_mutex(&ref_share->LOCK_share);
+    FK_info *dst= NULL;
+
+    for (Key& key: alter_info->key_list)
     {
-      const char *ref_db= it->db.str;
-      const char *ref_table= it->table.str;
-      TABLE_LIST tl;
-      tl.init_one_table(&it->db, &it->table, NULL, TL_IGNORE);
-      Share_acquire share_acquire(thd, tl);
-      TABLE_SHARE *ref_share= share_acquire.share;
-      if (!ref_share)
-      {
-        if (thd->variables.check_foreign())
-          return true;
+      if (!key.foreign)
         continue;
+      Foreign_key *src= static_cast<Foreign_key*>(&key);
+      LEX_CSTRING &src_db= src->ref_db.str ? src->ref_db : db;
+      // Find keys referencing the locked share
+      if (strcmp(src_db.str, ref_db) ||
+          strcmp(src->ref_table.str, ref_table))
+        continue;
+
+      dst= new (&ref_share->mem_root) FK_info;
+      if (ref_share->referenced_keys.push_back(dst, &ref_share->mem_root))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
       }
 
-      Mutex_lock share_mutex(&ref_share->LOCK_share);
-      key_it.rewind();
-      while (Key* key= key_it++)
+      if (dst->assign(*src, db, table_name, &ref_share->mem_root))
       {
-        if (!key->foreign)
-          continue;
-        Foreign_key *src= static_cast<Foreign_key*>(key);
-        LEX_CSTRING &src_db= src->ref_db.str ? src->ref_db : db;
-        // Find keys referencing the locked share
-        if (strcmp(src_db.str, ref_db) ||
-            strcmp(src->ref_table.str, ref_table))
-          continue;
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+    } // for (alter_info->key_list)
 
-        FOREIGN_KEY_INFO *dst= (FOREIGN_KEY_INFO *) alloc_root(
-          &ref_share->mem_root, sizeof(FOREIGN_KEY_INFO));
-        if (unlikely(ref_share->referenced_keys.push_back(dst, &ref_share->mem_root)))
-        {
-          my_error(ER_OUT_OF_RESOURCES, MYF(0));
-          return true;
-        }
-        dst->foreign_id.strdup(&ref_share->mem_root, src->constraint_name);
-        dst->foreign_db.strdup(&ref_share->mem_root, db);
-        dst->foreign_table.strdup(&ref_share->mem_root, table_name);
-        dst->referenced_key_name.strdup(&ref_share->mem_root, src->name);
-        dst->referenced_db.strdup(&ref_share->mem_root, src_db);
-        dst->referenced_table.strdup(&ref_share->mem_root, src->ref_table);
-        dst->update_method= src->update_opt;
-        dst->delete_method= src->delete_opt;
-        dst->foreign_fields.empty();
-        dst->referenced_fields.empty();
-
-        Key_part_spec* col;
-        List_iterator_fast<Key_part_spec> col_it(src->columns);
-        while ((col= col_it++))
-        {
-          Lex_cstring *field_name= new (&ref_share->mem_root) Lex_cstring;
-          if (unlikely(!field_name ||
-                      field_name->strdup(&ref_share->mem_root, col->field_name) ||
-                      dst->foreign_fields.push_back(field_name, &ref_share->mem_root)))
-          {
-            my_error(ER_OUT_OF_RESOURCES, MYF(0));
-            return true;
-          }
-        }
-
-        col_it.init(src->ref_columns);
-        while ((col= col_it++))
-        {
-          Lex_cstring *field_name= new (&ref_share->mem_root) Lex_cstring;
-          if (unlikely(!field_name ||
-                      field_name->strdup(&ref_share->mem_root, col->field_name) ||
-                      dst->referenced_fields.push_back(field_name, &ref_share->mem_root)))
-          {
-            my_error(ER_OUT_OF_RESOURCES, MYF(0));
-            return true;
-          }
-        } // while ((col= col_it++))
-      } // while (Key* key= key_it++)
-    } // while (MDL_request *req= it++)
-  } // if (!mdl_list.is_empty())
+    if (ref_share->fk_write_shadow_frm())
+      return true;
+  } // for (ref_tables)
 
   return false;
 }
@@ -9460,27 +9430,77 @@ bool release_ref_shares(THD *thd, TABLE_LIST *t)
   return false;
 }
 
-bool FK_info::assign(Foreign_key& fk)
+bool FK_info::assign(Foreign_key &src)
 {
-  DBUG_ASSERT(fk.foreign);
-  DBUG_ASSERT(fk.type == Key::MULTIPLE);
+  DBUG_ASSERT(src.foreign);
+  DBUG_ASSERT(src.type == Key::MULTIPLE);
 
-  foreign_id= fk.name;
-  referenced_db= fk.ref_db;
-  referenced_table= fk.ref_table;
-  update_method= fk.update_opt;
-  delete_method= fk.delete_opt;
-  referenced_key_name= fk.constraint_name;
+  foreign_id= src.name;
+  referenced_db= src.ref_db;
+  referenced_table= src.ref_table;
+  update_method= src.update_opt;
+  delete_method= src.delete_opt;
+  referenced_key_name= src.constraint_name;
 
-  List_iterator_fast<Key_part_spec> ref_it(fk.ref_columns);
+  List_iterator_fast<Key_part_spec> ref_it(src.ref_columns);
 
-  for (const Key_part_spec &kp: fk.columns)
+  for (const Key_part_spec &kp: src.columns)
   {
     if (foreign_fields.push_back((Lex_cstring *)(&kp.field_name)))
       return true;
     Key_part_spec *kp2= ref_it++;
-    if (referenced_fields.push_back((Lex_cstring *)(&kp.field_name)))
+    if (referenced_fields.push_back((Lex_cstring *)(&kp2->field_name)))
       return true;
+  }
+  return false;
+}
+
+bool FK_info::assign(const Foreign_key &src, const Lex_cstring &db,
+                     const Lex_cstring &table, MEM_ROOT *mem_root)
+{
+  if (foreign_id.strdup(mem_root, src.name))
+    return true;
+  if (foreign_db.strdup(mem_root, db))
+    return true;
+  if (foreign_table.strdup(mem_root, table))
+    return true;
+  if (referenced_key_name.strdup(mem_root, src.constraint_name))
+    return true;
+  if (src.ref_db.str)
+  {
+    if (referenced_db.strdup(mem_root, src.ref_db))
+      return true;
+  }
+  else
+  {
+    if (referenced_db.strdup(mem_root, db))
+      return true;
+  }
+  if (referenced_table.strdup(mem_root, src.ref_table))
+    return true;
+  update_method= src.update_opt;
+  delete_method= src.delete_opt;
+
+  for (const Key_part_spec &col: src.columns)
+  {
+    Lex_cstring *field_name= new (mem_root) Lex_cstring;
+    if (unlikely(!field_name ||
+                field_name->strdup(mem_root, col.field_name) ||
+                foreign_fields.push_back(field_name, mem_root)))
+    {
+      return true;
+    }
+  }
+
+  for (const Key_part_spec &col: src.ref_columns)
+  {
+    Lex_cstring *field_name= new (mem_root) Lex_cstring;
+    if (unlikely(!field_name ||
+                field_name->strdup(mem_root, col.field_name) ||
+                referenced_fields.push_back(field_name, mem_root)))
+    {
+      return true;
+    }
   }
   return false;
 }

@@ -1716,6 +1716,8 @@ public:
     delete_method(FK_OPTION_UNDEF)
   {}
   bool assign(Foreign_key &fk);
+  bool assign(const Foreign_key& src, const Lex_cstring& db,
+              const Lex_cstring& table, MEM_ROOT* mem_root);
   FK_info * clone(MEM_ROOT *mem_root) const;
 };
 
