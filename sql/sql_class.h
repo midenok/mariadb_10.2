@@ -6321,6 +6321,95 @@ typedef struct st_sort_buffer {
   SORT_FIELD *sortorder;
 } SORT_BUFFER;
 
+
+/* Convert STL exceptions to my_error() */
+
+template <class Base>
+class exception_wrapper : public Base
+{
+public:
+  /*
+     NB: any methods from different classes can be added here,
+     as templates are instantiated on demand.
+     Both lvalue and rvalue types are covered by perfect forwarding.
+  */
+  template <class T>
+  bool insert(T&& value) noexcept
+  {
+    try
+    {
+      Base::insert(std::forward<T>(value));
+    }
+    catch (std::bad_alloc())
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    catch (...)
+    {
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
+      return true;
+    }
+    return false;
+  }
+  template <class T>
+  bool push_back(T&& value) noexcept
+  {
+    try
+    {
+      Base::push_back(std::forward<T>(value));
+    }
+    catch (std::bad_alloc())
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    catch (...)
+    {
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
+      return true;
+    }
+    return false;
+  }
+};
+
+
+template <class T, class Allocator = std::allocator<T> >
+class vector :
+  public exception_wrapper<std::vector<T, Allocator> >
+{
+public:
+  bool push_back(const T& value)
+  {
+    return exception_wrapper<std::vector<T, Allocator> >::
+      push_back(value);
+  }
+  bool push_back(T&& value)
+  {
+    return exception_wrapper<std::vector<T, Allocator> >::
+      push_back(value);
+  }
+};
+
+template <class Key, class Compare = std::less<Key>,
+  class Allocator = std::allocator<Key> >
+class set :
+  public exception_wrapper<std::set<Key, Compare, Allocator> >
+{
+public:
+  bool insert(const Key& value)
+  {
+    return exception_wrapper<std::set<Key, Compare, Allocator> >::
+      insert(value);
+  }
+  bool insert(Key&& value)
+  {
+    return exception_wrapper<std::set<Key, Compare, Allocator> >::
+      insert(value);
+  }
+};
+
+
 /* Structure for db & table in sql_yacc */
 
 class Table_ident :public Sql_alloc
@@ -6398,83 +6487,24 @@ struct Table_ident_lt
   }
 };
 
-class Table_ident_set : public std::set<Table_ident, Table_ident_lt>
+
+class Table_ident_set: public set<Table_ident, Table_ident_lt>
 {
 public:
-  bool insert(Table_ident elem)
+  template <class T>
+  bool insert(T&& value)
   {
-    try
-    {
-      std::set<Table_ident, Table_ident_lt>::insert(elem);
-    }
-    catch (std::bad_alloc())
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    }
-    catch (...)
-    {
-      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
-      return true;
-    }
-    return false;
+    return set<Table_ident, Table_ident_lt>::
+      insert(std::forward<T>(value));
   }
   bool insert(Lex_cstring &db, Lex_cstring &table)
   {
-    return insert(Table_ident(db, table));
+    return set<Table_ident, Table_ident_lt>::
+      insert(Table_ident(db, table));
   }
 };
-
-class Table_ident_vector : public std::vector<Table_ident>
-{
-public:
-  bool push_back(Table_ident elem)
-  {
-    try
-    {
-      std::vector<Table_ident>::push_back(elem);
-    }
-    catch (std::bad_alloc())
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    }
-    catch (...)
-    {
-      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_vector");
-      return true;
-    }
-    return false;
-  }
-  bool push_back(Lex_cstring &db, Lex_cstring &table)
-  {
-    return push_back(Table_ident(db, table));
-  }
-};
-
-
-class Lex_cstring_set: public std::set<Lex_cstring, Lex_cstring_lt>
-{
-public:
-  bool insert(Lex_cstring elem)
-  {
-    try
-    {
-      std::set<Lex_cstring, Lex_cstring_lt>::insert(elem);
-    }
-    catch (std::bad_alloc())
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    }
-    catch (...)
-    {
-      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
-      return true;
-    }
-    return false;
-  }
-};
+typedef vector<Table_ident> Table_ident_vector;
+typedef set<Lex_cstring, Lex_cstring_lt> Lex_cstring_set;
 
 
 class Qualified_column_ident: public Table_ident

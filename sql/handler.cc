@@ -7717,9 +7717,9 @@ bool FK_list::get(THD *thd, Table_ident_set &result, LEX_CSTRING &fk_name, bool 
       if (!my_strcasecmp(system_charset_info, name->str, fk_name.str))
       {
         if (foreign)
-          result.insert(Table_ident(fk->referenced_db, fk->referenced_table));
+          result.insert(fk->referenced_db, fk->referenced_table);
         else
-          result.insert(Table_ident(fk->foreign_db, fk->foreign_table));
+          result.insert(fk->foreign_db, fk->foreign_table);
         break;
       }
     }
@@ -7733,9 +7733,9 @@ bool FK_list::get(THD *thd, Table_ident_set &result, bool foreign)
   while (FK_info *fk= it++)
   {
     if (foreign)
-      result.insert(Table_ident(fk->foreign_db, fk->foreign_table));
+      result.insert(fk->foreign_db, fk->foreign_table);
     else
-      result.insert(Table_ident(fk->referenced_db, fk->referenced_table));
+      result.insert(fk->referenced_db, fk->referenced_table);
   }
   return false;
 }

@@ -81,8 +81,7 @@ static uint blob_length_by_type(enum_field_types type);
 static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
                                   const HA_CREATE_INFO *create_info);
-static bool fk_process_drop(THD *thd, TABLE_LIST *t,
-                            std::vector<Share_acquire> &shares);
+bool fk_process_drop(THD* thd, TABLE_LIST* t, vector<Share_acquire>& shares);
 
 /**
   @brief Helper function for explain_filename
@@ -2451,7 +2450,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     {
       char *end;
       int frm_delete_error= 0;
-      std::vector<Share_acquire> shares;
+      vector<Share_acquire> shares;
       if (fk_process_drop(thd, table, shares))
       {
         error= 1;
@@ -11699,7 +11698,7 @@ wsrep_error_label:
 
 /* Used in DROP TABLE: remove table from referenced_keys of referenced tables,
    prohibit if foreign_keys is not empty. */
-bool fk_process_drop(THD *thd, TABLE_LIST *t, std::vector<Share_acquire> &shares)
+bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
                                              t->table_name.str,
