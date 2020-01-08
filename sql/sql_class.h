@@ -6503,7 +6503,6 @@ public:
       insert(Table_ident(db, table));
   }
 };
-typedef vector<Table_ident> Table_ident_vector;
 typedef set<Lex_cstring, Lex_cstring_lt> Lex_cstring_set;
 
 

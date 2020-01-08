@@ -271,6 +271,7 @@ bool sync_ddl_log();
 void release_ddl_log();
 void execute_ddl_log_recovery();
 bool execute_ddl_log_entry(THD *thd, uint first_entry);
+bool fk_process_rename(THD *thd, TABLE_LIST *t);
 
 template<typename T> class List;
 void promote_first_timestamp_column(List<Create_field> *column_definitions);

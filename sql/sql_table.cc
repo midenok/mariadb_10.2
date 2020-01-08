@@ -81,7 +81,9 @@ static uint blob_length_by_type(enum_field_types type);
 static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
                                   const HA_CREATE_INFO *create_info);
+static
 bool fk_process_drop(THD* thd, TABLE_LIST* t, vector<Share_acquire>& shares);
+
 
 /**
   @brief Helper function for explain_filename
@@ -11696,8 +11698,126 @@ wsrep_error_label:
 }
 
 
+// Used in CREATE TABLE
+bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
+                                    Table_ident_set &ref_tables)
+{
+  DBUG_ASSERT(alter_info);
+  if (foreign_keys.is_empty())
+    return false;
+
+  for (FOREIGN_KEY_INFO &fk: foreign_keys)
+  {
+    if (!cmp(&fk.referenced_db, &db) && !cmp(&fk.referenced_table, &table_name))
+      continue; // subject table name is already prelocked by caller DDL
+    ref_tables.insert(Table_ident(fk.referenced_db, fk.referenced_table));
+  }
+
+  if (ref_tables.empty())
+    return false;
+
+  MDL_request_list mdl_list;
+  Tmp_mem_root tmp_root;
+
+  for (const Table_ident &ref: ref_tables)
+  {
+    MDL_request *req= new (&tmp_root) MDL_request;
+    if (!req)
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    req->init(MDL_key::TABLE, ref.db.str, ref.table.str, MDL_EXCLUSIVE,
+              MDL_STATEMENT);
+    mdl_list.push_front(req);
+  }
+
+  DBUG_ASSERT(!mdl_list.is_empty());
+
+  if (thd->mdl_context.acquire_locks(&mdl_list,
+                                  thd->variables.lock_wait_timeout))
+  {
+    push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
+                        "Could not lock referenced tables");
+    return true;
+  }
+
+  // update referenced_keys of ref_tables
+  for (const Table_ident &ref: ref_tables)
+  {
+    const char *ref_db= ref.db.str;
+    const char *ref_table= ref.table.str;
+    TABLE_LIST tl;
+    tl.init_one_table(&ref.db, &ref.table, NULL, TL_IGNORE);
+    Share_acquire share_acquire(thd, tl);
+    TABLE_SHARE *ref_share= share_acquire.share;
+    if (!ref_share)
+    {
+      if (thd->variables.check_foreign())
+        return true;
+      continue;
+    }
+
+    Mutex_lock share_mutex(&ref_share->LOCK_share);
+    FK_info *dst= NULL;
+
+    for (Key& key: alter_info->key_list)
+    {
+      if (!key.foreign)
+        continue;
+      Foreign_key *src= static_cast<Foreign_key*>(&key);
+      LEX_CSTRING &src_db= src->ref_db.str ? src->ref_db : db;
+      // Find keys referencing the locked share
+      if (strcmp(src_db.str, ref_db) ||
+          strcmp(src->ref_table.str, ref_table))
+        continue;
+
+      dst= new (&ref_share->mem_root) FK_info;
+      if (ref_share->referenced_keys.push_back(dst, &ref_share->mem_root))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+
+      if (dst->assign(*src, db, table_name, &ref_share->mem_root))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+    } // for (alter_info->key_list)
+
+    if (ref_share->fk_write_shadow_frm())
+      return true;
+  } // for (ref_tables)
+
+  return false;
+}
+
+
+void TABLE_SHARE::fk_revert_create(THD *thd, Table_ident_set &ref_tables)
+{
+  Table_ident_set::const_iterator it;
+  for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
+  {
+    Share_lock share_lock(thd, it->db.str, it->table.str);
+    TDC_element *el= share_lock.element;
+    if (!el || el->share->referenced_keys.is_empty())
+      continue;
+    List_iterator<FOREIGN_KEY_INFO> fk_it(el->share->referenced_keys);
+    while (FOREIGN_KEY_INFO* fk= fk_it++)
+    {
+      if (!cmp(&fk->foreign_db, &db) && !cmp(&fk->foreign_table, &table_name))
+      {
+        fk_it.remove();
+      }
+    }
+  }
+}
+
+
 /* Used in DROP TABLE: remove table from referenced_keys of referenced tables,
    prohibit if foreign_keys is not empty. */
+static
 bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
@@ -11774,5 +11894,80 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
     ref.share->fk_write_shadow_frm();
   }
 
+  return false;
+}
+
+
+// Used in RENAME TABLE
+bool fk_process_rename(THD *thd, TABLE_LIST *t)
+{
+  // FIXME:
+  return false;
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
+                                             t->table_name.str,
+                                             MDL_INTENTION_EXCLUSIVE));
+  DBUG_ASSERT(!t->view);
+  Share_acquire s(thd, *t);
+  TABLE_SHARE *share= s.share;
+  if (!share)
+  {
+    // FIXME: remove this
+    if (thd->is_error() && thd->get_stmt_da()->sql_errno() == ER_WRONG_OBJECT)
+    {
+      return false;
+    }
+    return true;
+  }
+
+  Table_ident_set tables;
+
+  if (!share->foreign_keys.is_empty() && share->foreign_keys.get(thd, tables, false))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    return true;
+  }
+
+  if (!share->referenced_keys.is_empty() && share->referenced_keys.get(thd, tables, true))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    return true;
+  }
+
+  /*
+     For RENAME rename table in foreign_keys of this and referenced tables,
+     rename table in referenced_keys of this and foreign tables.
+     In case of failed operation everything must reverted back.
+  */
+
+  if (!tables.empty())
+  {
+    MDL_request_list mdl_list;
+    std::set<Table_ident>::const_iterator it;
+    for (it= tables.begin(); it != tables.end(); ++it)
+    {
+      if (!cmp(it->db, t->db) && !cmp(it->table, t->table_name))
+        continue; // subject table name is already locked by caller DDL
+      MDL_request *req= new (thd->mem_root) MDL_request;
+      if (!req)
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+      req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
+                MDL_TRANSACTION);
+      mdl_list.push_front(req);
+    }
+    if (!mdl_list.is_empty() &&
+        thd->mdl_context.acquire_locks(&mdl_list,
+                                       thd->variables.lock_wait_timeout))
+    {
+      push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
+                          "Could not lock foreign or referenced tables");
+    }
+
+    MDL_request_list::Iterator req_it(mdl_list);
+    while (MDL_request *req= req_it++)
+      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name());
+  }
   return false;
 }
