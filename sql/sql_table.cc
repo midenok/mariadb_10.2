@@ -84,6 +84,7 @@ static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
 static
 bool fk_process_drop(THD* thd, TABLE_LIST* t, vector<Share_acquire>& shares);
 
+class Share_acquire_vec: public vector<Share_acquire> {};
 
 /**
   @brief Helper function for explain_filename
@@ -8032,13 +8033,15 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
                           HA_CREATE_INFO *create_info,
                           Alter_info *alter_info,
                           Alter_table_ctx *alter_ctx,
-                          MDL_request_list *mdl_ref_tables)
+                          Share_acquire_vec *fk_shares)
 {
   /* New column definitions are added here */
   List<Create_field> new_create_list;
   /* New key definitions are added here */
   List<Key> new_key_list;
   FK_list new_fk_list;
+  Lex_cstring_set fk_names;
+  Table_ident_set fk_tables_to_lock;
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
   List_iterator<Create_field> def_it(alter_info->create_list);
   List_iterator<Alter_column> alter_it(alter_info->alter_list);
@@ -8047,7 +8050,6 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List_iterator<Create_field> field_it(new_create_list);
   List<Key_part_spec> key_parts;
   List<Virtual_column_info> new_constraint_list;
-  Lex_cstring_set fk_names;
   uint db_create_options= (table->s->db_create_options
                            & ~(HA_OPTION_PACK_RECORD));
   Item::func_processor_rename column_rename_param;
@@ -8060,7 +8062,6 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   Field **f_ptr,*field;
   MY_BITMAP *dropped_fields= NULL; // if it's NULL - no dropped fields
   bool drop_period= false;
-  Table_ident_set refs_to_close;
   DBUG_ENTER("mysql_prepare_alter_table");
 
   if (new_fk_list.copy(&table->s->foreign_keys, thd->mem_root) ||
@@ -8226,22 +8227,35 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           for (Lex_cstring &fld: fk.foreign_fields)
           {
             if (0 == cmp_ident(fld, def->change))
+            {
               fld= def->field_name;
+              /* Update foreign_keys of referenced tables.
+                 No FRM write required. */
+              if (fk_renamed_cols.insert({
+                    Table_ident(fk.foreign_db, fk.foreign_table),
+                    fld, def->field_name}))
+                DBUG_RETURN(1);
+              if (fk_tables_to_lock.insert(fk.foreign_db, fk.foreign_table))
+                DBUG_RETURN(1);
+            }
           }
         }
-        if (mdl_ref_tables) // FIXME: rework
+        for (FK_info &rk: table->s->referenced_keys)
         {
-          if (!table->s->foreign_keys.is_empty() &&
-              table->s->foreign_keys.get(thd, refs_to_close, def->change, true))
+          for (Lex_cstring &fld: rk.referenced_fields)
           {
-            my_error(ER_OUT_OF_RESOURCES, MYF(0));
-            DBUG_RETURN(1);
-          }
-          if (!table->s->referenced_keys.is_empty() &&
-              table->s->referenced_keys.get(thd, refs_to_close, def->change, false))
-          {
-            my_error(ER_OUT_OF_RESOURCES, MYF(0));
-            DBUG_RETURN(1);
+            if (0 == cmp_ident(fld, def->change))
+            {
+              fld= def->field_name;
+              /* Update referenced_keys of foreign tables.
+                 FRM write is required in this case. */
+              if (rk_renamed_cols.insert({
+                    Table_ident(rk.referenced_db, rk.referenced_table),
+                    fld, def->field_name}))
+                DBUG_RETURN(1);
+              if (fk_tables_to_lock.insert(rk.referenced_db, rk.referenced_table))
+                DBUG_RETURN(1);
+            }
           }
         }
       }
@@ -8719,13 +8733,14 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           goto err;
         // self-references have no ref_table and ref_db
         DBUG_ASSERT(fk->ref_table.str || fk->ref_db.str);
-        if (mdl_ref_tables && fk->ref_table.str)
+        if (fk->ref_table.str)
         {
           Table_ident t(fk->ref_db.str ? fk->ref_db : table->s->db,
                         fk->ref_table);
-          if (lower_case_table_names)
-            t.lowercase(thd->mem_root);
-          refs_to_close.insert(t);
+          if (fk_added_new.push_back({t, fk}))
+            goto err;
+          if (fk_tables_to_lock.insert(t))
+            goto err;
         }
       }
       new_key_list.push_back(key, thd->mem_root);
@@ -8881,12 +8896,12 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   // FIXME: remove in MDEV-21052
   alter_info->drop_list= alter_info->tmp_drop_list;
 
-  if (mdl_ref_tables && !refs_to_close.empty())
+  if (fk_shares && !fk_tables_to_lock.empty())
   {
+    MDL_request_list mdl_ref_tables;
     /* These referenced tables need to be updated, lock them now
        and close after this alter command succeeds. */
-    std::set<Table_ident>::const_iterator it;
-    for (it= refs_to_close.begin(); it != refs_to_close.end(); ++it)
+    for (const Table_ident &t: fk_tables_to_lock)
     {
       MDL_request *req= new (thd->mem_root) MDL_request;
       if (!req)
@@ -8894,11 +8909,11 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         my_error(ER_OUT_OF_RESOURCES, MYF(0));
         goto err;
       }
-      req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
-                MDL_TRANSACTION);
-      mdl_ref_tables->push_front(req);
+      req->init(MDL_key::TABLE, t.db.str, t.table.str, MDL_INTENTION_EXCLUSIVE,
+                MDL_STATEMENT);
+      mdl_ref_tables.push_front(req);
     }
-    if (thd->mdl_context.acquire_locks(mdl_ref_tables,
+    if (thd->mdl_context.acquire_locks(&mdl_ref_tables,
                                        thd->variables.lock_wait_timeout))
     {
       push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
@@ -9974,9 +9989,9 @@ do_continue:;
   }
 #endif
 
-  MDL_request_list mdl_ref_tables;
+  Share_acquire_vec fk_shares;
   if (mysql_prepare_alter_table(thd, table, create_info, alter_info,
-                                &alter_ctx, &mdl_ref_tables))
+                                &alter_ctx, &fk_shares))
   {
     DBUG_RETURN(true);
   }
@@ -10475,6 +10490,15 @@ do_continue:;
   thd->drop_temporary_table(new_table, NULL, false);
   new_table= NULL;
 
+/* FIXME:
+  {
+    MDL_request_list::Iterator it(mdl_ref_tables);
+    while (MDL_request *req= it++)
+      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name());
+  }
+*/
+
+
   DEBUG_SYNC(thd, "alter_table_before_rename_result_table");
 
   /*
@@ -10615,11 +10639,6 @@ do_continue:;
   }
 
 end_inplace:
-  {
-    MDL_request_list::Iterator it(mdl_ref_tables);
-    while (MDL_request *req= it++)
-      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name());
-  }
   if (thd->locked_tables_list.reopen_tables(thd, false))
     goto err_with_mdl_after_alter;
 
