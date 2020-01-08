@@ -20,6 +20,7 @@
 class Alter_drop;
 class Alter_column;
 class Key;
+class Table_ident;
 
 /**
   Data describing the table being created by CREATE TABLE or
@@ -312,6 +313,31 @@ public:
   const char   *fk_error_id;
   /** Name of table for the above error. */
   const char   *fk_error_table;
+  struct FK_rename_col
+  {
+    Table_ident ref;
+    Lex_cstring col_name;
+    Lex_cstring new_name;
+    // NB: this operator is required for std::set
+    bool operator< (const FK_rename_col &rhs) const
+    {
+      int ref_cmp= ref.cmp(rhs.ref);
+      if (ref_cmp < 0)
+        return -1;
+      if (ref_cmp > 0)
+        return 1;
+      return col_name.cmp(rhs.col_name);
+    }
+  };
+  struct FK_add_new
+  {
+    Table_ident ref;
+    Foreign_key *fk;
+  };
+  set<FK_rename_col> fk_renamed_cols;
+  set<FK_rename_col> rk_renamed_cols;
+  vector<FK_add_new> fk_added_new;
+
 
 private:
   char new_filename[FN_REFLEN + 1];

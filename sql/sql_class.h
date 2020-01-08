@@ -273,6 +273,105 @@ typedef struct st_copy_info {
 } COPY_INFO;
 
 
+
+/* Convert STL exceptions to my_error() */
+
+template <class Base>
+class exception_wrapper : public Base
+{
+public:
+  /*
+     NB: any methods from different classes can be added here,
+     as templates are instantiated on demand.
+     Both lvalue and rvalue types are covered by perfect forwarding.
+  */
+  template <class T>
+  bool insert(T&& value) noexcept
+  {
+    try
+    {
+      Base::insert(std::forward<T>(value));
+    }
+    catch (std::bad_alloc())
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    catch (...)
+    {
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
+      return true;
+    }
+    return false;
+  }
+  template <class T>
+  bool push_back(T&& value) noexcept
+  {
+    try
+    {
+      Base::push_back(std::forward<T>(value));
+    }
+    catch (std::bad_alloc())
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    catch (...)
+    {
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
+      return true;
+    }
+    return false;
+  }
+};
+
+
+template <class T, class Allocator = std::allocator<T> >
+class vector :
+  public exception_wrapper<std::vector<T, Allocator> >
+{
+public:
+  bool push_back(const T& value)
+  {
+    return exception_wrapper<std::vector<T, Allocator> >::
+      push_back(value);
+  }
+  bool push_back(T&& value)
+  {
+    return exception_wrapper<std::vector<T, Allocator> >::
+      push_back(value);
+  }
+};
+
+template <class Key, class Compare = std::less<Key>,
+  class Allocator = std::allocator<Key> >
+class set :
+  public exception_wrapper<std::set<Key, Compare, Allocator> >
+{
+public:
+  bool insert(const Key& value)
+  {
+    return exception_wrapper<std::set<Key, Compare, Allocator> >::
+      insert(value);
+  }
+  bool insert(Key&& value)
+  {
+    return exception_wrapper<std::set<Key, Compare, Allocator> >::
+      insert(value);
+  }
+};
+
+
+/* NB: Table_ident is parser-oriented class that
+class Table_name
+{
+public:
+  Lex_cstring db;
+  Lex_cstring table;
+};
+*/
+
+
 class Key_part_spec :public Sql_alloc {
 public:
   LEX_CSTRING field_name;
@@ -6322,94 +6421,6 @@ typedef struct st_sort_buffer {
 } SORT_BUFFER;
 
 
-/* Convert STL exceptions to my_error() */
-
-template <class Base>
-class exception_wrapper : public Base
-{
-public:
-  /*
-     NB: any methods from different classes can be added here,
-     as templates are instantiated on demand.
-     Both lvalue and rvalue types are covered by perfect forwarding.
-  */
-  template <class T>
-  bool insert(T&& value) noexcept
-  {
-    try
-    {
-      Base::insert(std::forward<T>(value));
-    }
-    catch (std::bad_alloc())
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    }
-    catch (...)
-    {
-      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
-      return true;
-    }
-    return false;
-  }
-  template <class T>
-  bool push_back(T&& value) noexcept
-  {
-    try
-    {
-      Base::push_back(std::forward<T>(value));
-    }
-    catch (std::bad_alloc())
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
-    }
-    catch (...)
-    {
-      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
-      return true;
-    }
-    return false;
-  }
-};
-
-
-template <class T, class Allocator = std::allocator<T> >
-class vector :
-  public exception_wrapper<std::vector<T, Allocator> >
-{
-public:
-  bool push_back(const T& value)
-  {
-    return exception_wrapper<std::vector<T, Allocator> >::
-      push_back(value);
-  }
-  bool push_back(T&& value)
-  {
-    return exception_wrapper<std::vector<T, Allocator> >::
-      push_back(value);
-  }
-};
-
-template <class Key, class Compare = std::less<Key>,
-  class Allocator = std::allocator<Key> >
-class set :
-  public exception_wrapper<std::set<Key, Compare, Allocator> >
-{
-public:
-  bool insert(const Key& value)
-  {
-    return exception_wrapper<std::set<Key, Compare, Allocator> >::
-      insert(value);
-  }
-  bool insert(Key&& value)
-  {
-    return exception_wrapper<std::set<Key, Compare, Allocator> >::
-      insert(value);
-  }
-};
-
-
 /* Structure for db & table in sql_yacc */
 
 class Table_ident :public Sql_alloc
@@ -6477,13 +6488,22 @@ public:
     }
     return false;
   }
+  int cmp(const Table_ident &rhs) const
+  {
+    int db_cmp= db.cmp(rhs.db);
+    if (db_cmp < 0)
+      return -1;
+    if (db_cmp > 0)
+      return 1;
+    return table.cmp(rhs.table);
+  }
 };
 
 struct Table_ident_lt
 {
   bool operator() (const Table_ident &lhs, const Table_ident &rhs) const
   {
-    return lhs.db.cmp(rhs.db) < 0 || lhs.table.cmp(rhs.table) < 0;
+    return lhs.cmp(rhs) < 0;
   }
 };
 

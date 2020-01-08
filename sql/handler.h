@@ -1044,9 +1044,7 @@ class Table_ident_set;
 class FK_list : public List<FK_info>
 {
 public:
-  /* Get all referenced tables for foreign key fk_name. */
-  bool get(THD *thd, Table_ident_set &result, LEX_CSTRING &fk_name, bool foreign);
-  /* Get all referenced or foreign tables. */
+    /* Get all referenced or foreign tables. */
   bool get(THD *thd, Table_ident_set &result, bool foreign);
   bool assign(const FK_list &src, MEM_ROOT *mem_root);
 };

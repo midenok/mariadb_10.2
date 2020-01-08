@@ -7703,31 +7703,6 @@ static void require_trx_id_error(const char *field, const char *table)
            table);
 }
 
-bool FK_list::get(THD *thd, Table_ident_set &result, LEX_CSTRING &fk_name, bool foreign)
-{
-  List_iterator_fast<FK_info> it(*this);
-  List_iterator_fast<Lex_cstring> col_it;
-  while (FK_info *fk= it++)
-  {
-    if (foreign)
-      col_it.init(fk->foreign_fields);
-    else
-      col_it.init(fk->referenced_fields);
-    while (Lex_cstring* name= col_it++)
-    {
-      if (!my_strcasecmp(system_charset_info, name->str, fk_name.str))
-      {
-        if (foreign)
-          result.insert(fk->referenced_db, fk->referenced_table);
-        else
-          result.insert(fk->foreign_db, fk->foreign_table);
-        break;
-      }
-    }
-  }
-  return false;
-}
-
 bool FK_list::get(THD *thd, Table_ident_set &result, bool foreign)
 {
   List_iterator_fast<FK_info> it(*this);
