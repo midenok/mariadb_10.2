@@ -7941,6 +7941,8 @@ ER_WARN_HISTORY_ROW_START_TIME
         eng "Table `%s.%s` history row start '%s' is later than row end '%s'"
 ER_PART_STARTS_BEYOND_INTERVAL
         eng "%`s: STARTS is later than query time, first history partition may exceed INTERVAL value"
+ER_BLACKBOX_ERROR
+	eng "%s Black Box failed: %s"
 ER_GALERA_REPLICATION_NOT_SUPPORTED
         eng "DDL-statement is forbidden as table storage engine does not support Galera replication"
 ER_LOAD_INFILE_CAPABILITY_DISABLED
