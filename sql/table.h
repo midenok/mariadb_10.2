@@ -644,9 +644,9 @@ struct TABLE_SHARE
   KEY  *key_info;			/* data of keys in database */
   FK_list foreign_keys;
   FK_list referenced_keys;
-  bool update_referenced_shares(THD *thd, Alter_info *alter_info,
+  bool fk_process_create(THD *thd, Alter_info *alter_info,
                                 Table_ident_set &ref_tables);
-  void revert_referenced_shares(THD *thd, Table_ident_set &ref_tables);
+  void fk_revert_create(THD *thd, Table_ident_set &ref_tables);
   bool check_foreign_keys(THD *thd);
   bool referenced_by_foreign_key() const
   {
@@ -1112,8 +1112,6 @@ public:
   bool is_truncated_value() { return truncated_value; }
 };
 
-// FIXME: move to sql_table
-bool release_ref_shares(THD *thd, TABLE_LIST *t);
 
 /* Information for one open table */
 enum index_hint_type

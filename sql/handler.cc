@@ -5171,8 +5171,7 @@ int ha_create_table(THD *thd, const char *path,
       goto err;
   }
 
-  if (fk_update_refs &&
-      share.update_referenced_shares(thd, alter_info, ref_tables))
+  if (fk_update_refs && share.fk_process_create(thd, alter_info, ref_tables))
     goto err;
 
   share.m_psi= PSI_CALL_get_table_share(temp_table, &share);
@@ -5180,7 +5179,8 @@ int ha_create_table(THD *thd, const char *path,
   if (open_table_from_share(thd, &share, &empty_clex_str, 0, READ_ALL, 0,
                             &table, true))
   {
-    share.revert_referenced_shares(thd, ref_tables);
+    if (fk_update_refs)
+      share.fk_revert_create(thd, ref_tables);
     goto err;
   }
 
@@ -5192,7 +5192,8 @@ int ha_create_table(THD *thd, const char *path,
 
   if (unlikely(error))
   {
-    share.revert_referenced_shares(thd, ref_tables);
+    if (fk_update_refs)
+      share.fk_revert_create(thd, ref_tables);
     if (!thd->is_error())
       my_error(ER_CANT_CREATE_TABLE, MYF(0), db, table_name, error);
     table.file->print_error(error, MYF(ME_WARNING));
