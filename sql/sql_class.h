@@ -299,7 +299,7 @@ public:
     }
     catch (...)
     {
-      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception");
       return true;
     }
     return false;
@@ -318,7 +318,7 @@ public:
     }
     catch (...)
     {
-      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception in Table_ident_set");
+      my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception");
       return true;
     }
     return false;
@@ -362,14 +362,61 @@ public:
 };
 
 
-/* NB: Table_ident is parser-oriented class that
+/*
+   NB: Table_ident is parser-oriented class that contains SELECT_LEX_UNIT and
+   depends on sql_lex.h, so it can't be declared in this place and is not declared
+   in many headers. Table_ident should be derived from Table_name.
+   Classes containing (db, table_name) pairs such as TABLE_LIST, TABLE_SHARE, etc.
+   should be reworked to contain Table_name instead.
+*/
 class Table_name
 {
 public:
   Lex_cstring db;
-  Lex_cstring table;
+  Lex_cstring name;
+  Table_name() {}
+  Table_name(Lex_cstring _db, Lex_cstring _name)
+    : db(_db), name(_name) {}
+  int cmp(const Table_name &rhs) const
+  {
+    int db_cmp= db.cmp(rhs.db);
+    if (db_cmp < 0)
+      return -1;
+    if (db_cmp > 0)
+      return 1;
+    return name.cmp(rhs.name);
+  }
 };
+
+/*
+   NB: needed for std::set when we have recommendation to not have operator
+   overloading in important classes.
 */
+struct Table_name_lt
+{
+  bool operator() (const Table_name &lhs, const Table_name &rhs) const
+  {
+    return lhs.cmp(rhs) < 0;
+  }
+};
+
+class Table_name_set: public set<Table_name, Table_name_lt>
+{
+public:
+  template <class T>
+  bool insert(T&& value)
+  {
+    return set<Table_name, Table_name_lt>::
+      insert(std::forward<T>(value));
+  }
+  bool insert(Lex_cstring &db, Lex_cstring &table)
+  {
+    return set<Table_name, Table_name_lt>::
+      insert({db, table});
+  }
+};
+typedef set<Lex_cstring, Lex_cstring_lt> Lex_cstring_set;
+
 
 
 class Key_part_spec :public Sql_alloc {
@@ -6498,32 +6545,6 @@ public:
     return table.cmp(rhs.table);
   }
 };
-
-struct Table_ident_lt
-{
-  bool operator() (const Table_ident &lhs, const Table_ident &rhs) const
-  {
-    return lhs.cmp(rhs) < 0;
-  }
-};
-
-
-class Table_ident_set: public set<Table_ident, Table_ident_lt>
-{
-public:
-  template <class T>
-  bool insert(T&& value)
-  {
-    return set<Table_ident, Table_ident_lt>::
-      insert(std::forward<T>(value));
-  }
-  bool insert(Lex_cstring &db, Lex_cstring &table)
-  {
-    return set<Table_ident, Table_ident_lt>::
-      insert(Table_ident(db, table));
-  }
-};
-typedef set<Lex_cstring, Lex_cstring_lt> Lex_cstring_set;
 
 
 class Qualified_column_ident: public Table_ident

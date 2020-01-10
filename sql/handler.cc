@@ -5143,7 +5143,7 @@ int ha_create_table(THD *thd, const char *path,
   char name_buff[FN_REFLEN];
   const char *name;
   TABLE_SHARE share;
-  Table_ident_set ref_tables;
+  Table_name_set ref_tables;
   bool temp_table __attribute__((unused)) =
     create_info->options & (HA_LEX_CREATE_TMP_TABLE | HA_CREATE_TMP_ALTER);
   DBUG_ENTER("ha_create_table");
@@ -7703,7 +7703,7 @@ static void require_trx_id_error(const char *field, const char *table)
            table);
 }
 
-bool FK_list::get(THD *thd, Table_ident_set &result, bool foreign)
+bool FK_list::get(THD *thd, Table_name_set &result, bool foreign)
 {
   List_iterator_fast<FK_info> it(*this);
   while (FK_info *fk= it++)

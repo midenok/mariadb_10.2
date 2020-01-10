@@ -645,8 +645,8 @@ struct TABLE_SHARE
   FK_list foreign_keys;
   FK_list referenced_keys;
   bool fk_process_create(THD *thd, Alter_info *alter_info,
-                                Table_ident_set &ref_tables);
-  void fk_revert_create(THD *thd, Table_ident_set &ref_tables);
+                                Table_name_set &ref_tables);
+  void fk_revert_create(THD *thd, Table_name_set &ref_tables);
   bool check_foreign_keys(THD *thd);
   bool referenced_by_foreign_key() const
   {
