@@ -126,7 +126,7 @@ public:
   Share_acquire(const Share_acquire &src) :
     share(src.share)
   {}
-  // NB: noexcept is needed to work in STL containers
+  // NB: noexcept is required for STL containers
   Share_acquire(Share_acquire &&src) noexcept :
     share(src.share)
   {
@@ -136,6 +136,15 @@ public:
   {
     if (share)
       tdc_release_share(share);
+  }
+  // NB: "operator<" is required for std::set
+  bool operator< (const Share_acquire &rhs) const
+  {
+    if (share < rhs.share)
+      return -1;
+    if (share < rhs.share)
+      return 1;
+    return 0;
   }
 };
 

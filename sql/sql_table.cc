@@ -9572,6 +9572,7 @@ bool mysql_alter_table(THD *thd, const LEX_CSTRING *new_db,
                        uint order_num, ORDER *order, bool ignore)
 {
   bool engine_changed;
+  set<Share_acquire> fk_update_frms;
   DBUG_ENTER("mysql_alter_table");
 
   /*
@@ -10563,8 +10564,17 @@ do_continue:;
           my_error(ER_OUT_OF_RESOURCES, MYF(0));
           goto err_new_table_cleanup;
         }
+        fk_update_frms.insert(std::move(fk_table));
+        DBUG_ASSERT(!fk_table.share);
       }
     }
+  }
+
+  /* Update EXTRA2_FOREIGN_KEY_INFO section in FRM files. */
+  for (const Share_acquire& sa: fk_update_frms)
+  {
+    if (sa.share->fk_write_shadow_frm())
+      goto err_new_table_cleanup;
   }
 
   close_all_tables_for_name(thd, table->s,
@@ -10761,6 +10771,7 @@ err_with_mdl_after_alter:
   write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
 err_with_mdl:
+  fk_update_frms.clear();
   /*
     An error happened while we were holding exclusive name metadata lock
     on table being altered. To be safe under LOCK TABLES we should
@@ -11952,6 +11963,7 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
     if (!ref_sa.share)
       return true;
     shares.push_back(std::move(ref_sa));
+    DBUG_ASSERT(!ref_sa.share);
   }
 
   List_iterator<FK_info> ref_it;

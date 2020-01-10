@@ -1300,10 +1300,8 @@ bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
     }
     if (read_string(dst->foreign_id, &s->mem_root, p))
       return true;
-    /* TODO: zero-valued fields where not needed
-    dst->foreign_db= &db;
-    dst->foreign_table= &table_name;
-    */
+    dst->foreign_db= s->db;
+    dst->foreign_table= s->table_name;
     if (read_string(dst->referenced_key_name, &s->mem_root, p))
       return true;
     if (read_string(dst->referenced_db, &s->mem_root, p))

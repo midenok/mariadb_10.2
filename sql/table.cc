@@ -9305,6 +9305,10 @@ FK_info * FK_info::clone(MEM_ROOT *mem_root) const
 
   if (dst->foreign_id.strdup(mem_root, foreign_id))
     return NULL;
+  if (dst->foreign_db.strdup(mem_root, foreign_db))
+    return NULL;
+  if (dst->foreign_table.strdup(mem_root, foreign_table))
+    return NULL;
   if (dst->referenced_db.strdup(mem_root, referenced_db))
     return NULL;
   if (dst->referenced_table.strdup(mem_root, referenced_table))
