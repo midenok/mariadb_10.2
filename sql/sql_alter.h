@@ -18,6 +18,7 @@
 #define SQL_ALTER_TABLE_H
 
 #include "sql_class.h"
+#include "table_cache.h"
 
 class Alter_drop;
 class Alter_column;
@@ -338,7 +339,8 @@ public:
   set<FK_rename_col> fk_renamed_cols;
   set<FK_rename_col> rk_renamed_cols;
   vector<FK_add_new> fk_added_new;
-
+  MDL_request_list fk_mdl_reqs;
+  vector<Share_acquire> fk_shares;
 
 private:
   char new_filename[FN_REFLEN + 1];

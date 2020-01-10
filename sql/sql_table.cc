@@ -84,8 +84,6 @@ static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
 static
 bool fk_process_drop(THD* thd, TABLE_LIST* t, vector<Share_acquire>& shares);
 
-class Share_acquire_vec: public vector<Share_acquire> {};
-
 /**
   @brief Helper function for explain_filename
   @param thd          Thread handle
@@ -8032,8 +8030,7 @@ bool
 mysql_prepare_alter_table(THD *thd, TABLE *table,
                           HA_CREATE_INFO *create_info,
                           Alter_info *alter_info,
-                          Alter_table_ctx *alter_ctx,
-                          Share_acquire_vec *fk_shares)
+                          Alter_table_ctx *alter_ctx)
 {
   /* New column definitions are added here */
   List<Create_field> new_create_list;
@@ -8896,11 +8893,8 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   // FIXME: remove in MDEV-21052
   alter_info->drop_list= alter_info->tmp_drop_list;
 
-  if (fk_shares && !fk_tables_to_lock.empty())
+  if (!fk_tables_to_lock.empty())
   {
-    MDL_request_list mdl_ref_tables;
-    /* These referenced tables need to be updated, lock them now
-       and close after this alter command succeeds. */
     for (const Table_name &t: fk_tables_to_lock)
     {
       MDL_request *req= new (thd->mem_root) MDL_request;
@@ -8911,9 +8905,9 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       }
       req->init(MDL_key::TABLE, t.db.str, t.name.str, MDL_INTENTION_EXCLUSIVE,
                 MDL_STATEMENT);
-      mdl_ref_tables.push_front(req);
+      alter_ctx->fk_mdl_reqs.push_front(req);
     }
-    if (thd->mdl_context.acquire_locks(&mdl_ref_tables,
+    if (thd->mdl_context.acquire_locks(&alter_ctx->fk_mdl_reqs,
                                        thd->variables.lock_wait_timeout))
     {
       push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
@@ -9989,9 +9983,8 @@ do_continue:;
   }
 #endif
 
-  Share_acquire_vec fk_shares;
   if (mysql_prepare_alter_table(thd, table, create_info, alter_info,
-                                &alter_ctx, &fk_shares))
+                                &alter_ctx))
   {
     DBUG_RETURN(true);
   }
