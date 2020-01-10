@@ -317,13 +317,13 @@ public:
   const char   *fk_error_table;
   struct FK_rename_col
   {
-    Table_name ref;
+    Table_name table;
     Lex_cstring col_name;
     Lex_cstring new_name;
-    // NB: this operator is required for std::set
+    // NB: "operator<" is required for std::set
     bool operator< (const FK_rename_col &rhs) const
     {
-      int ref_cmp= ref.cmp(rhs.ref);
+      int ref_cmp= table.cmp(rhs.table);
       if (ref_cmp < 0)
         return -1;
       if (ref_cmp > 0)
