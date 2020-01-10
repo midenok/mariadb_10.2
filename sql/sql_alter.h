@@ -17,10 +17,11 @@
 #ifndef SQL_ALTER_TABLE_H
 #define SQL_ALTER_TABLE_H
 
+#include "sql_class.h"
+
 class Alter_drop;
 class Alter_column;
 class Key;
-class Table_ident;
 
 /**
   Data describing the table being created by CREATE TABLE or
@@ -315,7 +316,7 @@ public:
   const char   *fk_error_table;
   struct FK_rename_col
   {
-    Table_ident ref;
+    Table_name ref;
     Lex_cstring col_name;
     Lex_cstring new_name;
     // NB: this operator is required for std::set
@@ -331,7 +332,7 @@ public:
   };
   struct FK_add_new
   {
-    Table_ident ref;
+    Table_name ref;
     Foreign_key *fk;
   };
   set<FK_rename_col> fk_renamed_cols;

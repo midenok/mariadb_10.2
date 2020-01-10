@@ -8041,7 +8041,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List<Key> new_key_list;
   FK_list new_fk_list;
   Lex_cstring_set fk_names;
-  Table_ident_set fk_tables_to_lock;
+  Table_name_set fk_tables_to_lock;
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
   List_iterator<Create_field> def_it(alter_info->create_list);
   List_iterator<Alter_column> alter_it(alter_info->alter_list);
@@ -8231,8 +8231,8 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
               fld= def->field_name;
               /* Update foreign_keys of referenced tables.
                  No FRM write required. */
-              if (fk_renamed_cols.insert({
-                    Table_ident(fk.foreign_db, fk.foreign_table),
+              if (alter_ctx->fk_renamed_cols.insert({
+                    Table_name(fk.foreign_db, fk.foreign_table),
                     fld, def->field_name}))
                 DBUG_RETURN(1);
               if (fk_tables_to_lock.insert(fk.foreign_db, fk.foreign_table))
@@ -8249,8 +8249,8 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
               fld= def->field_name;
               /* Update referenced_keys of foreign tables.
                  FRM write is required in this case. */
-              if (rk_renamed_cols.insert({
-                    Table_ident(rk.referenced_db, rk.referenced_table),
+              if (alter_ctx->rk_renamed_cols.insert({
+                    Table_name(rk.referenced_db, rk.referenced_table),
                     fld, def->field_name}))
                 DBUG_RETURN(1);
               if (fk_tables_to_lock.insert(rk.referenced_db, rk.referenced_table))
@@ -8735,9 +8735,9 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         DBUG_ASSERT(fk->ref_table.str || fk->ref_db.str);
         if (fk->ref_table.str)
         {
-          Table_ident t(fk->ref_db.str ? fk->ref_db : table->s->db,
-                        fk->ref_table);
-          if (fk_added_new.push_back({t, fk}))
+          Table_name t(fk->ref_db.str ? fk->ref_db : table->s->db,
+                       fk->ref_table);
+          if (alter_ctx->fk_added_new.push_back({t, fk}))
             goto err;
           if (fk_tables_to_lock.insert(t))
             goto err;
@@ -8901,7 +8901,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     MDL_request_list mdl_ref_tables;
     /* These referenced tables need to be updated, lock them now
        and close after this alter command succeeds. */
-    for (const Table_ident &t: fk_tables_to_lock)
+    for (const Table_name &t: fk_tables_to_lock)
     {
       MDL_request *req= new (thd->mem_root) MDL_request;
       if (!req)
@@ -8909,7 +8909,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         my_error(ER_OUT_OF_RESOURCES, MYF(0));
         goto err;
       }
-      req->init(MDL_key::TABLE, t.db.str, t.table.str, MDL_INTENTION_EXCLUSIVE,
+      req->init(MDL_key::TABLE, t.db.str, t.name.str, MDL_INTENTION_EXCLUSIVE,
                 MDL_STATEMENT);
       mdl_ref_tables.push_front(req);
     }
@@ -11719,17 +11719,17 @@ wsrep_error_label:
 
 // Used in CREATE TABLE
 bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
-                                    Table_ident_set &ref_tables)
+                                    Table_name_set &ref_tables)
 {
   DBUG_ASSERT(alter_info);
   if (foreign_keys.is_empty())
     return false;
 
-  for (FOREIGN_KEY_INFO &fk: foreign_keys)
+  for (FK_info &fk: foreign_keys)
   {
     if (!cmp(&fk.referenced_db, &db) && !cmp(&fk.referenced_table, &table_name))
       continue; // subject table name is already prelocked by caller DDL
-    ref_tables.insert(Table_ident(fk.referenced_db, fk.referenced_table));
+    ref_tables.insert(fk.referenced_db, fk.referenced_table);
   }
 
   if (ref_tables.empty())
@@ -11738,7 +11738,7 @@ bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
   MDL_request_list mdl_list;
   Tmp_mem_root tmp_root;
 
-  for (const Table_ident &ref: ref_tables)
+  for (const Table_name &ref: ref_tables)
   {
     MDL_request *req= new (&tmp_root) MDL_request;
     if (!req)
@@ -11746,7 +11746,7 @@ bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
-    req->init(MDL_key::TABLE, ref.db.str, ref.table.str, MDL_EXCLUSIVE,
+    req->init(MDL_key::TABLE, ref.db.str, ref.name.str, MDL_EXCLUSIVE,
               MDL_STATEMENT);
     mdl_list.push_front(req);
   }
@@ -11762,12 +11762,12 @@ bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
   }
 
   // update referenced_keys of ref_tables
-  for (const Table_ident &ref: ref_tables)
+  for (const Table_name &ref: ref_tables)
   {
     const char *ref_db= ref.db.str;
-    const char *ref_table= ref.table.str;
+    const char *ref_table= ref.name.str;
     TABLE_LIST tl;
-    tl.init_one_table(&ref.db, &ref.table, NULL, TL_IGNORE);
+    tl.init_one_table(&ref.db, &ref.name, NULL, TL_IGNORE);
     Share_acquire share_acquire(thd, tl);
     TABLE_SHARE *ref_share= share_acquire.share;
     if (!ref_share)
@@ -11813,12 +11813,11 @@ bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
 }
 
 
-void TABLE_SHARE::fk_revert_create(THD *thd, Table_ident_set &ref_tables)
+void TABLE_SHARE::fk_revert_create(THD *thd, Table_name_set &ref_tables)
 {
-  Table_ident_set::const_iterator it;
-  for (it= ref_tables.begin(); it != ref_tables.end(); ++it)
+  for (const Table_name &t: ref_tables)
   {
-    Share_lock share_lock(thd, it->db.str, it->table.str);
+    Share_lock share_lock(thd, t.db.str, t.name.str);
     TDC_element *el= share_lock.element;
     if (!el || el->share->referenced_keys.is_empty())
       continue;
@@ -11854,7 +11853,7 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
   }
   if (share->foreign_keys.is_empty())
     return false;
-  Table_ident_set tables;
+  Table_name_set tables;
   List_iterator_fast<FK_info> it(share->foreign_keys);
   while (FK_info *fk= it++)
   {
@@ -11867,7 +11866,7 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
   if (tables.empty())
     return false;
   MDL_request_list mdl_list;
-  for (const Table_ident &ref: tables)
+  for (const Table_name &ref: tables)
   {
     MDL_request *req= new (thd->mem_root) MDL_request;
     if (!req)
@@ -11875,7 +11874,7 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
-    req->init(MDL_key::TABLE, ref.db.str, ref.table.str, MDL_EXCLUSIVE,
+    req->init(MDL_key::TABLE, ref.db.str, ref.name.str, MDL_EXCLUSIVE,
               MDL_STATEMENT);
     mdl_list.push_front(req);
   }
@@ -11888,14 +11887,14 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
   // NB: we don't want needless reallocs and reconstruction of objects inside
   shares.reserve(tables.size());
 
-  for (const Table_ident &ref_ti: tables)
+  for (const Table_name &ref: tables)
   {
     TABLE_LIST tl;
-    tl.init_one_table(&ref_ti.db, &ref_ti.table, &ref_ti.table, TL_IGNORE);
-    Share_acquire ref(thd, tl);
-    if (!ref.share)
+    tl.init_one_table(&ref.db, &ref.name, &ref.name, TL_IGNORE);
+    Share_acquire ref_sa(thd, tl);
+    if (!ref_sa.share)
       return true;
-    shares.push_back(std::move(ref));
+    shares.push_back(std::move(ref_sa));
   }
 
   List_iterator<FK_info> ref_it;
@@ -11918,15 +11917,15 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
 
 
 // Used in RENAME TABLE
-bool fk_process_rename(THD *thd, TABLE_LIST *t)
+bool fk_process_rename(THD *thd, TABLE_LIST *table)
 {
   // FIXME:
   return false;
-  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
-                                             t->table_name.str,
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, table->db.str,
+                                             table->table_name.str,
                                              MDL_INTENTION_EXCLUSIVE));
-  DBUG_ASSERT(!t->view);
-  Share_acquire s(thd, *t);
+  DBUG_ASSERT(!table->view);
+  Share_acquire s(thd, *table);
   TABLE_SHARE *share= s.share;
   if (!share)
   {
@@ -11938,7 +11937,7 @@ bool fk_process_rename(THD *thd, TABLE_LIST *t)
     return true;
   }
 
-  Table_ident_set tables;
+  Table_name_set tables;
 
   if (!share->foreign_keys.is_empty() && share->foreign_keys.get(thd, tables, false))
   {
@@ -11961,10 +11960,9 @@ bool fk_process_rename(THD *thd, TABLE_LIST *t)
   if (!tables.empty())
   {
     MDL_request_list mdl_list;
-    std::set<Table_ident>::const_iterator it;
-    for (it= tables.begin(); it != tables.end(); ++it)
+    for (const Table_name &t: tables)
     {
-      if (!cmp(it->db, t->db) && !cmp(it->table, t->table_name))
+      if (!cmp(t.db, table->db) && !cmp(t.name, table->table_name))
         continue; // subject table name is already locked by caller DDL
       MDL_request *req= new (thd->mem_root) MDL_request;
       if (!req)
@@ -11972,7 +11970,7 @@ bool fk_process_rename(THD *thd, TABLE_LIST *t)
         my_error(ER_OUT_OF_RESOURCES, MYF(0));
         return true;
       }
-      req->init(MDL_key::TABLE, it->db.str, it->table.str, MDL_EXCLUSIVE,
+      req->init(MDL_key::TABLE, t.db.str, t.name.str, MDL_EXCLUSIVE,
                 MDL_TRANSACTION);
       mdl_list.push_front(req);
     }

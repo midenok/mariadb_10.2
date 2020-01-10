@@ -1040,12 +1040,12 @@ struct TABLE_SHARE;
 struct HA_CREATE_INFO;
 struct st_foreign_key_info;
 class FK_info;
-class Table_ident_set;
+class Table_name_set;
 class FK_list : public List<FK_info>
 {
 public:
     /* Get all referenced or foreign tables. */
-  bool get(THD *thd, Table_ident_set &result, bool foreign);
+  bool get(THD *thd, Table_name_set &result, bool foreign);
   bool assign(const FK_list &src, MEM_ROOT *mem_root);
 };
 typedef bool (stat_print_fn)(THD *thd, const char *type, size_t type_len,
