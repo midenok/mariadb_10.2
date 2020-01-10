@@ -339,7 +339,7 @@ public:
   bool push_back(T&& value)
   {
     return exception_wrapper<std::vector<T, Allocator> >::
-      push_back(value);
+      push_back(std::forward<T>(value));
   }
 };
 
@@ -357,7 +357,7 @@ public:
   bool insert(Key&& value)
   {
     return exception_wrapper<std::set<Key, Compare, Allocator> >::
-      insert(value);
+      insert(std::forward<Key>(value));
   }
 };
 
