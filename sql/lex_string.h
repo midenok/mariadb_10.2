@@ -106,6 +106,10 @@ class Lex_cstring : public LEX_CSTRING, public Sql_alloc
       return 1;
     return strcmp(str, rhs);
   }
+  Lex_cstring print() const
+  {
+    return str ? *this : "(NULL)";
+  }
 };
 
 struct Lex_cstring_lt
