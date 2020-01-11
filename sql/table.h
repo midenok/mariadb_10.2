@@ -1717,6 +1717,7 @@ public:
   bool assign(const Foreign_key& src, const Lex_cstring& db,
               const Lex_cstring& table, MEM_ROOT* mem_root);
   FK_info * clone(MEM_ROOT *mem_root) const;
+  void print(String &out);
 };
 
 typedef class FK_info FOREIGN_KEY_INFO;

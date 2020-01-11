@@ -342,6 +342,9 @@ public:
   MDL_request_list fk_mdl_reqs;
   vector<Share_acquire> fk_shares;
 
+  bool fk_update_shares_and_frms(THD *thd);
+  void fk_release_locks(THD *thd);
+
 private:
   char new_filename[FN_REFLEN + 1];
   char new_alias_buff[NAME_LEN + 1];

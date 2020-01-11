@@ -9362,6 +9362,54 @@ FK_info * FK_info::clone(MEM_ROOT *mem_root) const
   return dst;
 }
 
+
+void FK_info::print(String& out)
+{
+  out.append("foreign_id: ");
+  out.append(foreign_id.print());
+  out.append("; foreign_db: ");
+  out.append(foreign_db.print());
+  out.append("; foreign_table: ");
+  out.append(foreign_table.print());
+  out.append("; referenced_db: ");
+  out.append(referenced_db.print());
+  out.append("; referenced_table: ");
+  out.append(referenced_table.print());
+  out.append("; referenced_key_name: ");
+  out.append(referenced_key_name.print());
+  out.append("; update_method: ");
+  out.append(fk_option_name(update_method));
+  out.append("; delete_method: ");
+  out.append(fk_option_name(delete_method));
+  out.append("; foreign_fields: ");
+  uint i= 0;
+  for (const Lex_cstring &fld: foreign_fields)
+  {
+    if (i)
+      out.append("; ");
+    out.append("[");
+    out.append(i++);
+    out.append("]: ");
+    out.append(fld.print());
+  }
+  if (!i)
+    out.append("(empty)");
+  out.append("; referenced_fields: ");
+  i= 0;
+  for (const Lex_cstring &fld: referenced_fields)
+  {
+    if (i)
+      out.append("; ");
+    out.append("[");
+    out.append(i++);
+    out.append("]: ");
+    out.append(fld.print());
+  }
+  if (!i)
+    out.append("(empty)");
+}
+
+
 bool TABLE_SHARE::check_foreign_keys(THD *thd)
 {
   List_iterator_fast<FOREIGN_KEY_INFO> ref_it;

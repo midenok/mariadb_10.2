@@ -7788,6 +7788,9 @@ static bool mysql_inplace_alter_table(THD *thd,
   if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME))
     goto rollback;
 
+  if (alter_ctx->fk_update_shares_and_frms(thd))
+    goto rollback;
+
   /* Set MDL_BACKUP_DDL */
   if (backup_reset_alter_copy_lock(thd))
     goto rollback;
@@ -7938,6 +7941,7 @@ static bool mysql_inplace_alter_table(THD *thd,
       thd->locked_tables_list.unlink_all_closed_tables(thd, NULL, 0);
     /* QQ; do something about metadata locks ? */
   }
+  alter_ctx->fk_release_locks(thd);
   DBUG_RETURN(true);
 }
 
@@ -8226,12 +8230,13 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
             if (0 == cmp_ident(fld, def->change))
             {
               fld= def->field_name;
-
+              /* Update foreign_fields of referenced tables.
+                 No FRM write required. */
               if (alter_ctx->fk_renamed_cols.insert({
-                    Table_name(fk.foreign_db, fk.foreign_table),
-                    fld, def->field_name}))
+                    Table_name(fk.referenced_db, fk.referenced_table),
+                    def->change, def->field_name}))
                 DBUG_RETURN(1);
-              if (fk_tables_to_lock.insert(fk.foreign_db, fk.foreign_table))
+              if (fk_tables_to_lock.insert(fk.referenced_db, fk.referenced_table))
                 DBUG_RETURN(1);
             }
           }
@@ -8243,13 +8248,13 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
             if (0 == cmp_ident(fld, def->change))
             {
               fld= def->field_name;
-              /* Update referenced_keys of foreign tables.
+              /* Update referenced_fields of foreign tables.
                  FRM write is required in this case. */
               if (alter_ctx->rk_renamed_cols.insert({
-                    Table_name(rk.referenced_db, rk.referenced_table),
-                    fld, def->field_name}))
+                    Table_name(rk.foreign_db, rk.foreign_table),
+                    def->change, def->field_name}))
                 DBUG_RETURN(1);
-              if (fk_tables_to_lock.insert(rk.referenced_db, rk.referenced_table))
+              if (fk_tables_to_lock.insert(rk.foreign_db, rk.foreign_table))
                 DBUG_RETURN(1);
             }
           }
@@ -9572,7 +9577,6 @@ bool mysql_alter_table(THD *thd, const LEX_CSTRING *new_db,
                        uint order_num, ORDER *order, bool ignore)
 {
   bool engine_changed;
-  set<Share_acquire> fk_update_frms;
   DBUG_ENTER("mysql_alter_table");
 
   /*
@@ -10305,6 +10309,7 @@ do_continue:;
         cleanup_table_after_inplace_alter(&altered_table);
         DBUG_RETURN(true);
       }
+
       cleanup_table_after_inplace_alter_keep_files(&altered_table);
 
       goto end_inplace;
@@ -10507,75 +10512,9 @@ do_continue:;
   if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME))
     goto err_new_table_cleanup;
 
-  {
-    MDL_request_list::Iterator it(alter_ctx.fk_mdl_reqs);
-    while (MDL_request *req= it++)
-    {
-      if (thd->mdl_context.upgrade_shared_lock(req->ticket, MDL_EXCLUSIVE,
-                                               thd->variables.lock_wait_timeout))
-        // NB: now after lock upgrade it jumps to "err_with_mdl" as well
-        goto err_new_table_cleanup;
-    }
-  }
-
-  /* Update foreign_keys of referenced tables. No FRM write required. */
-  for (const Alter_table_ctx::FK_rename_col &ren_col: alter_ctx.fk_renamed_cols)
-  {
-    TABLE_LIST tl;
-    tl.init_one_table(&ren_col.table.db, &ren_col.table.name, NULL, TL_IGNORE);
-    Share_acquire ref_table(thd, tl);
-    if (!ref_table.share)
-      goto err_new_table_cleanup;
-    for (FK_info &fk: ref_table.share->foreign_keys)
-    {
-      if (0 != ren_col.table.cmp({ref_table.share->db, ref_table.share->table_name}))
-        continue;
-      for (Lex_cstring &col: fk.foreign_fields)
-      {
-        if (0 != col.cmp(ren_col.col_name))
-          continue;
-        if (col.strdup(&ref_table.share->mem_root, ren_col.new_name))
-        {
-          my_error(ER_OUT_OF_RESOURCES, MYF(0));
-          goto err_new_table_cleanup;
-        }
-      }
-    }
-  }
-
-  /* Update referenced_keys of foreign tables. FRM write is required. */
-  for (const Alter_table_ctx::FK_rename_col &ren_col: alter_ctx.rk_renamed_cols)
-  {
-    TABLE_LIST tl;
-    tl.init_one_table(&ren_col.table.db, &ren_col.table.name, NULL, TL_IGNORE);
-    Share_acquire fk_table(thd, tl);
-    if (!fk_table.share)
-      goto err_new_table_cleanup;
-    for (FK_info &rk: fk_table.share->referenced_keys)
-    {
-      if (0 != ren_col.table.cmp({fk_table.share->db, fk_table.share->table_name}))
-        continue;
-      for (Lex_cstring &col: rk.referenced_fields)
-      {
-        if (0 != col.cmp(ren_col.col_name))
-          continue;
-        if (col.strdup(&fk_table.share->mem_root, ren_col.new_name))
-        {
-          my_error(ER_OUT_OF_RESOURCES, MYF(0));
-          goto err_new_table_cleanup;
-        }
-        fk_update_frms.insert(std::move(fk_table));
-        DBUG_ASSERT(!fk_table.share);
-      }
-    }
-  }
-
-  /* Update EXTRA2_FOREIGN_KEY_INFO section in FRM files. */
-  for (const Share_acquire& sa: fk_update_frms)
-  {
-    if (sa.share->fk_write_shadow_frm())
-      goto err_new_table_cleanup;
-  }
+  if (alter_ctx.fk_update_shares_and_frms(thd))
+    // NB: now after lock upgrade it jumps to "err_with_mdl" as well
+    goto err_new_table_cleanup;
 
   close_all_tables_for_name(thd, table->s,
                             alter_ctx.is_table_renamed() ?
@@ -10771,7 +10710,6 @@ err_with_mdl_after_alter:
   write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
 err_with_mdl:
-  fk_update_frms.clear();
   /*
     An error happened while we were holding exclusive name metadata lock
     on table being altered. To be safe under LOCK TABLES we should
@@ -10782,14 +10720,7 @@ err_with_mdl:
   if (!table_list->table)
     thd->mdl_context.release_all_locks_for_name(mdl_ticket);
 
-  {
-    MDL_request_list::Iterator it(alter_ctx.fk_mdl_reqs);
-    while (MDL_request *req= it++)
-    {
-      if (req->ticket->get_type() == MDL_EXCLUSIVE)
-        thd->mdl_context.release_all_locks_for_name(req->ticket);
-    }
-  }
+  alter_ctx.fk_release_locks(thd);
 
   DBUG_RETURN(true);
 }
@@ -11897,6 +11828,93 @@ void TABLE_SHARE::fk_revert_create(THD *thd, Table_name_set &ref_tables)
         fk_it.remove();
       }
     }
+  }
+}
+
+
+// Used in ALTER TABLE
+bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
+{
+  set<Share_acquire> shares_to_write; // write FRMs to disk
+
+  MDL_request_list::Iterator it(fk_mdl_reqs);
+  while (MDL_request *req= it++)
+  {
+    if (thd->mdl_context.upgrade_shared_lock(req->ticket, MDL_EXCLUSIVE,
+                                             thd->variables.lock_wait_timeout))
+      return true;
+  }
+
+  /* Update foreign_fields of referenced tables. No FRM write required. */
+  for (const FK_rename_col &ren_col:fk_renamed_cols)
+  {
+    TABLE_LIST tl;
+    tl.init_one_table(&ren_col.table.db, &ren_col.table.name, NULL, TL_IGNORE);
+    Share_acquire ref_table(thd, tl);
+    if (!ref_table.share)
+      return true;
+    for (FK_info &fk: ref_table.share->referenced_keys)
+    {
+      if (0 != ren_col.table.cmp({ref_table.share->db, ref_table.share->table_name}))
+        continue;
+      for (Lex_cstring &col: fk.foreign_fields)
+      {
+        if (0 != col.cmp(ren_col.col_name))
+          continue;
+        if (col.strdup(&ref_table.share->mem_root, ren_col.new_name))
+        {
+          my_error(ER_OUT_OF_RESOURCES, MYF(0));
+          return true;
+        }
+      }
+    }
+  }
+
+  /* Update referenced_fields of foreign tables. FRM write is required. */
+  for (const FK_rename_col &ren_col: rk_renamed_cols)
+  {
+    TABLE_LIST tl;
+    tl.init_one_table(&ren_col.table.db, &ren_col.table.name, NULL, TL_IGNORE);
+    Share_acquire fk_table(thd, tl);
+    if (!fk_table.share)
+      return true;
+    for (FK_info &rk: fk_table.share->foreign_keys)
+    {
+      if (0 != ren_col.table.cmp({fk_table.share->db, fk_table.share->table_name}))
+        continue;
+      for (Lex_cstring &col: rk.referenced_fields)
+      {
+        if (0 != col.cmp(ren_col.col_name))
+          continue;
+        if (col.strdup(&fk_table.share->mem_root, ren_col.new_name))
+        {
+          my_error(ER_OUT_OF_RESOURCES, MYF(0));
+          return true;
+        }
+        shares_to_write.insert(std::move(fk_table));
+        DBUG_ASSERT(!fk_table.share);
+      }
+    }
+  }
+
+  /* Update EXTRA2_FOREIGN_KEY_INFO section in FRM files. */
+  for (const Share_acquire& sa: shares_to_write)
+  {
+    if (sa.share->fk_write_shadow_frm())
+      return true;
+  }
+
+  return false;
+}
+
+
+void Alter_table_ctx::fk_release_locks(THD* thd)
+{
+  MDL_request_list::Iterator it(fk_mdl_reqs);
+  while (MDL_request *req= it++)
+  {
+    if (req->ticket->get_type() == MDL_EXCLUSIVE)
+      thd->mdl_context.release_all_locks_for_name(req->ticket);
   }
 }
 
