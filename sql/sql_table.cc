@@ -12011,15 +12011,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
   if (share->foreign_keys.is_empty() && share->referenced_keys.is_empty())
     return false;
   Table_name_set tables;
-  if (fk_rename_backup.push_back(FK_rename_backup(std::move(sa))))
-  {
-mem_error:
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
-    return true;
-  }
-  if (!fk_rename_backup.back().sa.share)
-    return true; // FK_rename_backup() ctor failed
-  DBUG_ASSERT(!sa.share);
+  MDL_request_list mdl_list;
   for (FK_info &fk: share->foreign_keys)
   {
     if (fk.foreign_db.strdup(&share->mem_root, *new_db) ||
@@ -12057,7 +12049,6 @@ mem_error:
     return false;
 
   // FIXME: upgrade table lock?
-  MDL_request_list mdl_list;
   for (const Table_name &ref: tables)
   {
     MDL_request *req= new (thd->mem_root) MDL_request;
@@ -12112,6 +12103,10 @@ mem_error:
   }
 
   return false;
+
+mem_error:
+  my_error(ER_OUT_OF_RESOURCES, MYF(0));
+  return true;
 }
 
 
