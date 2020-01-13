@@ -50,8 +50,8 @@
 #include "session_tracker.h"
 #include "backup.h"
 #include "xa.h"
-#include <set>
 #include <vector>
+#include <set>
 
 extern "C"
 void set_thd_stage_info(void *thd,
@@ -361,6 +361,27 @@ public:
   }
 };
 
+#if 0
+template<class Key, class T, class Compare = std::less<Key>,
+  class Allocator = std::allocator<std::pair<const Key, T> > >
+class map :
+  public exception_wrapper<std::map<Key, T, Compare, Allocator> >
+{
+public:
+  typedef typename std::map<Key, T, Compare, Allocator>::value_type value_type;
+  bool insert(const value_type& value)
+  {
+    return exception_wrapper<std::map<Key, T, Compare, Allocator> >::
+      insert(value);
+  }
+  bool insert(value_type&& value)
+  {
+    return exception_wrapper<std::map<Key, T, Compare, Allocator> >::
+      insert(std::forward<value_type>(value));
+  }
+};
+#endif
+
 
 /*
    NB: Table_ident is parser-oriented class that contains SELECT_LEX_UNIT and
@@ -372,6 +393,7 @@ public:
 class Table_name
 {
 public:
+  // TODO: use Lex_table_name
   Lex_cstring db;
   Lex_cstring name;
   Table_name() {}
@@ -409,7 +431,7 @@ public:
     return set<Table_name, Table_name_lt>::
       insert(std::forward<T>(value));
   }
-  bool insert(Lex_cstring &db, Lex_cstring &table)
+  bool insert(const Lex_cstring &db, const Lex_cstring &table)
   {
     return set<Table_name, Table_name_lt>::
       insert({db, table});

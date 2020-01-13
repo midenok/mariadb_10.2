@@ -82,7 +82,7 @@ static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
                                   const HA_CREATE_INFO *create_info);
 static
-bool fk_process_drop(THD* thd, TABLE_LIST* t, vector<Share_acquire>& shares);
+bool fk_handle_drop(THD* thd, TABLE_LIST* table, vector<Share_acquire>& shares);
 
 /**
   @brief Helper function for explain_filename
@@ -2452,7 +2452,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
       char *end;
       int frm_delete_error= 0;
       vector<Share_acquire> shares;
-      if (fk_process_drop(thd, table, shares))
+      if (fk_handle_drop(thd, table, shares))
       {
         error= 1;
         goto err;
@@ -11717,10 +11717,8 @@ wsrep_error_label:
 
 
 // Used in CREATE TABLE
-bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
-                                    Table_name_set &ref_tables)
+bool TABLE_SHARE::fk_update_shares(THD *thd, Table_name_set &ref_tables)
 {
-  DBUG_ASSERT(alter_info);
   if (foreign_keys.is_empty())
     return false;
 
@@ -11763,8 +11761,6 @@ bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
   // update referenced_keys of ref_tables
   for (const Table_name &ref: ref_tables)
   {
-    const char *ref_db= ref.db.str;
-    const char *ref_table= ref.name.str;
     TABLE_LIST tl;
     tl.init_one_table(&ref.db, &ref.name, NULL, TL_IGNORE);
     Share_acquire share_acquire(thd, tl);
@@ -11779,30 +11775,21 @@ bool TABLE_SHARE::fk_process_create(THD *thd, Alter_info *alter_info,
     Mutex_lock share_mutex(&ref_share->LOCK_share);
     FK_info *dst= NULL;
 
-    for (Key& key: alter_info->key_list)
+    for (const FK_info &fk: foreign_keys)
     {
-      if (!key.foreign)
-        continue;
-      Foreign_key *src= static_cast<Foreign_key*>(&key);
-      LEX_CSTRING &src_db= src->ref_db.str ? src->ref_db : db;
-      // Find keys referencing the locked share
-      if (strcmp(src_db.str, ref_db) ||
-          strcmp(src->ref_table.str, ref_table))
+      // Find keys referencing the acquired share and add them to referenced_keys
+      if (cmp_table(fk.referenced_db, ref.db) ||
+          cmp_table(fk.referenced_table, ref.name))
         continue;
 
-      dst= new (&ref_share->mem_root) FK_info;
-      if (ref_share->referenced_keys.push_back(dst, &ref_share->mem_root))
+      dst= fk.clone(&ref_share->mem_root);
+      if (!dst ||
+          ref_share->referenced_keys.push_back(dst, &ref_share->mem_root))
       {
         my_error(ER_OUT_OF_RESOURCES, MYF(0));
         return true;
       }
-
-      if (dst->assign(*src, db, table_name, &ref_share->mem_root))
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        return true;
-      }
-    } // for (alter_info->key_list)
+    } // for (const FK_info &fk: foreign_keys)
 
     if (ref_share->fk_write_shadow_frm())
       return true;
@@ -11922,13 +11909,13 @@ void Alter_table_ctx::fk_release_locks(THD* thd)
 /* Used in DROP TABLE: remove table from referenced_keys of referenced tables,
    prohibit if foreign_keys is not empty. */
 static
-bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
+bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<Share_acquire> &shares)
 {
-  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, t->db.str,
-                                             t->table_name.str,
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, table->db.str,
+                                             table->table_name.str,
                                              MDL_INTENTION_EXCLUSIVE));
-  DBUG_ASSERT(!t->view);
-  Share_acquire s(thd, *t);
+  DBUG_ASSERT(!table->view);
+  Share_acquire s(thd, *table);
   TABLE_SHARE *share= s.share;
   if (!share)
     return true;
@@ -11940,13 +11927,12 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
   if (share->foreign_keys.is_empty())
     return false;
   Table_name_set tables;
-  List_iterator_fast<FK_info> it(share->foreign_keys);
-  while (FK_info *fk= it++)
+  for (const FK_info &fk: share->foreign_keys)
   {
-    if (0 == cmp(fk->referenced_db, t->db) &&
-        0 == cmp(fk->referenced_table, t->table_name))
+    if (0 == cmp_table(fk.referenced_db, table->db) &&
+        0 == cmp_table(fk.referenced_table, table->table_name))
       continue;
-    if (tables.insert(fk->referenced_db, fk->referenced_table))
+    if (tables.insert(fk.referenced_db, fk.referenced_table))
       return true;
   }
   if (tables.empty())
@@ -11970,7 +11956,7 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
     return true;
   }
 
-  // NB: we don't want needless reallocs and reconstruction of objects inside
+  // NB: we don't want needless reallocs and reconstruction of objects inside the loop
   shares.reserve(tables.size());
 
   for (const Table_name &ref: tables)
@@ -11980,7 +11966,8 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
     Share_acquire ref_sa(thd, tl);
     if (!ref_sa.share)
       return true;
-    shares.push_back(std::move(ref_sa));
+    if (shares.push_back(std::move(ref_sa)))
+      return true;
     DBUG_ASSERT(!ref_sa.share);
   }
 
@@ -11990,88 +11977,168 @@ bool fk_process_drop(THD *thd, TABLE_LIST *t, vector<Share_acquire> &shares)
     ref_it.init(ref.share->referenced_keys);
     while (FK_info *rk= ref_it++)
     {
-      if (0 == cmp(rk->foreign_db, share->db) &&
-          0 == cmp(rk->foreign_table, share->table_name))
+      if (0 == cmp_table(rk->foreign_db, share->db) &&
+          0 == cmp_table(rk->foreign_table, share->table_name))
       {
         ref_it.remove();
       }
     }
-    ref.share->fk_write_shadow_frm();
+    if (ref.share->fk_write_shadow_frm())
+      return true;
   }
 
   return false;
 }
 
 
-// Used in RENAME TABLE
-bool fk_process_rename(THD *thd, TABLE_LIST *table)
+/*  Used in RENAME TABLE
+    Rename table in foreign_keys of this and referenced tables.
+    Rename table in referenced_keys of this and foreign tables.
+    In case of failed operation everything must reverted back.
+*/
+bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
+                      const LEX_CSTRING *new_table_name,
+                      vector<FK_rename_backup> &fk_rename_backup)
 {
-  // FIXME:
-  return false;
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, table->db.str,
                                              table->table_name.str,
                                              MDL_INTENTION_EXCLUSIVE));
   DBUG_ASSERT(!table->view);
-  Share_acquire s(thd, *table);
-  TABLE_SHARE *share= s.share;
+  Share_acquire sa(thd, *table);
+  TABLE_SHARE *share= sa.share;
   if (!share)
-  {
-    // FIXME: remove this
-    if (thd->is_error() && thd->get_stmt_da()->sql_errno() == ER_WRONG_OBJECT)
-    {
-      return false;
-    }
     return true;
-  }
-
+  if (share->foreign_keys.is_empty() && share->referenced_keys.is_empty())
+    return false;
   Table_name_set tables;
-
-  if (!share->foreign_keys.is_empty() && share->foreign_keys.get(thd, tables, false))
+  if (fk_rename_backup.push_back(FK_rename_backup(std::move(sa))))
   {
+mem_error:
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
     return true;
   }
-
-  if (!share->referenced_keys.is_empty() && share->referenced_keys.get(thd, tables, true))
+  if (!fk_rename_backup.back().sa.share)
+    return true; // FK_rename_backup() ctor failed
+  DBUG_ASSERT(!sa.share);
+  for (FK_info &fk: share->foreign_keys)
   {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    if (fk.foreign_db.strdup(&share->mem_root, *new_db) ||
+        fk.foreign_table.strdup(&share->mem_root, *new_table_name))
+      goto mem_error;
+    if (0 == cmp_table(fk.referenced_db, table->db) &&
+        0 == cmp_table(fk.referenced_table, table->table_name))
+    {
+      // NB: we don't have to lock self-references but we have to update share
+      if (fk.referenced_db.strdup(&share->mem_root, *new_db) ||
+          fk.referenced_table.strdup(&share->mem_root, *new_table_name))
+        goto mem_error;
+      continue;
+    }
+    if (tables.insert(fk.referenced_db, fk.referenced_table))
+      goto mem_error;
+  }
+  for (FK_info &rk: share->referenced_keys)
+  {
+    if (rk.referenced_db.strdup(&share->mem_root, *new_db) ||
+        rk.referenced_table.strdup(&share->mem_root, *new_table_name))
+      goto mem_error;
+    if (0 == cmp_table(rk.foreign_db, table->db) &&
+        0 == cmp_table(rk.foreign_table, table->table_name))
+    {
+      if (rk.foreign_db.strdup(&share->mem_root, *new_db) ||
+          rk.foreign_table.strdup(&share->mem_root, *new_table_name))
+        goto mem_error;
+      continue;
+    }
+    if (tables.insert(rk.foreign_db, rk.foreign_table))
+      goto mem_error;
+  }
+  if (tables.empty())
+    return false;
+
+  // FIXME: upgrade table lock?
+  MDL_request_list mdl_list;
+  for (const Table_name &ref: tables)
+  {
+    MDL_request *req= new (thd->mem_root) MDL_request;
+    if (!req)
+      goto mem_error;
+    req->init(MDL_key::TABLE, ref.db.str, ref.name.str, MDL_EXCLUSIVE,
+              MDL_STATEMENT);
+    mdl_list.push_front(req);
+  }
+  if (thd->mdl_context.acquire_locks(&mdl_list, thd->variables.lock_wait_timeout))
+  {
+    my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
     return true;
   }
 
-  /*
-     For RENAME rename table in foreign_keys of this and referenced tables,
-     rename table in referenced_keys of this and foreign tables.
-     In case of failed operation everything must reverted back.
-  */
+  // NB: we don't want needless reallocs and reconstruction of objects inside the loop
+  fk_rename_backup.reserve(1 + tables.size());
 
-  if (!tables.empty())
+  for (const Table_name &ref: tables)
   {
-    MDL_request_list mdl_list;
-    for (const Table_name &t: tables)
+    TABLE_LIST tl;
+    tl.init_one_table(&ref.db, &ref.name, &ref.name, TL_IGNORE);
+    Share_acquire ref_sa(thd, tl);
+    if (!ref_sa.share)
+      return true;
+    TABLE_SHARE *ref_share= ref_sa.share;
+    if (fk_rename_backup.push_back(FK_rename_backup(std::move(ref_sa))))
+      goto mem_error;
+    if (!fk_rename_backup.back().sa.share)
+      return true; // FK_rename_backup() ctor failed
+    DBUG_ASSERT(!ref_sa.share);
+    for (FK_info &fk: ref_share->foreign_keys)
     {
-      if (!cmp(t.db, table->db) && !cmp(t.name, table->table_name))
-        continue; // subject table name is already locked by caller DDL
-      MDL_request *req= new (thd->mem_root) MDL_request;
-      if (!req)
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        return true;
-      }
-      req->init(MDL_key::TABLE, t.db.str, t.name.str, MDL_EXCLUSIVE,
-                MDL_TRANSACTION);
-      mdl_list.push_front(req);
+      if (cmp_table(fk.referenced_db, table->db) ||
+          cmp_table(fk.referenced_table, table->table_name))
+        continue;
+      if (fk.referenced_db.strdup(&ref_share->mem_root, *new_db) ||
+          fk.referenced_table.strdup(&ref_share->mem_root, *new_table_name))
+        goto mem_error;
     }
-    if (!mdl_list.is_empty() &&
-        thd->mdl_context.acquire_locks(&mdl_list,
-                                       thd->variables.lock_wait_timeout))
+    for (FK_info &rk: ref_share->referenced_keys)
     {
-      push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE, ER_UNKNOWN_ERROR,
-                          "Could not lock foreign or referenced tables");
+      if (cmp_table(rk.foreign_db, table->db) ||
+          cmp_table(rk.foreign_table, table->table_name))
+        continue;
+      if (rk.foreign_db.strdup(&ref_share->mem_root, *new_db) ||
+          rk.foreign_table.strdup(&ref_share->mem_root, *new_table_name))
+        goto mem_error;
     }
-
-    MDL_request_list::Iterator req_it(mdl_list);
-    while (MDL_request *req= req_it++)
-      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, req->key.db_name(), req->key.name());
+    if (ref_share->fk_write_shadow_frm())
+      return true;
   }
+
   return false;
+}
+
+
+FK_rename_backup::FK_rename_backup(Share_acquire&& _sa) :
+  sa(std::move(_sa))
+{
+  if (foreign_keys.copy(&sa.share->foreign_keys, &sa.share->mem_root) ||
+      list_copy_and_replace_each_value(foreign_keys, &sa.share->mem_root))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    sa.release();
+    return;
+  }
+  if (referenced_keys.copy(&sa.share->referenced_keys, &sa.share->mem_root) ||
+      list_copy_and_replace_each_value(referenced_keys, &sa.share->mem_root))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    sa.release();
+    return;
+  }
+}
+
+
+void
+FK_rename_backup::reverse()
+{
+  DBUG_ASSERT(sa.share);
+  sa.share->foreign_keys= foreign_keys;
+  sa.share->referenced_keys= referenced_keys;
 }

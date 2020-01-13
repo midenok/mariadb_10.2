@@ -20,6 +20,8 @@
 #include <my_sys.h>                             // pthread_mutex_t
 #include "m_string.h"                           // LEX_CUSTRING
 #include "mdl.h"                                // MDL_request_list
+#include "sql_class.h"
+#include "table_cache.h"
 
 class Alter_info;
 class Alter_table_ctx;
@@ -271,7 +273,20 @@ bool sync_ddl_log();
 void release_ddl_log();
 void execute_ddl_log_recovery();
 bool execute_ddl_log_entry(THD *thd, uint first_entry);
-bool fk_process_rename(THD *thd, TABLE_LIST *t);
+
+class FK_rename_backup
+{
+public:
+  Share_acquire sa;
+  /* NB: we don't want to store these in share->mem_root to avoid leaks */
+  FK_list foreign_keys;
+  FK_list referenced_keys;
+  FK_rename_backup(Share_acquire&& _sa);
+  void reverse();
+};
+bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
+                      const LEX_CSTRING *new_table_name,
+                      vector<FK_rename_backup> &fk_rename_backup);
 
 template<typename T> class List;
 void promote_first_timestamp_column(List<Create_field> *column_definitions);
