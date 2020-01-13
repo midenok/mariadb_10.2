@@ -644,8 +644,7 @@ struct TABLE_SHARE
   KEY  *key_info;			/* data of keys in database */
   FK_list foreign_keys;
   FK_list referenced_keys;
-  bool fk_process_create(THD *thd, Alter_info *alter_info,
-                                Table_name_set &ref_tables);
+  bool fk_update_shares(THD *thd, Table_name_set &ref_tables);
   void fk_revert_create(THD *thd, Table_name_set &ref_tables);
   bool check_foreign_keys(THD *thd);
   bool referenced_by_foreign_key() const
@@ -1698,12 +1697,14 @@ class FK_info : public Sql_alloc
 {
 public:
   Lex_cstring foreign_id;
+  // TODO: use Table_name
   Lex_cstring foreign_db;
   Lex_cstring foreign_table;
   Lex_cstring referenced_db;
   Lex_cstring referenced_table;
   enum_fk_option update_method;
   enum_fk_option delete_method;
+  // FIXME: now used as constraint_name, nowhere as "referenced key name"
   Lex_cstring referenced_key_name;
   List<Lex_cstring> foreign_fields;
   List<Lex_cstring> referenced_fields;
@@ -1714,8 +1715,6 @@ public:
     delete_method(FK_OPTION_UNDEF)
   {}
   bool assign(Foreign_key &fk);
-  bool assign(const Foreign_key& src, const Lex_cstring& db,
-              const Lex_cstring& table, MEM_ROOT* mem_root);
   FK_info * clone(MEM_ROOT *mem_root) const;
   void print(String &out);
 };

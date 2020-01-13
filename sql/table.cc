@@ -9265,55 +9265,6 @@ bool FK_info::assign(Foreign_key &src)
   return false;
 }
 
-bool FK_info::assign(const Foreign_key &src, const Lex_cstring &db,
-                     const Lex_cstring &table, MEM_ROOT *mem_root)
-{
-  if (foreign_id.strdup(mem_root, src.name))
-    return true;
-  if (foreign_db.strdup(mem_root, db))
-    return true;
-  if (foreign_table.strdup(mem_root, table))
-    return true;
-  if (referenced_key_name.strdup(mem_root, src.constraint_name))
-    return true;
-  if (src.ref_db.str)
-  {
-    if (referenced_db.strdup(mem_root, src.ref_db))
-      return true;
-  }
-  else
-  {
-    if (referenced_db.strdup(mem_root, db))
-      return true;
-  }
-  if (referenced_table.strdup(mem_root, src.ref_table))
-    return true;
-  update_method= src.update_opt;
-  delete_method= src.delete_opt;
-
-  for (const Key_part_spec &col: src.columns)
-  {
-    Lex_cstring *field_name= new (mem_root) Lex_cstring;
-    if (unlikely(!field_name ||
-                field_name->strdup(mem_root, col.field_name) ||
-                foreign_fields.push_back(field_name, mem_root)))
-    {
-      return true;
-    }
-  }
-
-  for (const Key_part_spec &col: src.ref_columns)
-  {
-    Lex_cstring *field_name= new (mem_root) Lex_cstring;
-    if (unlikely(!field_name ||
-                field_name->strdup(mem_root, col.field_name) ||
-                referenced_fields.push_back(field_name, mem_root)))
-    {
-      return true;
-    }
-  }
-  return false;
-}
 
 FK_info * FK_info::clone(MEM_ROOT *mem_root) const
 {

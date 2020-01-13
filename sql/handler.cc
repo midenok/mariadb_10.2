@@ -5171,7 +5171,7 @@ int ha_create_table(THD *thd, const char *path,
       goto err;
   }
 
-  if (fk_update_refs && share.fk_process_create(thd, alter_info, ref_tables))
+  if (fk_update_refs && share.fk_update_shares(thd, ref_tables))
     goto err;
 
   share.m_psi= PSI_CALL_get_table_share(temp_table, &share);

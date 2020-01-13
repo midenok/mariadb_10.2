@@ -175,6 +175,11 @@ static inline bool cmp_ident(const LEX_CSTRING a, const LEX_CSTRING b)
 {
   return lex_string_cmp(system_charset_info, &a, &b);
 }
+static inline bool cmp_table(const LEX_CSTRING a, const LEX_CSTRING b)
+{
+  return lex_string_cmp(table_alias_charset, &a, &b);
+}
+
 
 /*
   Compare if two LEX_CSTRING are equal. Assumption is that

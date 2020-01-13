@@ -137,6 +137,14 @@ public:
     if (share)
       tdc_release_share(share);
   }
+  void release()
+  {
+    if (share)
+    {
+      tdc_release_share(share);
+      share= NULL;
+    }
+  }
   // NB: "operator<" is required for std::set
   bool operator< (const Share_acquire &rhs) const
   {
