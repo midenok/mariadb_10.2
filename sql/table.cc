@@ -3152,6 +3152,7 @@ int TABLE_SHARE::init_from_sql_statement_string(THD *thd, bool write,
   LEX tmp_lex;
   KEY *unused1;
   uint unused2;
+  FK_list foreign_keys;
   handlerton *hton= plugin_hton(db_plugin);
   LEX_CUSTRING frm= {0,0};
   LEX_CSTRING db_backup= thd->db;
@@ -3200,7 +3201,8 @@ int TABLE_SHARE::init_from_sql_statement_string(THD *thd, bool write,
   thd->lex->create_info.alter_info= &thd->lex->alter_info;
   file= mysql_create_frm_image(thd, db, table_name,
                                &thd->lex->create_info, &thd->lex->alter_info,
-                               C_ORDINARY_CREATE, &unused1, &unused2, &frm);
+                               C_ORDINARY_CREATE, &unused1, &unused2,
+                               foreign_keys, &frm);
   error|= file == 0;
   delete file;
 
@@ -9222,12 +9224,14 @@ public:
 };
 
 
-bool FK_info::assign(Foreign_key &src)
+bool FK_info::assign(Foreign_key &src, Table_name table)
 {
   DBUG_ASSERT(src.foreign);
   DBUG_ASSERT(src.type == Key::MULTIPLE);
 
   foreign_id= src.name;
+  foreign_db= table.db;
+  foreign_table= table.name;
   referenced_db= src.ref_db;
   referenced_table= src.ref_table;
   update_method= src.update_opt;
