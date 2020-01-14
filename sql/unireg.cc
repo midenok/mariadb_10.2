@@ -1372,15 +1372,14 @@ bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
     size_t refs_was= s->referenced_keys.elements;
     for (FK_info &fk: fs.share->foreign_keys)
     {
-      // FIXME: fs locale comparison (for all places in patch)
-      if (cmp(fk.referenced_db, s->db) || cmp(fk.referenced_table, s->table_name))
+      if (cmp_table(fk.referenced_db, s->db) || cmp_table(fk.referenced_table, s->table_name))
         continue;
       for (Lex_cstring &fld: fk.referenced_fields)
       {
         uint i;
         for (i= 0; i < s->fields ; i++)
         {
-          if (0 == cmp(s->field[i]->field_name, fld))
+          if (0 == cmp_ident(s->field[i]->field_name, fld))
             break;
         }
         if (i == s->fields)
