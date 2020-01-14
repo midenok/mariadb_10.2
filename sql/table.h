@@ -50,6 +50,7 @@ struct TABLE_LIST;
 class ACL_internal_schema_access;
 class ACL_internal_table_access;
 class Field;
+class Table_name;
 class Table_statistics;
 class With_element;
 struct TDC_element;
@@ -1714,7 +1715,11 @@ public:
     update_method(FK_OPTION_UNDEF),
     delete_method(FK_OPTION_UNDEF)
   {}
-  bool assign(Foreign_key &fk);
+  Lex_cstring ref_db() const
+  {
+    return referenced_db.str ? referenced_db : foreign_db;
+  }
+  bool assign(Foreign_key &fk, Table_name table);
   FK_info * clone(MEM_ROOT *mem_root) const;
   void print(String &out);
 };

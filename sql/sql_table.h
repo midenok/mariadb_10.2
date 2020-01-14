@@ -208,6 +208,7 @@ handler *mysql_create_frm_image(THD *thd,
                                 int create_table_mode,
                                 KEY **key_info,
                                 uint *key_count,
+                                FK_list &fk_list,
                                 LEX_CUSTRING *frm);
 
 int mysql_discard_or_import_tablespace(THD *thd,

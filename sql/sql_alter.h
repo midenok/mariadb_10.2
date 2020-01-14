@@ -339,6 +339,8 @@ public:
   set<FK_rename_col> fk_renamed_cols;
   set<FK_rename_col> rk_renamed_cols;
   vector<FK_add_new> fk_added_new;
+  /** FK list prepared by prepare_create_table() */
+  FK_list            fk_list;
   MDL_request_list fk_mdl_reqs;
   vector<Share_acquire> fk_shares;
 
