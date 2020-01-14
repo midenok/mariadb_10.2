@@ -9142,10 +9142,8 @@ static bool fk_prepare_copy_alter_table(THD *thd, TABLE *table,
         if ((drop->type == Alter_drop::FOREIGN_KEY) &&
             (my_strcasecmp(system_charset_info, f_key->foreign_id.str,
                           drop->name) == 0) &&
-            (lex_string_cmp(table_alias_charset, &f_key->foreign_db,
-                            &table->s->db) == 0) &&
-            (lex_string_cmp(table_alias_charset, &f_key->foreign_table,
-                            &table->s->table_name) == 0))
+            (cmp_table(f_key->foreign_db, &table->s->db) == 0) &&
+            (cmp_table(&f_key->foreign_table, &table->s->table_name) == 0))
           fk_parent_key_it.remove();
       }
     }

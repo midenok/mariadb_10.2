@@ -213,13 +213,18 @@ public:
 
   LEX_STRING lex_string() const
   {
-    LEX_STRING str = { (char*) ptr(), length() };
+    LEX_STRING str = { (char*) (length() ? ptr() : NULL), length() };
     return str;
   }
   LEX_CSTRING lex_cstring() const
   {
-    LEX_CSTRING skr = { ptr(), length() };
-    return skr;
+    LEX_CSTRING str = { (length() ? ptr() : NULL), length() };
+    return str;
+  }
+  LEX_CUSTRING lex_custring() const
+  {
+    LEX_CUSTRING str= { (const uchar *) (length() ? ptr() : NULL), length() };
+    return str;
   }
 
   bool has_8bit_bytes() const

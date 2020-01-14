@@ -2170,10 +2170,6 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
                                        extra2.field_data_type_info))
     goto err;
 
-  if (extra2.foreign_key_info.length &&
-      foreign_key_io.parse(thd, this, extra2.foreign_key_info))
-    goto err;
-
   for (i=0 ; i < share->fields; i++, strpos+=field_pack_length, field_ptr++)
   {
     uint interval_nr= 0, recpos;
@@ -3031,6 +3027,10 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
 	(*save++)= k;
     }
   }
+
+  if (extra2.foreign_key_info.length &&
+      foreign_key_io.parse(thd, this, extra2.foreign_key_info))
+    goto err;
 
   /*
     the correct null_bytes can now be set, since bitfields have been taken
