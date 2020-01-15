@@ -276,4 +276,10 @@ select fld2 from t2;
 select * from t2;
 drop table t2, t1;
 
+--echo # Check drop foreign key
+create or replace table t1 (id int primary key);
+create or replace table t2 (id int, foreign key fk (id) references t1 (id));
+alter table t2 drop foreign key fk;
+drop tables t1, t2;
+
 set default_storage_engine= default;
