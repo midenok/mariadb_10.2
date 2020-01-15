@@ -8042,7 +8042,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List<Create_field> new_create_list;
   /* New key definitions are added here */
   List<Key> new_key_list;
-  FK_list new_fk_list;
+  FK_list fk_list;
   Lex_cstring_set fk_names;
   Table_name_set fk_tables_to_lock;
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
@@ -8067,8 +8067,8 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   bool drop_period= false;
   DBUG_ENTER("mysql_prepare_alter_table");
 
-  if (new_fk_list.copy(&table->s->foreign_keys, thd->mem_root) ||
-      list_copy_and_replace_each_value(new_fk_list, thd->mem_root))
+  if (fk_list.copy(&table->s->foreign_keys, thd->mem_root) ||
+      list_copy_and_replace_each_value(fk_list, thd->mem_root))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
     DBUG_RETURN(1);
@@ -8225,7 +8225,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       if ((alter_info->flags & ALTER_RENAME_COLUMN) &&
           0 != cmp_ident(def->change, def->field_name))
       {
-        for (FK_info &fk: new_fk_list)
+        for (const FK_info &fk: fk_list)
         {
           for (Lex_cstring &fld: fk.foreign_fields)
           {
@@ -8243,7 +8243,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
             }
           }
         }
-        for (FK_info &rk: table->s->referenced_keys)
+        for (const FK_info &rk: table->s->referenced_keys)
         {
           for (Lex_cstring &fld: rk.referenced_fields)
           {
@@ -8481,7 +8481,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   /*
     Collect all foreign keys which isn't in drop list.
   */
-  for (const FK_info &fk: new_fk_list)
+  for (const FK_info &fk: fk_list)
   {
     Foreign_key *key;
     Alter_drop *drop;
@@ -8510,6 +8510,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           }
         }
       }
+      // FIXME: handle drop FK
       alter_info->tmp_drop_list.push_back(drop); // FIXME: remove in MDEV-21052
       drop_it.remove();
       continue;
