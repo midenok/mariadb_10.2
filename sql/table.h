@@ -647,7 +647,9 @@ struct TABLE_SHARE
   FK_list referenced_keys;
   bool fk_update_shares(THD *thd, Table_name_set &ref_tables);
   void fk_revert_create(THD *thd, Table_name_set &ref_tables);
-  bool check_foreign_keys(THD *thd);
+#ifndef DBUG_OFF
+  bool dbug_check_foreign_keys(THD *thd);
+#endif
   bool referenced_by_foreign_key() const
   {
     return !referenced_keys.is_empty();
