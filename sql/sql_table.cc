@@ -7927,6 +7927,7 @@ static bool mysql_inplace_alter_table(THD *thd,
   DBUG_RETURN(false);
 
  rollback:
+  alter_ctx->fk_rollback();
   table->file->ha_commit_inplace_alter_table(altered_table,
                                              ha_alter_info,
                                              false);
@@ -8513,7 +8514,6 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       Table_name t(fk.ref_db(), fk.referenced_table);
       if (alter_ctx->fk_dropped.push_back({t, &fk}))
         goto err;
-      // FIXME: handle drop FK
       alter_info->tmp_drop_list.push_back(drop); // FIXME: remove in MDEV-21052
       drop_it.remove();
       continue;
@@ -10714,6 +10714,8 @@ err_with_mdl_after_alter:
   write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
 err_with_mdl:
+  alter_ctx.fk_rollback();
+
   /*
     An error happened while we were holding exclusive name metadata lock
     on table being altered. To be safe under LOCK TABLES we should
@@ -11825,7 +11827,7 @@ void TABLE_SHARE::fk_revert_create(THD *thd, Table_name_set &ref_tables)
 // Used in ALTER TABLE
 bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
 {
-  set<Share_acquire> shares_to_write; // write FRMs to disk
+  set<TABLE_SHARE *> shares_to_write; // write FRMs to disk
 
   MDL_request_list::Iterator it(fk_mdl_reqs);
   while (MDL_request *req= it++)
@@ -11843,20 +11845,23 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
     Share_acquire ref_table(thd, tl);
     if (!ref_table.share)
       return true;
+    TABLE_SHARE *ref_share= ref_table.share;
     Mutex_lock share_mutex(&ref_table.share->LOCK_share);
-    for (FK_info &fk: ref_table.share->referenced_keys)
+    for (FK_info &fk: ref_share->referenced_keys)
     {
-      if (0 != ren_col.table.cmp({ref_table.share->db, ref_table.share->table_name}))
+      if (0 != ren_col.table.cmp({ref_share->db, ref_share->table_name}))
         continue;
       for (Lex_cstring &col: fk.foreign_fields)
       {
         if (0 != col.cmp(ren_col.col_name))
           continue;
-        if (col.strdup(&ref_table.share->mem_root, ren_col.new_name))
+        if (col.strdup(&ref_share->mem_root, ren_col.new_name))
         {
           my_error(ER_OUT_OF_RESOURCES, MYF(0));
           return true;
         }
+        if (fk_add_backup(ref_table))
+          return true;
       }
     }
   }
@@ -11869,22 +11874,24 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
     Share_acquire fk_table(thd, tl);
     if (!fk_table.share)
       return true;
-    Mutex_lock share_mutex(&fk_table.share->LOCK_share);
-    for (FK_info &rk: fk_table.share->foreign_keys)
+    TABLE_SHARE *fk_share= fk_table.share;
+    Mutex_lock share_mutex(&fk_share->LOCK_share);
+    for (FK_info &rk: fk_share->foreign_keys)
     {
-      if (0 != ren_col.table.cmp({fk_table.share->db, fk_table.share->table_name}))
+      if (0 != ren_col.table.cmp({fk_share->db, fk_share->table_name}))
         continue;
       for (Lex_cstring &col: rk.referenced_fields)
       {
         if (0 != col.cmp(ren_col.col_name))
           continue;
-        if (col.strdup(&fk_table.share->mem_root, ren_col.new_name))
+        if (col.strdup(&fk_share->mem_root, ren_col.new_name))
         {
           my_error(ER_OUT_OF_RESOURCES, MYF(0));
           return true;
         }
-        shares_to_write.insert(std::move(fk_table));
-        DBUG_ASSERT(!fk_table.share);
+        if (fk_add_backup(fk_table))
+          return true;
+        shares_to_write.insert(fk_share);
       }
     }
   }
@@ -11943,8 +11950,9 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
       break;
     }  // for (const FK_info &fk: fk_list)
 
-    shares_to_write.insert(std::move(ref_table));
-    DBUG_ASSERT(!ref_table.share);
+    if (fk_add_backup(ref_table))
+      return true;
+    shares_to_write.insert(ref_share);
   } // for (const FK_add_new &new_fk: fk_added_new)
 
   /* Remove dropped referenced_keys in referenced tables. FRM write is required. */
@@ -11967,18 +11975,38 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
       break;
     }
     DBUG_ASSERT(rk);
-    shares_to_write.insert(std::move(ref_table));
-    DBUG_ASSERT(!ref_table.share);
+    if (fk_add_backup(ref_table))
+      return true;
+    shares_to_write.insert(ref_share);
   }
 
   /* Update EXTRA2_FOREIGN_KEY_INFO section in FRM files. */
-  for (const Share_acquire& sa: shares_to_write)
+  for (TABLE_SHARE *s: shares_to_write)
   {
-    if (sa.share->fk_write_shadow_frm())
+    if (s->fk_write_shadow_frm())
       return true;
   }
 
   return false;
+}
+
+
+bool Alter_table_ctx::fk_add_backup(Share_acquire &sa)
+{
+  FK_backup fk_bak(std::move(sa));
+  DBUG_ASSERT(!sa.share);
+  if (!fk_bak.sa.share)
+    return true; // FK_backup() ctor failed, share is released
+  if (fk_info_backup.insert(std::move(fk_bak)))
+    return true;
+  return false;
+}
+
+
+void Alter_table_ctx::fk_rollback()
+{
+  for (const FK_backup &fk_bak: fk_info_backup)
+    const_cast<FK_backup *>(&fk_bak)->reverse();
 }
 
 
@@ -12085,7 +12113,7 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<Share_acquire> &shares)
 */
 bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
                       const LEX_CSTRING *new_table_name,
-                      vector<FK_rename_backup> &fk_rename_backup)
+                      vector<FK_backup> &fk_rename_backup)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, table->db.str,
                                              table->table_name.str,
@@ -12162,10 +12190,11 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
     if (!ref_sa.share)
       return true;
     TABLE_SHARE *ref_share= ref_sa.share;
-    if (fk_rename_backup.push_back(FK_rename_backup(std::move(ref_sa))))
+    if (fk_rename_backup.push_back(FK_backup(std::move(ref_sa))))
       goto mem_error;
+    DBUG_ASSERT(!ref_sa.share);
     if (!fk_rename_backup.back().sa.share)
-      return true; // FK_rename_backup() ctor failed
+      return true; // FK_backup() ctor failed
     DBUG_ASSERT(!ref_sa.share);
     for (FK_info &fk: ref_share->foreign_keys)
     {
@@ -12197,7 +12226,7 @@ mem_error:
 }
 
 
-FK_rename_backup::FK_rename_backup(Share_acquire&& _sa) :
+FK_backup::FK_backup(Share_acquire&& _sa) :
   sa(std::move(_sa))
 {
   if (foreign_keys.copy(&sa.share->foreign_keys, &sa.share->mem_root) ||
@@ -12218,7 +12247,7 @@ FK_rename_backup::FK_rename_backup(Share_acquire&& _sa) :
 
 
 void
-FK_rename_backup::reverse()
+FK_backup::reverse()
 {
   DBUG_ASSERT(sa.share);
   sa.share->foreign_keys= foreign_keys;
