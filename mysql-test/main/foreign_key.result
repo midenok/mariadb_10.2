@@ -2,7 +2,8 @@ drop table if exists t1,t2;
 create table t2 (
 a int unique, c int unique);
 create table t3 (
-a int unique, c int unique, d int unique);
+a int unique, c int unique, d int unique,
+r int references t3(d));
 create table t1 (
 a int not null references t2,
 b int not null constraint t2_c references t2 (c),
@@ -16,7 +17,11 @@ foreign key (a,b) references t3 (c,d) on delete set default,
 foreign key (a,b) references t3 (c,d) on update set null);
 create index a on t1 (a);
 create unique index b on t1 (a,b);
-drop tables t2, t3, t1;
+drop tables t2;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+drop tables t3;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+drop tables t1, t2, t3;
 create table t1 (id int primary key) engine = innodb;
 create table t2 (id int PRIMARY KEY, FOREIGN KEY (id) REFERENCES t1(id)) engine=innodb;
 insert into t1 values (1), (2), (3), (4), (5), (6);
@@ -122,14 +127,10 @@ create or replace table t2 (id int primary key, foreign key (id) references t1(i
 select * from t1, t2;
 id	id
 flush tables t1, t2;
-Warnings:
-Note	1105	Referenced table test.t1 is not opened
 drop table t2, t1;
 create table t1 (id int primary key);
 create table t2 (id int references t1(id)) select id from t1;
 flush tables;
-Warnings:
-Note	1105	Referenced table test.t1 is not opened
 drop table t2, t1;
 # Check rename column, lock tables
 create or replace table t1 (id int primary key);
@@ -257,4 +258,9 @@ select * from t2;
 fld1	fld2
 2	2
 drop table t2, t1;
+# Check drop foreign key
+create or replace table t1 (id int primary key);
+create or replace table t2 (id int, foreign key fk (id) references t1 (id));
+alter table t2 drop foreign key fk;
+drop tables t1, t2;
 set default_storage_engine= default;
