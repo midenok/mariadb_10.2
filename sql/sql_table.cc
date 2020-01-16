@@ -11846,7 +11846,7 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
     if (!ref_table.share)
       return true;
     TABLE_SHARE *ref_share= ref_table.share;
-    Mutex_lock share_mutex(&ref_table.share->LOCK_share);
+    Mutex_lock share_mutex(&ref_share->LOCK_share);
     for (FK_info &fk: ref_share->referenced_keys)
     {
       if (0 != ren_col.table.cmp({ref_share->db, ref_share->table_name}))
