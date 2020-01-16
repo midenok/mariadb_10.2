@@ -8042,7 +8042,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List<Create_field> new_create_list;
   /* New key definitions are added here */
   List<Key> new_key_list;
-  FK_list fk_list;
+  FK_list orig_foreign_keys;
   Lex_cstring_set fk_names;
   Table_name_set fk_tables_to_lock;
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
@@ -8067,8 +8067,8 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   bool drop_period= false;
   DBUG_ENTER("mysql_prepare_alter_table");
 
-  if (fk_list.copy(&table->s->foreign_keys, thd->mem_root) ||
-      list_copy_and_replace_each_value(fk_list, thd->mem_root))
+  if (orig_foreign_keys.copy(&table->s->foreign_keys, thd->mem_root) ||
+      list_copy_and_replace_each_value(orig_foreign_keys, thd->mem_root))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
     DBUG_RETURN(1);
@@ -8225,7 +8225,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       if ((alter_info->flags & ALTER_RENAME_COLUMN) &&
           0 != cmp_ident(def->change, def->field_name))
       {
-        for (const FK_info &fk: fk_list)
+        for (const FK_info &fk: orig_foreign_keys)
         {
           for (Lex_cstring &fld: fk.foreign_fields)
           {
@@ -8481,7 +8481,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   /*
     Collect all foreign keys which isn't in drop list.
   */
-  for (const FK_info &fk: fk_list)
+  for (const FK_info &fk: orig_foreign_keys)
   {
     Foreign_key *key;
     Alter_drop *drop;
@@ -8510,6 +8510,9 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           }
         }
       }
+      Table_name t(fk.ref_db(), fk.referenced_table);
+      if (alter_ctx->fk_dropped.push_back({t, &fk}))
+        goto err;
       // FIXME: handle drop FK
       alter_info->tmp_drop_list.push_back(drop); // FIXME: remove in MDEV-21052
       drop_it.remove();
@@ -8741,7 +8744,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         {
           Table_name t(fk->ref_db.str ? fk->ref_db : table->s->db,
                        fk->ref_table);
-          if (alter_ctx->fk_added_new.push_back({t, fk}))
+          if (alter_ctx->fk_added.push_back({t, fk}))
             goto err;
           if (fk_tables_to_lock.insert(t))
             goto err;
@@ -11887,7 +11890,7 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
   }
 
   /* Add new referenced_keys to referenced tables. FRM write is required. */
-  for (const FK_add_new &new_fk: fk_added_new)
+  for (const FK_add_new &new_fk: fk_added)
   {
     TABLE_LIST tl;
     tl.init_one_table(&new_fk.ref.db, &new_fk.ref.name, NULL, TL_IGNORE);
@@ -11943,6 +11946,30 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
     shares_to_write.insert(std::move(ref_table));
     DBUG_ASSERT(!ref_table.share);
   } // for (const FK_add_new &new_fk: fk_added_new)
+
+  /* Remove dropped referenced_keys in referenced tables. FRM write is required. */
+  for (const FK_drop_old &dropped_fk: fk_dropped)
+  {
+    TABLE_LIST tl;
+    tl.init_one_table(&dropped_fk.ref.db, &dropped_fk.ref.name, NULL, TL_IGNORE);
+    Share_acquire ref_table(thd, tl);
+    if (!ref_table.share)
+      return true;
+    TABLE_SHARE *ref_share= ref_table.share;
+    Mutex_lock share_mutex(&ref_share->LOCK_share);
+    FK_info *rk;
+    List_iterator<FK_info> ref_it(ref_share->referenced_keys);
+    while ((rk= ref_it++))
+    {
+      if (cmp_ident(rk->foreign_id, dropped_fk.fk->foreign_id))
+        continue;
+      ref_it.remove();
+      break;
+    }
+    DBUG_ASSERT(rk);
+    shares_to_write.insert(std::move(ref_table));
+    DBUG_ASSERT(!ref_table.share);
+  }
 
   /* Update EXTRA2_FOREIGN_KEY_INFO section in FRM files. */
   for (const Share_acquire& sa: shares_to_write)

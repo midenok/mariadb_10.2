@@ -336,9 +336,15 @@ public:
     Table_name ref;
     Foreign_key *fk;
   };
+  struct FK_drop_old
+  {
+    Table_name ref;
+    const FK_info *fk;
+  };
   set<FK_rename_col> fk_renamed_cols;
   set<FK_rename_col> rk_renamed_cols;
-  vector<FK_add_new> fk_added_new;
+  vector<FK_add_new> fk_added;
+  vector<FK_drop_old> fk_dropped;
   /** FK list prepared by prepare_create_table() */
   FK_list            fk_list;
   MDL_request_list fk_mdl_reqs;
