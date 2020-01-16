@@ -275,19 +275,36 @@ void release_ddl_log();
 void execute_ddl_log_recovery();
 bool execute_ddl_log_entry(THD *thd, uint first_entry);
 
-class FK_rename_backup
+class FK_backup
 {
 public:
   Share_acquire sa;
-  /* NB: we don't want to store these in share->mem_root to avoid leaks */
   FK_list foreign_keys;
   FK_list referenced_keys;
-  FK_rename_backup(Share_acquire&& _sa);
+
+  FK_backup(Share_acquire&& _sa);
+  FK_backup(const FK_backup&)= delete;
+  FK_backup(FK_backup&& src) :
+    sa(std::move(src.sa)),
+    foreign_keys(src.foreign_keys),
+    referenced_keys(src.referenced_keys)
+  {}
+
   void reverse();
+
+  // NB: "operator<" is required for std::set
+  bool operator< (const FK_backup &rhs) const
+  {
+    if (sa.share < rhs.sa.share)
+      return -1;
+    if (sa.share > rhs.sa.share)
+      return 1;
+    return 0;
+  }
 };
 bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
                       const LEX_CSTRING *new_table_name,
-                      vector<FK_rename_backup> &fk_rename_backup);
+                      vector<FK_backup> &fk_rename_backup);
 
 template<typename T> class List;
 void promote_first_timestamp_column(List<Create_field> *column_definitions);

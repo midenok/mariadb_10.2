@@ -23,6 +23,7 @@
 class Alter_drop;
 class Alter_column;
 class Key;
+class FK_backup;
 
 /**
   Data describing the table being created by CREATE TABLE or
@@ -352,6 +353,10 @@ public:
 
   bool fk_update_shares_and_frms(THD *thd);
   void fk_release_locks(THD *thd);
+
+  set<FK_backup> fk_info_backup;
+  bool fk_add_backup(Share_acquire &sa);
+  void fk_rollback();
 
 private:
   char new_filename[FN_REFLEN + 1];

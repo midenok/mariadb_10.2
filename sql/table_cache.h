@@ -123,9 +123,9 @@ public:
   {
     share= tdc_acquire_share(thd, &tl, GTS_TABLE);
   }
-  Share_acquire(const Share_acquire &src) :
-    share(src.share)
-  {}
+
+  Share_acquire(const Share_acquire &src)= delete;
+
   // NB: noexcept is required for STL containers
   Share_acquire(Share_acquire &&src) noexcept :
     share(src.share)
@@ -150,7 +150,7 @@ public:
   {
     if (share < rhs.share)
       return -1;
-    if (share < rhs.share)
+    if (share > rhs.share)
       return 1;
     return 0;
   }
