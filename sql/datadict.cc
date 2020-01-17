@@ -447,6 +447,8 @@ bool TABLE_SHARE::fk_write_shadow_frm()
 
   foreign_key_io.store(foreign_keys, &referenced_keys);
   extra2.foreign_key_info= foreign_key_io.lex_custring();
+  if (!extra2.foreign_key_info.length)
+    extra2.foreign_key_info.str= NULL;
 
   const ulong extra2_increase= extra2.store_size() - extra2.read_size;
   frm_size+= extra2_increase;
