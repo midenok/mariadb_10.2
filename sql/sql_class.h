@@ -52,6 +52,7 @@
 #include "xa.h"
 #include <vector>
 #include <set>
+#include <map>
 
 extern "C"
 void set_thd_stage_info(void *thd,
@@ -361,27 +362,23 @@ public:
   }
 };
 
-#if 0
 template<class Key, class T, class Compare = std::less<Key>,
   class Allocator = std::allocator<std::pair<const Key, T> > >
 class map :
   public exception_wrapper<std::map<Key, T, Compare, Allocator> >
 {
 public:
-  typedef typename std::map<Key, T, Compare, Allocator>::value_type value_type;
-  bool insert(const value_type& value)
+  bool insert(const Key& key, const T& value)
   {
     return exception_wrapper<std::map<Key, T, Compare, Allocator> >::
-      insert(value);
+      insert(std::make_pair(key, value));
   }
-  bool insert(value_type&& value)
+  bool insert(const Key& key, T&& value)
   {
     return exception_wrapper<std::map<Key, T, Compare, Allocator> >::
-      insert(std::forward<value_type>(value));
+      insert(std::make_pair(key, std::forward<T>(value)));
   }
 };
-#endif
-
 
 /*
    NB: Table_ident is parser-oriented class that contains SELECT_LEX_UNIT and
