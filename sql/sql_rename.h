@@ -16,8 +16,29 @@
 #ifndef SQL_RENAME_INCLUDED
 #define SQL_RENAME_INCLUDED
 
+#include "table_cache.h"
+
 class THD;
 struct TABLE_LIST;
+
+// NB: FK_rename_backup responds to share release unlike FK_alter_backup
+class FK_rename_backup
+{
+public:
+  Share_acquire sa;
+  FK_list foreign_keys;
+  FK_list referenced_keys;
+
+  FK_rename_backup(Share_acquire&& _sa);
+  FK_rename_backup(const FK_rename_backup&)= delete;
+  FK_rename_backup(FK_rename_backup&& src) :
+    sa(std::move(src.sa)),
+    foreign_keys(src.foreign_keys),
+    referenced_keys(src.referenced_keys)
+  {}
+
+  void reverse();
+};
 
 bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent);
 

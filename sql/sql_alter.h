@@ -23,7 +23,20 @@
 class Alter_drop;
 class Alter_column;
 class Key;
-class FK_backup;
+
+
+class FK_alter_backup
+{
+public:
+  TABLE_SHARE *share;
+  FK_list foreign_keys;
+  FK_list referenced_keys;
+
+  FK_alter_backup(TABLE_SHARE *_share);
+
+  void reverse();
+};
+
 
 /**
   Data describing the table being created by CREATE TABLE or
@@ -342,6 +355,7 @@ public:
     Table_name ref;
     const FK_info *fk;
   };
+  // FIXME: why this stored in std::set?
   set<FK_rename_col> fk_renamed_cols;
   set<FK_rename_col> rk_renamed_cols;
   vector<FK_add_new> fk_added;
@@ -349,13 +363,15 @@ public:
   /** FK list prepared by prepare_create_table() */
   FK_list            fk_list;
   MDL_request_list fk_mdl_reqs;
-  vector<Share_acquire> fk_shares;
+  map<Table_name, Share_acquire, Table_name_lt> fk_shares;
 
   bool fk_update_shares_and_frms(THD *thd);
   void fk_release_locks(THD *thd);
 
-  set<FK_backup> fk_info_backup;
-  bool fk_add_backup(Share_acquire &sa);
+  // NB: share is owned and released by fk_shares
+  map<TABLE_SHARE *, FK_alter_backup> fk_alter_backup;
+  // NB: backup is added only if not exists
+  bool fk_add_backup(TABLE_SHARE *share);
   void fk_rollback();
 
 private:
