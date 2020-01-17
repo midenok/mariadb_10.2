@@ -248,7 +248,7 @@ bool mysql_rm_table(THD *thd,TABLE_LIST *tables, bool if_exists,
                     bool drop_temporary, bool drop_sequence);
 int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
                             bool drop_temporary, bool drop_view,
-                            bool drop_sequence,
+                            bool drop_sequence, bool drop_db,
                             bool log_query, bool dont_free_locks);
 bool log_drop_table(THD *thd, const LEX_CSTRING *db_name,
                     const LEX_CSTRING *table_name, bool temporary_table);

@@ -84,7 +84,8 @@ static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
                                   const HA_CREATE_INFO *create_info);
 static
-bool fk_handle_drop(THD* thd, TABLE_LIST* table, vector<Share_acquire>& shares);
+bool fk_handle_drop(THD* thd, TABLE_LIST* table, vector<Share_acquire>& shares,
+                    bool drop_db);
 
 /**
   @brief Helper function for explain_filename
@@ -2130,7 +2131,7 @@ bool mysql_rm_table(THD *thd,TABLE_LIST *tables, bool if_exists,
   /* mark for close and remove all cached entries */
   thd->push_internal_handler(&err_handler);
   error= mysql_rm_table_no_locks(thd, tables, if_exists, drop_temporary,
-                                 false, drop_sequence, false, false);
+                                 false, drop_sequence, false, false, false);
   thd->pop_internal_handler();
 
   if (unlikely(error))
@@ -2218,7 +2219,7 @@ static uint32 comment_length(THD *thd, uint32 comment_pos,
 
 int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
                             bool drop_temporary, bool drop_view,
-                            bool drop_sequence,
+                            bool drop_sequence, bool drop_db,
                             bool dont_log_query,
                             bool dont_free_locks)
 {
@@ -2455,7 +2456,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
       char *end;
       int frm_delete_error= 0;
       vector<Share_acquire> shares;
-      if (fk_handle_drop(thd, table, shares))
+      if (fk_handle_drop(thd, table, shares, drop_db))
       {
         error= 1;
         goto err;
@@ -5005,7 +5006,7 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
         */
         (void) trans_rollback_stmt(thd);
         /* Remove normal table without logging. Keep tables locked */
-        if (mysql_rm_table_no_locks(thd, &table_list, 0, 0, 0, 0, 1, 1))
+        if (mysql_rm_table_no_locks(thd, &table_list, 0, 0, 0, 0, 0, 1, 1))
           goto err;
 
         /*
@@ -5214,6 +5215,7 @@ int mysql_create_table_no_lock(THD *thd, const LEX_CSTRING *db,
       if (!mysql_rm_table_no_locks(thd, table_list, 1,
                                    create_info->tmp_table(),
                                    false, true /* Sequence*/,
+                                   false, /* Drop DB */
                                    true /* Don't log_query */,
                                    true /* Don't free locks */ ))
       {
@@ -12036,7 +12038,8 @@ void Alter_table_ctx::fk_release_locks(THD* thd)
 /* Used in DROP TABLE: remove table from referenced_keys of referenced tables,
    prohibit if foreign_keys is not empty. */
 static
-bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<Share_acquire> &shares)
+bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<Share_acquire> &shares,
+                    bool drop_db)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, table->db.str,
                                              table->table_name.str,
@@ -12046,10 +12049,14 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<Share_acquire> &shares)
   TABLE_SHARE *share= s.share;
   if (!share)
     return true;
-  if (!share->referenced_keys.is_empty())
+  for (const FK_info &rk: share->referenced_keys)
   {
-    my_error(ER_ROW_IS_REFERENCED, MYF(0));
-    return true;
+    if (0 != cmp_table(rk.foreign_db, table->db) ||
+        (!drop_db && 0 != cmp_table(rk.foreign_table, table->table_name)))
+    {
+      my_error(ER_ROW_IS_REFERENCED, MYF(0));
+      return true;
+    }
   }
   if (share->foreign_keys.is_empty())
     return false;
@@ -12057,7 +12064,7 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<Share_acquire> &shares)
   for (const FK_info &fk: share->foreign_keys)
   {
     if (0 == cmp_table(fk.referenced_db, table->db) &&
-        0 == cmp_table(fk.referenced_table, table->table_name))
+        (drop_db || 0 == cmp_table(fk.referenced_table, table->table_name)))
       continue;
     if (tables.insert(fk.referenced_db, fk.referenced_table))
       return true;
