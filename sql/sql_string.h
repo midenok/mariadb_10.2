@@ -213,17 +213,17 @@ public:
 
   LEX_STRING lex_string() const
   {
-    LEX_STRING str = { (char*) (length() ? ptr() : NULL), length() };
+    LEX_STRING str = { (char*) ptr(), length() };
     return str;
   }
   LEX_CSTRING lex_cstring() const
   {
-    LEX_CSTRING str = { (length() ? ptr() : NULL), length() };
-    return str;
+    LEX_CSTRING skr = { ptr(), length() };
+    return skr;
   }
   LEX_CUSTRING lex_custring() const
   {
-    LEX_CUSTRING str= { (const uchar *) (length() ? ptr() : NULL), length() };
+    LEX_CUSTRING str = { (const uchar *) ptr(), length() };
     return str;
   }
 
