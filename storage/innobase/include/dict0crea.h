@@ -149,8 +149,9 @@ local_fk_set belong to
 dberr_t
 dict_create_add_foreigns_to_dictionary(
 /*===================================*/
-	const dict_foreign_set&	local_fk_set,
+	dict_foreign_set&	local_fk_set,
 	const dict_table_t*	table,
+	bool			alter,
 	trx_t*			trx)
 	MY_ATTRIBUTE((nonnull, warn_unused_result));
 
@@ -216,6 +217,7 @@ dict_create_add_foreign_to_dictionary(
 /*==================================*/
 	const char*		name,	/*!< in: table name */
 	const dict_foreign_t*	foreign,/*!< in: foreign key */
+	bool			alter,
 	trx_t*			trx)	/*!< in/out: dictionary transaction */
 	MY_ATTRIBUTE((nonnull, warn_unused_result));
 
