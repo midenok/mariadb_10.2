@@ -12312,9 +12312,8 @@ create_table_info_t::create_foreign_keys()
 	const CHARSET_INFO*   cs	= innobase_get_charset(m_thd);
 	const char*	      name	= m_table_name;
 
-	enum_sql_command sqlcom = enum_sql_command(thd_sql_command(m_thd));
-	const char*	 operation = sqlcom == SQLCOM_ALTER_TABLE
-					? "Alter " : "Create ";
+	bool alter = enum_sql_command(thd_sql_command(m_thd)) == SQLCOM_ALTER_TABLE;
+	const char*	 operation = alter ? "Alter " : "Create ";
 
 	if (tmp_table && !m_form->s->foreign_keys.is_empty()) {
 		ib_foreign_warn(m_trx, DB_CANNOT_ADD_CONSTRAINT,
@@ -12329,7 +12328,7 @@ create_table_info_t::create_foreign_keys()
 		return (DB_CANNOT_ADD_CONSTRAINT);
 	}
 
-	if (sqlcom == SQLCOM_ALTER_TABLE) {
+	if (alter) {
 		dict_table_t* table_to_alter;
 		mem_heap_t*   heap = mem_heap_create(10000);
 		ulint	      highest_id_so_far;
@@ -12694,7 +12693,7 @@ create_table_info_t::create_foreign_keys()
 	trx_set_dict_operation(m_trx, TRX_DICT_OP_TABLE);
 
 	error = dict_create_add_foreigns_to_dictionary(local_fk_set, table,
-						       m_trx);
+						       alter, m_trx);
 
 	if (error == DB_SUCCESS) {
 

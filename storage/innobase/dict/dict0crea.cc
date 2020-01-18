@@ -1832,6 +1832,7 @@ dict_create_add_foreign_to_dictionary(
 /*==================================*/
 	const char*		name,	/*!< in: table name */
 	const dict_foreign_t*	foreign,/*!< in: foreign key */
+	bool			alter,
 	trx_t*			trx)	/*!< in/out: dictionary transaction */
 {
 	dberr_t		error;
@@ -1866,7 +1867,7 @@ dict_create_add_foreign_to_dictionary(
 
 	if (error != DB_SUCCESS) {
 
-		if (error == DB_DUPLICATE_KEY) {
+		if (!alter && error == DB_DUPLICATE_KEY) {
 			char	buf[MAX_TABLE_NAME_LEN + 1] = "";
 			char	tablename[MAX_TABLE_NAME_LEN + 1] = "";
 			char*	fk_def;
@@ -2010,8 +2011,9 @@ local_fk_set belong to
 dberr_t
 dict_create_add_foreigns_to_dictionary(
 /*===================================*/
-	const dict_foreign_set&	local_fk_set,
+	dict_foreign_set&	local_fk_set,
 	const dict_table_t*	table,
+	bool 			alter,
 	trx_t*			trx)
 {
 	dict_foreign_t*	foreign;
@@ -2030,17 +2032,28 @@ dict_create_add_foreigns_to_dictionary(
 	error = DB_SUCCESS;
 
 	for (dict_foreign_set::const_iterator it = local_fk_set.begin();
-	     it != local_fk_set.end();
-	     ++it) {
+	     it != local_fk_set.end();) {
 
 		foreign = *it;
 		ut_ad(foreign->id != NULL);
 
 		error = dict_create_add_foreign_to_dictionary(
-			table->name.m_name, foreign, trx);
+			table->name.m_name, foreign, alter, trx);
 
-		if (error != DB_SUCCESS) {
+		// TODO: MDEV-21052: remove dict_create_add_foreigns_to_dictionary()
+		if (alter && error == DB_DUPLICATE_KEY) {
+			/*
+			   NB: Duplicate check is done by sql layer. Now as we
+			   process full list from table->s->foreign_keys we have
+			   to ignore existing ones. Will be fixed in MDEV-21052.
+			 */
+			error = DB_SUCCESS;
+			trx->error_state = DB_SUCCESS;
+			local_fk_set.erase(it++);
+		} else if (error != DB_SUCCESS) {
 			break;
+		} else {
+			++it;
 		}
 	}
 

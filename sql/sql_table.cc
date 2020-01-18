@@ -8231,6 +8231,9 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       {
         for (const FK_info &fk: orig_foreign_keys)
         {
+          if (0 == cmp_table(fk.referenced_db, table->s->db) &&
+              0 == cmp_table(fk.referenced_table, table->s->table_name))
+            continue;
           for (Lex_cstring &fld: fk.foreign_fields)
           {
             if (0 == cmp_ident(fld, def->change))
@@ -8249,6 +8252,9 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         }
         for (const FK_info &rk: table->s->referenced_keys)
         {
+          if (0 == cmp_table(rk.foreign_db, table->s->db) &&
+              0 == cmp_table(rk.foreign_table, table->s->table_name))
+            continue;
           for (Lex_cstring &fld: rk.referenced_fields)
           {
             if (0 == cmp_ident(fld, def->change))
@@ -8515,8 +8521,14 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         }
       }
       Table_name t(fk.ref_db(), fk.referenced_table);
-      if (alter_ctx->fk_dropped.push_back({t, &fk}))
-        goto err;
+      if (0 != cmp_table(t.db, table->s->db) ||
+          0 != cmp_table(t.name, table->s->table_name))
+      {
+        if (alter_ctx->fk_dropped.push_back({t, &fk}))
+          goto err;
+        if (fk_tables_to_lock.insert(t))
+          goto err;
+      }
       alter_info->tmp_drop_list.push_back(drop); // FIXME: remove in MDEV-21052
       drop_it.remove();
       continue;
@@ -8747,10 +8759,14 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         {
           Table_name t(fk->ref_db.str ? fk->ref_db : table->s->db,
                        fk->ref_table);
-          if (alter_ctx->fk_added.push_back({t, fk}))
-            goto err;
-          if (fk_tables_to_lock.insert(t))
-            goto err;
+          if (0 != cmp_table(t.db, table->s->db) ||
+              0 != cmp_table(t.name, table->s->table_name))
+          {
+            if (alter_ctx->fk_added.push_back({t, fk}))
+              goto err;
+            if (fk_tables_to_lock.insert(t))
+              goto err;
+          }
         }
       }
       new_key_list.push_back(key, thd->mem_root);
@@ -9325,6 +9341,7 @@ static bool fk_prepare_copy_alter_table(THD *thd, TABLE *table,
 
       mdl_request.init(MDL_key::TABLE, ref_db, ref_table, MDL_SHARED_NO_WRITE,
                        MDL_TRANSACTION);
+      // FIXME: is it needed now?
       if (thd->mdl_context.acquire_lock(&mdl_request,
                                         thd->variables.lock_wait_timeout))
         DBUG_RETURN(true);
@@ -11851,7 +11868,7 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
   }
 
   /* Update foreign_fields of referenced tables. No FRM write required. */
-  for (const FK_rename_col &ren_col:fk_renamed_cols)
+  for (const FK_rename_col &ren_col: fk_renamed_cols)
   {
     auto i= fk_shares.find(ren_col.table);
     DBUG_ASSERT(i != fk_shares.end());
@@ -11881,9 +11898,9 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
   /* Update referenced_fields of foreign tables. FRM write is required. */
   for (const FK_rename_col &ren_col: rk_renamed_cols)
   {
-    TABLE_LIST tl;
-    tl.init_one_table(&ren_col.table.db, &ren_col.table.name, NULL, TL_IGNORE);
-    Share_acquire fk_table(thd, tl);
+    auto i= fk_shares.find(ren_col.table);
+    DBUG_ASSERT(i != fk_shares.end());
+    Share_acquire &fk_table= i->second;
     if (!fk_table.share)
       return true;
     TABLE_SHARE *fk_share= fk_table.share;
@@ -11913,9 +11930,9 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
   /* Add new referenced_keys to referenced tables. FRM write is required. */
   for (const FK_add_new &new_fk: fk_added)
   {
-    TABLE_LIST tl;
-    tl.init_one_table(&new_fk.ref.db, &new_fk.ref.name, NULL, TL_IGNORE);
-    Share_acquire ref_table(thd, tl);
+    auto i= fk_shares.find(new_fk.ref);
+    DBUG_ASSERT(i != fk_shares.end());
+    Share_acquire &ref_table= i->second;
     if (!ref_table.share)
       return true;
     TABLE_SHARE *ref_share= ref_table.share;
@@ -11971,9 +11988,9 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
   /* Remove dropped referenced_keys in referenced tables. FRM write is required. */
   for (const FK_drop_old &dropped_fk: fk_dropped)
   {
-    TABLE_LIST tl;
-    tl.init_one_table(&dropped_fk.ref.db, &dropped_fk.ref.name, NULL, TL_IGNORE);
-    Share_acquire ref_table(thd, tl);
+    auto i= fk_shares.find(dropped_fk.ref);
+    DBUG_ASSERT(i != fk_shares.end());
+    Share_acquire &ref_table= i->second;
     if (!ref_table.share)
       return true;
     TABLE_SHARE *ref_share= ref_table.share;
@@ -12144,6 +12161,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
     return true;
   if (share->foreign_keys.is_empty() && share->referenced_keys.is_empty())
     return false;
+  bool self_refs= false;
   Table_name_set tables;
   MDL_request_list mdl_list;
   for (FK_info &fk: share->foreign_keys)
@@ -12158,6 +12176,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
       if (fk.referenced_db.strdup(&share->mem_root, *new_db) ||
           fk.referenced_table.strdup(&share->mem_root, *new_table_name))
         goto mem_error;
+      self_refs= true;
       continue;
     }
     if (tables.insert(fk.referenced_db, fk.referenced_table))
@@ -12174,11 +12193,16 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *table, const LEX_CSTRING *new_db,
       if (rk.foreign_db.strdup(&share->mem_root, *new_db) ||
           rk.foreign_table.strdup(&share->mem_root, *new_table_name))
         goto mem_error;
+      self_refs= true;
       continue;
     }
     if (tables.insert(rk.foreign_db, rk.foreign_table))
       goto mem_error;
   }
+
+  if (self_refs && share->fk_write_shadow_frm())
+    return true;
+
   if (tables.empty())
     return false;
 
