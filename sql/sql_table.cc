@@ -10732,7 +10732,7 @@ err_new_table_cleanup:
                           (FN_IS_TMP | (no_ha_table ? NO_HA_TABLE : 0)),
                           alter_ctx.get_tmp_path());
 
-  if (table->mdl_ticket->get_type() == MDL_EXCLUSIVE)
+  if (table->mdl_ticket && table->mdl_ticket->get_type() == MDL_EXCLUSIVE)
     goto err_with_mdl;
 
   DBUG_RETURN(true);
@@ -12124,7 +12124,17 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<Share_acquire> &shares,
     tl.init_one_table(&ref.db, &ref.name, &ref.name, TL_IGNORE);
     Share_acquire ref_sa(thd, tl);
     if (!ref_sa.share)
+    {
+      if (!thd->variables.check_foreign() &&
+          thd->is_error() &&
+          thd->get_stmt_da()->sql_errno() == ER_NO_SUCH_TABLE)
+      {
+        // skip non-existing referenced shares, allow drop
+        thd->clear_error();
+        continue;
+      }
       return true;
+    }
     if (shares.push_back(std::move(ref_sa)))
       return true;
     DBUG_ASSERT(!ref_sa.share);

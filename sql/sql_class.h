@@ -790,7 +790,7 @@ typedef struct system_variables
   ulonglong option_bits; ///< OPTION_xxx constants, e.g. OPTION_PROFILING
   bool check_foreign()
   {
-      return !((bool) option_bits & OPTION_NO_FOREIGN_KEY_CHECKS);
+      return !((bool)(option_bits & OPTION_NO_FOREIGN_KEY_CHECKS));
   }
   ulonglong join_buff_space_limit;
   ulonglong log_slow_filter; 

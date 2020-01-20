@@ -158,7 +158,7 @@ Table	Create Table
   PRIMARY KEY (`id`),
   KEY `a` (`a`),
   KEY `fk_#boroda` (`b`),
-  CONSTRAINT `#boroda_ibfk_1` FOREIGN KEY (`a`) REFERENCES `#boroda` (`id`),
+  CONSTRAINT `boroda_ibfk_1` FOREIGN KEY (`a`) REFERENCES `#boroda` (`id`),
   CONSTRAINT `fk_#boroda` FOREIGN KEY (`b`) REFERENCES `#boroda` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 DROP TABLE `#boroda`;
@@ -182,7 +182,7 @@ bor#oda	CREATE TABLE `bor#oda` (
   PRIMARY KEY (`id`),
   KEY `a` (`a`),
   KEY `fk_bor#oda` (`b`),
-  CONSTRAINT `bor#oda_ibfk_1` FOREIGN KEY (`a`) REFERENCES `bor#oda` (`id`),
+  CONSTRAINT `boroda_ibfk_1` FOREIGN KEY (`a`) REFERENCES `bor#oda` (`id`),
   CONSTRAINT `fk_bor#oda` FOREIGN KEY (`b`) REFERENCES `bor#oda` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 DROP TABLE `bor#oda`;

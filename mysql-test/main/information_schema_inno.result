@@ -89,6 +89,8 @@ where constraint_schema = schema();
 UNIQUE_CONSTRAINT_NAME
 NULL
 drop table t2;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
 set foreign_key_checks = 1;
 #
 # Bug#55973 Assertion `thd->transaction.stmt.is_empty()'
