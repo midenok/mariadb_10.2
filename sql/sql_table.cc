@@ -10136,6 +10136,7 @@ do_continue:;
   handlerton *old_db_type= table->s->db_type();
   TABLE *new_table= NULL;
   ha_rows copied=0,deleted=0;
+  ulonglong option_bits_save= thd->variables.option_bits;
 
   /*
     Handling of symlinked tables:
@@ -10570,6 +10571,7 @@ do_continue:;
   char backup_name_buff[FN_LEN];
   LEX_CSTRING backup_name;
   backup_name.str= backup_name_buff;
+  thd->variables.option_bits|= OPTION_NO_FOREIGN_KEY_CHECKS;
 
   DBUG_PRINT("info", ("is_table_renamed: %d  engine_changed: %d",
                       alter_ctx.is_table_renamed(), engine_changed));
@@ -10667,6 +10669,8 @@ do_continue:;
     goto err_with_mdl_after_alter;
   }
 
+  thd->variables.option_bits= option_bits_save;
+
 end_inplace:
   if (thd->locked_tables_list.reopen_tables(thd, false))
     goto err_with_mdl_after_alter;
@@ -10746,6 +10750,7 @@ err_with_mdl_after_alter:
   write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
 err_with_mdl:
+  thd->variables.option_bits= option_bits_save;
   alter_ctx.fk_rollback();
 
   /*
@@ -12066,13 +12071,16 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<Share_acquire> &shares,
   TABLE_SHARE *share= s.share;
   if (!share)
     return true;
-  for (const FK_info &rk: share->referenced_keys)
+  if (thd->variables.check_foreign())
   {
-    if (0 != cmp_table(rk.foreign_db, table->db) ||
-        (!drop_db && 0 != cmp_table(rk.foreign_table, table->table_name)))
+    for (const FK_info &rk: share->referenced_keys)
     {
-      my_error(ER_ROW_IS_REFERENCED, MYF(0));
-      return true;
+      if (0 != cmp_table(rk.foreign_db, table->db) ||
+          (!drop_db && 0 != cmp_table(rk.foreign_table, table->table_name)))
+      {
+        my_error(ER_ROW_IS_REFERENCED, MYF(0));
+        return true;
+      }
     }
   }
   if (share->foreign_keys.is_empty())
