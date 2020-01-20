@@ -1832,7 +1832,6 @@ dict_create_add_foreign_to_dictionary(
 /*==================================*/
 	const char*		name,	/*!< in: table name */
 	const dict_foreign_t*	foreign,/*!< in: foreign key */
-	bool			alter,
 	trx_t*			trx)	/*!< in/out: dictionary transaction */
 {
 	dberr_t		error;
@@ -1867,7 +1866,7 @@ dict_create_add_foreign_to_dictionary(
 
 	if (error != DB_SUCCESS) {
 
-		if (!alter && error == DB_DUPLICATE_KEY) {
+		if (error == DB_DUPLICATE_KEY) {
 			char	buf[MAX_TABLE_NAME_LEN + 1] = "";
 			char	tablename[MAX_TABLE_NAME_LEN + 1] = "";
 			char*	fk_def;
@@ -1998,6 +1997,13 @@ dict_foreigns_has_s_base_col(
 	return(false);
 }
 
+bool
+innobase_drop_foreign_try(
+/*======================*/
+	trx_t*			trx,
+	const char*		table_name,
+	const char*		foreign_id);
+
 /** Adds the given set of foreign key objects to the dictionary tables
 in the database. This function does not modify the dictionary cache. The
 caller must ensure that all foreign key objects contain a valid constraint
@@ -2013,7 +2019,7 @@ dict_create_add_foreigns_to_dictionary(
 /*===================================*/
 	dict_foreign_set&	local_fk_set,
 	const dict_table_t*	table,
-	bool 			alter,
+	dict_table_t* 		table_to_alter,
 	trx_t*			trx)
 {
 	dict_foreign_t*	foreign;
@@ -2031,29 +2037,26 @@ dict_create_add_foreigns_to_dictionary(
 
 	error = DB_SUCCESS;
 
+	if (table_to_alter != NULL) {
+		for (dict_foreign_t *fk: table_to_alter->foreign_set) {
+			if (innobase_drop_foreign_try(trx, table_to_alter->name.m_name, fk->id)) {
+				return DB_ERROR;
+			}
+		}
+	}
+
 	for (dict_foreign_set::const_iterator it = local_fk_set.begin();
-	     it != local_fk_set.end();) {
+	     it != local_fk_set.end();
+	     ++it) {
 
 		foreign = *it;
 		ut_ad(foreign->id != NULL);
 
 		error = dict_create_add_foreign_to_dictionary(
-			table->name.m_name, foreign, alter, trx);
+			table->name.m_name, foreign, trx);
 
-		// TODO: MDEV-21052: remove dict_create_add_foreigns_to_dictionary()
-		if (alter && error == DB_DUPLICATE_KEY) {
-			/*
-			   NB: Duplicate check is done by sql layer. Now as we
-			   process full list from table->s->foreign_keys we have
-			   to ignore existing ones. Will be fixed in MDEV-21052.
-			 */
-			error = DB_SUCCESS;
-			trx->error_state = DB_SUCCESS;
-			local_fk_set.erase(it++);
-		} else if (error != DB_SUCCESS) {
+		if (error != DB_SUCCESS) {
 			break;
-		} else {
-			++it;
 		}
 	}
 

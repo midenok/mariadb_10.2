@@ -8664,7 +8664,7 @@ func_exit:
 @param foreign_id Foreign key constraint identifier
 @retval true Failure
 @retval false Success */
-static MY_ATTRIBUTE((nonnull, warn_unused_result))
+MY_ATTRIBUTE((nonnull, warn_unused_result))
 bool
 innobase_drop_foreign_try(
 /*======================*/
@@ -8674,7 +8674,6 @@ innobase_drop_foreign_try(
 {
 	DBUG_ENTER("innobase_drop_foreign_try");
 
-	DBUG_ASSERT(trx_get_dict_operation(trx) == TRX_DICT_OP_INDEX);
 	ut_ad(trx->dict_operation_lock_mode == RW_X_LATCH);
 	ut_d(dict_sys.assert_locked());
 
@@ -8693,6 +8692,50 @@ innobase_drop_foreign_try(
 	pars_info_add_str_literal(info, "id", foreign_id);
 
 	trx->op_info = "dropping foreign key constraint from dictionary";
+	error = que_eval_sql(info, sql, FALSE, trx);
+	trx->op_info = "";
+
+	DBUG_EXECUTE_IF("ib_drop_foreign_error",
+			error = DB_OUT_OF_FILE_SPACE;);
+
+	if (error != DB_SUCCESS) {
+		my_error_innodb(error, table_name, 0);
+		trx->error_state = DB_SUCCESS;
+		DBUG_RETURN(true);
+	}
+
+	DBUG_RETURN(false);
+}
+
+
+static MY_ATTRIBUTE((nonnull, warn_unused_result))
+bool
+innobase_drop_foreigns_try(
+/*======================*/
+	trx_t*			trx,
+	const char*		table_name)
+{
+	DBUG_ENTER("innobase_drop_foreigns_try");
+
+	DBUG_ASSERT(trx_get_dict_operation(trx) == TRX_DICT_OP_INDEX);
+	ut_ad(trx->dict_operation_lock_mode == RW_X_LATCH);
+	ut_d(dict_sys.assert_locked());
+
+	/* Drop the constraint from the data dictionary. */
+	static const char sql[] =
+		"PROCEDURE DROP_FOREIGN_PROC () IS\n"
+		"BEGIN\n"
+		"DELETE FROM SYS_FOREIGN WHERE FOR_NAME=:table;\n"
+		"DELETE FROM SYS_FOREIGN_COLS WHERE ID=:id;\n"
+		"END;\n";
+
+	dberr_t		error;
+	pars_info_t*	info;
+
+	info = pars_info_create();
+	pars_info_add_str_literal(info, "table", table_name);
+
+	trx->op_info = "dropping foreign key constraints from dictionary";
 	error = que_eval_sql(info, sql, FALSE, trx);
 	trx->op_info = "";
 
@@ -9394,7 +9437,7 @@ innobase_update_foreign_try(
 		names, while the columns in ctx->old_table have not
 		been renamed yet. */
 		error = dict_create_add_foreign_to_dictionary(
-			ctx->old_table->name.m_name, fk, false, trx);
+			ctx->old_table->name.m_name, fk, trx);
 
 		DBUG_EXECUTE_IF(
 			"innodb_test_cannot_add_fk_system",

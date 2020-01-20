@@ -12311,6 +12311,7 @@ create_table_info_t::create_foreign_keys()
 	const bool	      tmp_table = m_flags2 & DICT_TF2_TEMPORARY;
 	const CHARSET_INFO*   cs	= innobase_get_charset(m_thd);
 	const char*	      name	= m_table_name;
+	dict_table_t* table_to_alter = NULL;
 
 	bool alter = enum_sql_command(thd_sql_command(m_thd)) == SQLCOM_ALTER_TABLE;
 	const char*	 operation = alter ? "Alter " : "Create ";
@@ -12329,7 +12330,6 @@ create_table_info_t::create_foreign_keys()
 	}
 
 	if (alter) {
-		dict_table_t* table_to_alter;
 		mem_heap_t*   heap = mem_heap_create(10000);
 		ulint	      highest_id_so_far;
 		char*	      n = dict_get_referenced_table(
@@ -12693,7 +12693,7 @@ create_table_info_t::create_foreign_keys()
 	trx_set_dict_operation(m_trx, TRX_DICT_OP_TABLE);
 
 	error = dict_create_add_foreigns_to_dictionary(local_fk_set, table,
-						       alter, m_trx);
+						       table_to_alter, m_trx);
 
 	if (error == DB_SUCCESS) {
 
