@@ -12564,7 +12564,7 @@ create_table_info_t::create_foreign_keys()
 		fields and in the right order, and the types are the same as in
 		foreign->foreign_index */
 
-		if (foreign->referenced_table) {
+		if (m_trx->check_foreigns && foreign->referenced_table) {
 			index = dict_foreign_find_index(
 				foreign->referenced_table, NULL,
 				ref_column_names, i, foreign->foreign_index,
