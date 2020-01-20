@@ -8046,7 +8046,6 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List<Create_field> new_create_list;
   /* New key definitions are added here */
   List<Key> new_key_list;
-  FK_list orig_foreign_keys;
   Lex_cstring_set fk_names;
   Table_name_set fk_tables_to_lock;
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
@@ -8070,13 +8069,6 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   MY_BITMAP *dropped_fields= NULL; // if it's NULL - no dropped fields
   bool drop_period= false;
   DBUG_ENTER("mysql_prepare_alter_table");
-
-  if (orig_foreign_keys.copy(&table->s->foreign_keys, thd->mem_root) ||
-      list_copy_and_replace_each_value(orig_foreign_keys, thd->mem_root))
-  {
-    my_error(ER_OUT_OF_RESOURCES, MYF(0));
-    DBUG_RETURN(1);
-  }
 
   /*
     Merge incompatible changes flag in case of upgrade of a table from an
@@ -8229,7 +8221,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       if ((alter_info->flags & ALTER_RENAME_COLUMN) &&
           0 != cmp_ident(def->change, def->field_name))
       {
-        for (const FK_info &fk: orig_foreign_keys)
+        for (const FK_info &fk: table->s->foreign_keys)
         {
           if (0 == cmp_table(fk.referenced_db, table->s->db) &&
               0 == cmp_table(fk.referenced_table, table->s->table_name))
@@ -8246,6 +8238,17 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
                     def->change, def->field_name}))
                 DBUG_RETURN(1);
               if (fk_tables_to_lock.insert(fk.referenced_db, fk.referenced_table))
+                DBUG_RETURN(1);
+            }
+          }
+        }
+        for (FK_info &fk: table->s->foreign_keys)
+        {
+          for (Lex_cstring &fld: fk.foreign_fields)
+          {
+            if (0 == cmp_ident(fld, def->change))
+            {
+              if (fld.strdup(&table->s->mem_root, def->field_name))
                 DBUG_RETURN(1);
             }
           }
@@ -8491,7 +8494,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   /*
     Collect all foreign keys which isn't in drop list.
   */
-  for (const FK_info &fk: orig_foreign_keys)
+  for (const FK_info &fk: table->s->foreign_keys)
   {
     Foreign_key *key;
     Alter_drop *drop;
@@ -11810,9 +11813,15 @@ bool TABLE_SHARE::fk_update_shares(THD *thd, Table_name_set &ref_tables)
     TABLE_SHARE *ref_share= share_acquire.share;
     if (!ref_share)
     {
-      if (thd->variables.check_foreign())
-        return true;
-      continue;
+      if (!thd->variables.check_foreign() &&
+          thd->is_error() &&
+          thd->get_stmt_da()->sql_errno() == ER_NO_SUCH_TABLE)
+      {
+        // skip non-existing referenced shares, allow create
+        thd->clear_error();
+        continue;
+      }
+      return true;
     }
 
     for (const FK_info &fk: foreign_keys)
