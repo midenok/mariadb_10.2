@@ -5143,7 +5143,7 @@ int ha_create_table(THD *thd, const char *path,
   char name_buff[FN_REFLEN];
   const char *name;
   TABLE_SHARE share;
-  Table_name_set ref_tables;
+  FK_backup_vector fk_shares;
   bool temp_table __attribute__((unused)) =
     create_info->options & (HA_LEX_CREATE_TMP_TABLE | HA_CREATE_TMP_ALTER);
   DBUG_ENTER("ha_create_table");
@@ -5171,7 +5171,7 @@ int ha_create_table(THD *thd, const char *path,
       goto err;
   }
 
-  if (fk_update_refs && share.fk_update_shares(thd, ref_tables))
+  if (fk_update_refs && share.fk_handle_create(thd, fk_shares))
     goto err;
 
   share.m_psi= PSI_CALL_get_table_share(temp_table, &share);
@@ -5179,8 +5179,6 @@ int ha_create_table(THD *thd, const char *path,
   if (open_table_from_share(thd, &share, &empty_clex_str, 0, READ_ALL, 0,
                             &table, true))
   {
-    if (fk_update_refs)
-      share.fk_revert_create(thd, ref_tables);
     goto err;
   }
 
@@ -5192,8 +5190,6 @@ int ha_create_table(THD *thd, const char *path,
 
   if (unlikely(error))
   {
-    if (fk_update_refs)
-      share.fk_revert_create(thd, ref_tables);
     if (!thd->is_error())
       my_error(ER_CANT_CREATE_TABLE, MYF(0), db, table_name, error);
     table.file->print_error(error, MYF(ME_WARNING));
@@ -5202,8 +5198,16 @@ int ha_create_table(THD *thd, const char *path,
   }
 
   (void) closefrm(&table);
- 
+  for (FK_ddl_backup &bak: fk_shares)
+  {
+    bak.sa.share->fk_install_shadow_frm();
+    // FIXME: MDEV-21053 (now there is no right for error)
+    thd->clear_error();
+  }
+
 err:
+  for (FK_ddl_backup &bak: fk_shares)
+    bak.rollback();
   free_table_share(&share);
   DBUG_RETURN(error != 0);
 }
@@ -7701,19 +7705,6 @@ static void require_trx_id_error(const char *field, const char *table)
 {
   my_error(ER_VERS_FIELD_WRONG_TYPE, MYF(0), field, "BIGINT(20) UNSIGNED",
            table);
-}
-
-bool FK_list::get(THD *thd, Table_name_set &result, bool foreign)
-{
-  List_iterator_fast<FK_info> it(*this);
-  while (FK_info *fk= it++)
-  {
-    if (foreign)
-      result.insert(fk->foreign_db, fk->foreign_table);
-    else
-      result.insert(fk->referenced_db, fk->referenced_table);
-  }
-  return false;
 }
 
 

@@ -44,6 +44,7 @@ public:
   {
     share= NULL;
   }
+protected:
   void rollback()
   {
     DBUG_ASSERT(share);
@@ -60,6 +61,11 @@ public:
   virtual ~FK_ref_backup()
   {
     commit();
+  }
+  void rollback_frm()
+  {
+    rollback();
+    share->fk_drop_shadow_frm();
   }
 };
 
@@ -400,6 +406,7 @@ public:
   // NB: backup is added only if not exists
   bool fk_add_backup(TABLE_SHARE *share);
   void fk_rollback();
+  bool fk_install_frms();
 
 private:
   char new_filename[FN_REFLEN + 1];
