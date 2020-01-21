@@ -33,7 +33,7 @@
 
 static TABLE_LIST *rename_tables(THD *thd, TABLE_LIST *table_list,
                                  bool skip_error,
-                                 vector<FK_rename_backup> &fk_rename_backup);
+                                 vector<FK_ddl_backup> &fk_rename_backup);
 
 static TABLE_LIST *reverse_table_list(TABLE_LIST *table_list);
 
@@ -49,7 +49,7 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
   TABLE_LIST *ren_table= 0;
   int to_table;
   const char *rename_log_table[2]= {NULL, NULL};
-  vector<FK_rename_backup> fk_rename_backup;
+  vector<FK_ddl_backup> fk_rename_backup;
   DBUG_ENTER("mysql_rename_tables");
 
   /*
@@ -169,10 +169,19 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
     /* Revert the table list (for prepared statements) */
     table_list= reverse_table_list(table_list);
 
-    for (FK_rename_backup &fk_bak: fk_rename_backup)
-      fk_bak.reverse();
+    for (FK_ddl_backup &bak: fk_rename_backup)
+      bak.rollback();
 
     error= 1;
+  }
+  else
+  {
+    for (FK_ddl_backup &bak: fk_rename_backup)
+    {
+      error= bak.sa.share->fk_install_shadow_frm();
+      if (error)
+        break;
+    }
   }
 
   if (likely(!silent && !error))
@@ -260,7 +269,7 @@ do_rename_temporary(THD *thd, TABLE_LIST *ren_table, TABLE_LIST *new_table,
 static bool
 do_rename(THD *thd, TABLE_LIST *ren_table, const LEX_CSTRING *new_db,
           const LEX_CSTRING *new_table_name, const LEX_CSTRING *new_table_alias,
-          bool skip_error, vector<FK_rename_backup> &fk_rename_backup)
+          bool skip_error, vector<FK_ddl_backup> &fk_rename_backup)
 {
   int rc= 1;
   handlerton *hton;
@@ -288,9 +297,6 @@ do_rename(THD *thd, TABLE_LIST *ren_table, const LEX_CSTRING *new_db,
   if (ha_table_exists(thd, &ren_table->db, &old_alias, &hton) && hton)
   {
     DBUG_ASSERT(!thd->locked_tables_mode);
-    if (!skip_error &&
-        fk_handle_rename(thd, ren_table, new_db, new_table_name, fk_rename_backup))
-      DBUG_RETURN(1);
     tdc_remove_table(thd, TDC_RT_REMOVE_ALL,
                      ren_table->db.str, ren_table->table_name.str);
 
@@ -302,11 +308,14 @@ do_rename(THD *thd, TABLE_LIST *ren_table, const LEX_CSTRING *new_db,
         (void) rename_table_in_stat_tables(thd, &ren_table->db,
                                            &ren_table->table_name,
                                            new_db, &new_alias);
-        if ((rc= Table_triggers_list::change_table_name(thd, &ren_table->db,
-                                                        &old_alias,
-                                                        &ren_table->table_name,
-                                                        new_db,
-                                                        &new_alias)))
+        rc= Table_triggers_list::change_table_name(thd, &ren_table->db,
+                                                   &old_alias,
+                                                   &ren_table->table_name,
+                                                   new_db, &new_alias);
+        if (!rc && !skip_error)
+          rc= fk_handle_rename(thd, ren_table, new_db, new_table_name,
+                               fk_rename_backup);
+        if (rc)
         {
           /*
             We've succeeded in renaming table's .frm and in updating
@@ -370,7 +379,7 @@ do_rename(THD *thd, TABLE_LIST *ren_table, const LEX_CSTRING *new_db,
 
 static TABLE_LIST *
 rename_tables(THD *thd, TABLE_LIST *table_list, bool skip_error,
-              vector<FK_rename_backup> &fk_rename_backup)
+              vector<FK_ddl_backup> &fk_rename_backup)
 {
   TABLE_LIST *ren_table, *new_table;
 

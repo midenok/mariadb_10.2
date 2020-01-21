@@ -19,6 +19,7 @@
 #include "sql_class.h"
 #include "sql_table.h"
 #include "ha_sequence.h"
+#include "discover.h"
 
 static int read_string(File file, uchar**to, size_t length)
 {
@@ -472,69 +473,59 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   int4store(frm_dst + 10, frm_size);
   memcpy((void *)pos, rest_src + 4, rest_size - 4);
 
-  if (write_frm_image(frm_dst, frm_size))
   {
-    // FIXME: error
-    return true;
+    char shadow_path[FN_REFLEN+1];
+//     char shadow_frm_name[FN_REFLEN+1];
+    build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
+                                db, table_name);
+//     strxmov(shadow_frm_name, shadow_path, reg_ext, NullS);
+    if (writefrm(shadow_path, db.str, table_name.str, false, frm_dst, frm_size))
+    {
+      // FIXME: error
+      return true;
+    }
   }
 
   return false;
 }
 
-// FIXME: remove
-bool dd_check_frm(LEX_CUSTRING *frm)
+bool TABLE_SHARE::fk_install_shadow_frm()
 {
-  DBUG_ASSERT(0);
-  const uchar * frm_src= frm->str;
-  uchar * frm_dst;
-  uchar * pos;
-  size_t frm_size= frm->length;
-  Extra2_info extra2;
-
-  DBUG_ASSERT(frm_size > 0);
-
-  Scope_malloc frm_src_freer(frm_src);
-
-  if (frm_size < FRM_HEADER_SIZE + FRM_FORMINFO_SIZE)
-    return true;
-
-  if (!is_binary_frm_header(frm_src))
-    return true;
-
-  if (extra2.read(frm_src, frm_size))
-    return true;
-
-  const uchar * const rest_src= frm_src + FRM_HEADER_SIZE + extra2.read_size;
-  const size_t rest_size= frm_size - FRM_HEADER_SIZE - extra2.read_size;
-  ulong forminfo_off= uint4korr(rest_src);
-
-  // add/change some extra2 data here
-  Scope_malloc(extra2.foreign_key_info.str, 65400, MY_WME);
-  extra2.foreign_key_info.length= 65400;
-
-  const ulong extra2_increase= extra2.store_size() - extra2.read_size;
-  frm_size+= extra2_increase;
-  frm_dst= (uchar *) my_malloc(frm_size, MY_WME);
-  memcpy((void *)frm_dst, (void *)frm_src, FRM_HEADER_SIZE);
-
-  if (!(pos= extra2.write(frm_dst, frm_size)))
+  char shadow_path[FN_REFLEN+1];
+  char shadow_frm_name[FN_REFLEN+1];
+  char frm_name[FN_REFLEN+1];
+  MY_STAT stat_info;
+  build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
+                              db, table_name);
+  strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
+  strxnmov(frm_name, sizeof(frm_name), normalized_path.str, reg_ext, NullS);
+  if (!mysql_file_stat(key_file_frm, shadow_frm_name, &stat_info, MYF(0)))
   {
-    memcpy((void *)frm_dst, (void *)frm_src, frm->length);
-    frm->str= frm_dst;
-    frm->length= frm_size;
+    my_error(ER_FILE_NOT_FOUND, MYF(0), shadow_frm_name, my_errno);
     return true;
   }
-
-  forminfo_off+= extra2_increase;
-  int4store(pos, forminfo_off);
-  pos+= 4;
-  int2store(frm_dst + 4, extra2.write_size);
-  int2store(frm_dst + 6, FRM_HEADER_SIZE + extra2.write_size + 4); // Position to key information
-  int4store(frm_dst + 10, frm_size);
-
-  memcpy((void *)pos, rest_src + 4, rest_size - 4);
-  frm->str= frm_dst;
-  frm->length= frm_size;
-
+  if (mysql_file_delete(key_file_frm, frm_name, MYF(MY_WME)))
+  {
+    // FIXME: error
+    return true;
+  }
+  if (mysql_file_rename(key_file_frm, shadow_frm_name, frm_name, MYF(MY_WME)))
+  {
+    // FIXME: error
+    return true;
+  }
   return false;
+}
+
+void TABLE_SHARE::fk_drop_shadow_frm()
+{
+  char shadow_path[FN_REFLEN+1];
+  char shadow_frm_name[FN_REFLEN+1];
+  build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
+                              db, table_name);
+  strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
+  if (mysql_file_delete(key_file_frm, shadow_frm_name, MYF(MY_WME)))
+  {
+    // FIXME: push warning
+  }
 }
