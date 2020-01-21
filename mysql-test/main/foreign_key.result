@@ -278,41 +278,74 @@ t1	CREATE TABLE `t1` (
 insert into t1 values (1, 2);
 ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t1`, CONSTRAINT `fk_t1` FOREIGN KEY (`id2`) REFERENCES `t1` (`id`))
 insert into t1 values (1, 1);
-alter table t1 add foreign key (id2) references t1 (id);
+alter table t1 change id2 id3 int;
 flush tables t1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `id` int(11) NOT NULL,
-  `id2` int(11) DEFAULT NULL,
+  `id3` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `fk_t1_2` (`id2`),
-  CONSTRAINT `fk_t1` FOREIGN KEY (`id2`) REFERENCES `t1` (`id`),
-  CONSTRAINT `fk_t1_2` FOREIGN KEY (`id2`) REFERENCES `t1` (`id`)
+  KEY `fk_t1` (`id3`),
+  CONSTRAINT `fk_t1` FOREIGN KEY (`id3`) REFERENCES `t1` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+alter table t1 add foreign key (id3) references t1 (id);
+flush tables t1;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `id3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_t1_2` (`id3`),
+  CONSTRAINT `fk_t1` FOREIGN KEY (`id3`) REFERENCES `t1` (`id`),
+  CONSTRAINT `fk_t1_2` FOREIGN KEY (`id3`) REFERENCES `t1` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+alter table t1 change id id4 int;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id4` int(11) NOT NULL,
+  `id3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id4`),
+  KEY `fk_t1_2` (`id3`),
+  CONSTRAINT `fk_t1` FOREIGN KEY (`id3`) REFERENCES `t1` (`id4`),
+  CONSTRAINT `fk_t1_2` FOREIGN KEY (`id3`) REFERENCES `t1` (`id4`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+flush tables t1;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id4` int(11) NOT NULL,
+  `id3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id4`),
+  KEY `fk_t1_2` (`id3`),
+  CONSTRAINT `fk_t1` FOREIGN KEY (`id3`) REFERENCES `t1` (`id4`),
+  CONSTRAINT `fk_t1_2` FOREIGN KEY (`id3`) REFERENCES `t1` (`id4`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 alter table t1 drop foreign key fk_t1;
 flush tables t1;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `id` int(11) NOT NULL,
-  `id2` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `fk_t1_2` (`id2`),
-  CONSTRAINT `fk_t1_2` FOREIGN KEY (`id2`) REFERENCES `t1` (`id`)
+  `id4` int(11) NOT NULL,
+  `id3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id4`),
+  KEY `fk_t1_2` (`id3`),
+  CONSTRAINT `fk_t1_2` FOREIGN KEY (`id3`) REFERENCES `t1` (`id4`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 rename table t1 to t2;
 flush tables t2;
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int(11) NOT NULL,
-  `id2` int(11) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  KEY `fk_t1_2` (`id2`),
-  CONSTRAINT `fk_t1_2` FOREIGN KEY (`id2`) REFERENCES `t2` (`id`)
+  `id4` int(11) NOT NULL,
+  `id3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id4`),
+  KEY `fk_t1_2` (`id3`),
+  CONSTRAINT `fk_t1_2` FOREIGN KEY (`id3`) REFERENCES `t2` (`id4`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 delete from t2;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t1_2` FOREIGN KEY (`id2`) REFERENCES `t2` (`id`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t1_2` FOREIGN KEY (`id3`) REFERENCES `t2` (`id4`))
 drop table t2;
 set default_storage_engine= default;
