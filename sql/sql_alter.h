@@ -25,16 +25,42 @@ class Alter_column;
 class Key;
 
 
-class FK_alter_backup
+/* Backup for the table we altering */
+class FK_table_backup
 {
 public:
   TABLE_SHARE *share;
   FK_list foreign_keys;
   FK_list referenced_keys;
 
-  FK_alter_backup(TABLE_SHARE *_share);
+  FK_table_backup() : share(NULL) {}
+  virtual ~FK_table_backup()
+  {
+    if (share)
+      rollback();
+  }
+  bool init(TABLE_SHARE *);
+  void commit()
+  {
+    share= NULL;
+  }
+  void rollback()
+  {
+    DBUG_ASSERT(share);
+    share->foreign_keys= foreign_keys;
+    share->referenced_keys= referenced_keys;
+  }
+};
 
-  void reverse();
+
+/* Backup for the table we refering or which referes us */
+class FK_ref_backup : public FK_table_backup
+{
+public:
+  virtual ~FK_ref_backup()
+  {
+    commit();
+  }
 };
 
 
@@ -368,8 +394,9 @@ public:
   bool fk_update_shares_and_frms(THD *thd);
   void fk_release_locks(THD *thd);
 
+  FK_table_backup fk_table_backup;
   // NB: share is owned and released by fk_shares
-  map<TABLE_SHARE *, FK_alter_backup> fk_alter_backup;
+  map<TABLE_SHARE *, FK_ref_backup> fk_ref_backup;
   // NB: backup is added only if not exists
   bool fk_add_backup(TABLE_SHARE *share);
   void fk_rollback();

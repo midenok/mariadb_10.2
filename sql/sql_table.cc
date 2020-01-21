@@ -8068,6 +8068,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   Field **f_ptr,*field;
   MY_BITMAP *dropped_fields= NULL; // if it's NULL - no dropped fields
   bool drop_period= false;
+  alter_ctx->fk_table_backup.init(table->s);
   DBUG_ENTER("mysql_prepare_alter_table");
 
   /*
@@ -8242,9 +8243,21 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
             }
           }
         }
+        // NB: prepare_create_table() requires foreign_keys updated (see validate())
         for (FK_info &fk: table->s->foreign_keys)
         {
           for (Lex_cstring &fld: fk.foreign_fields)
+          {
+            if (0 == cmp_ident(fld, def->change))
+            {
+              if (fld.strdup(&table->s->mem_root, def->field_name))
+                DBUG_RETURN(1);
+            }
+          }
+          if (0 != cmp_table(fk.referenced_db, table->s->db) ||
+              0 != cmp_table(fk.referenced_table, table->s->table_name))
+            continue;
+          for (Lex_cstring &fld: fk.referenced_fields)
           {
             if (0 == cmp_ident(fld, def->change))
             {
@@ -8270,6 +8283,34 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
                     def->change, def->field_name}))
                 DBUG_RETURN(1);
               if (fk_tables_to_lock.insert(rk.foreign_db, rk.foreign_table))
+                DBUG_RETURN(1);
+            }
+          }
+        }
+        // NB: prepare_create_table() doesn't require referenced_keys updated,
+        // but we keep consistency.
+        for (FK_info &rk: table->s->referenced_keys)
+        {
+          if (0 == cmp_table(rk.foreign_db, table->s->db) ||
+              0 == cmp_table(rk.foreign_table, table->s->table_name))
+          {
+            for (Lex_cstring &fld: rk.foreign_fields)
+            {
+              if (0 == cmp_ident(fld, def->change))
+              {
+                if (fld.strdup(&table->s->mem_root, def->field_name))
+                  DBUG_RETURN(1);
+              }
+            }
+          }
+          if (0 != cmp_table(rk.referenced_db, table->s->db) ||
+              0 != cmp_table(rk.referenced_table, table->s->table_name))
+            continue;
+          for (Lex_cstring &fld: rk.referenced_fields)
+          {
+            if (0 == cmp_ident(fld, def->change))
+            {
+              if (fld.strdup(&table->s->mem_root, def->field_name))
                 DBUG_RETURN(1);
             }
           }
@@ -10556,6 +10597,8 @@ do_continue:;
     // NB: now after lock upgrade it jumps to "err_with_mdl" as well
     goto err_new_table_cleanup;
 
+  alter_ctx.fk_table_backup.commit();
+
   close_all_tables_for_name(thd, table->s,
                             alter_ctx.is_table_renamed() ?
                             HA_EXTRA_PREPARE_FOR_RENAME:
@@ -10686,7 +10729,7 @@ end_inplace:
                 thd->is_current_stmt_binlog_format_row() &&
                 (create_info->tmp_table())));
   if (write_bin_log(thd, true, thd->query(), thd->query_length()))
-    DBUG_RETURN(true);
+    goto err_with_mdl;
 
   table_list->table= NULL;			// For query cache
   query_cache_invalidate3(thd, table_list, false);
@@ -12036,13 +12079,13 @@ bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
 
 bool Alter_table_ctx::fk_add_backup(TABLE_SHARE *share)
 {
-  FK_alter_backup fk_bak(share);
-  if (!fk_bak.share)
-    return true; // FK_alter_backup() ctor failed
-  auto found= fk_alter_backup.find(share);
-  if (found != fk_alter_backup.end())
+  FK_ref_backup fk_bak;
+  if (fk_bak.init(share))
+    return true;
+  auto found= fk_ref_backup.find(share);
+  if (found != fk_ref_backup.end())
     return false;
-  if (fk_alter_backup.insert(share, fk_bak))
+  if (fk_ref_backup.insert(share, fk_bak))
     return true;
   return false;
 }
@@ -12050,8 +12093,8 @@ bool Alter_table_ctx::fk_add_backup(TABLE_SHARE *share)
 
 void Alter_table_ctx::fk_rollback()
 {
-  for (auto &fk_bak: fk_alter_backup)
-    const_cast<FK_alter_backup *>(&fk_bak.second)->reverse();
+  for (auto &fk_bak: fk_ref_backup)
+    const_cast<FK_ref_backup *>(&fk_bak.second)->rollback();
 }
 
 
@@ -12325,29 +12368,22 @@ FK_rename_backup::reverse()
 }
 
 
-FK_alter_backup::FK_alter_backup(TABLE_SHARE *_share) :
-  share(NULL)
+bool
+FK_table_backup::init(TABLE_SHARE *_share)
 {
+  DBUG_ASSERT(_share);
   if (foreign_keys.copy(&_share->foreign_keys, &_share->mem_root) ||
       list_copy_and_replace_each_value(foreign_keys, &_share->mem_root))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
-    return;
+    return true;
   }
   if (referenced_keys.copy(&_share->referenced_keys, &_share->mem_root) ||
       list_copy_and_replace_each_value(referenced_keys, &_share->mem_root))
   {
     my_error(ER_OUT_OF_RESOURCES, MYF(0));
-    return;
+    return true;
   }
   share= _share;
-}
-
-
-void
-FK_alter_backup::reverse()
-{
-  DBUG_ASSERT(share);
-  share->foreign_keys= foreign_keys;
-  share->referenced_keys= referenced_keys;
+  return false;
 }

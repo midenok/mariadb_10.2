@@ -289,7 +289,14 @@ show create table t1;
 --error ER_NO_REFERENCED_ROW_2
 insert into t1 values (1, 2);
 insert into t1 values (1, 1);
-alter table t1 add foreign key (id2) references t1 (id);
+alter table t1 change id2 id3 int;
+flush tables t1;
+show create table t1;
+alter table t1 add foreign key (id3) references t1 (id);
+flush tables t1;
+show create table t1;
+alter table t1 change id id4 int;
+show create table t1;
 flush tables t1;
 show create table t1;
 alter table t1 drop foreign key fk_t1;
