@@ -34,7 +34,7 @@ create table t2(a int, b int, foreign key (a) references t1(a), foreign key (b) 
 ERROR HY000: Can't create table `test`.`t2` (errno: 150 "Foreign key constraint is incorrectly formed")
 show warnings;
 Level	Code	Message
-Warning	150	Create  table `test`.`t2` with foreign key (b) constraint failed. There is no index in the referenced table where the referenced columns appear as the first columns.
+Warning	150	Create  table `test`.`t2` with foreign key `fk_t2_2` constraint failed. There is no index in the referenced table where the referenced columns appear as the first columns.
 Error	1005	Can't create table `test`.`t2` (errno: 150 "Foreign key constraint is incorrectly formed")
 Warning	1215	Cannot add foreign key constraint for `t2`
 drop table t1;
@@ -114,7 +114,7 @@ create table t2(a int not null, foreign key(a) references t1(f1) on delete set n
 ERROR HY000: Can't create table `test`.`t2` (errno: 150 "Foreign key constraint is incorrectly formed")
 show warnings;
 Level	Code	Message
-Warning	150	Create  table `test`.`t2` with foreign key (a) constraint failed. You have defined a SET NULL condition but column 'a' is defined as NOT NULL.
+Warning	150	Create  table `test`.`t2` with foreign key `fk_t2` constraint failed. You have defined a SET NULL condition but column 'a' is defined as NOT NULL.
 Error	1005	Can't create table `test`.`t2` (errno: 150 "Foreign key constraint is incorrectly formed")
 Warning	1215	Cannot add foreign key constraint for `t2`
 drop table t1;
@@ -123,7 +123,7 @@ create table t2(a char(20), key(a), foreign key(a) references t1(f1)) engine=inn
 ERROR HY000: Can't create table `test`.`t2` (errno: 150 "Foreign key constraint is incorrectly formed")
 show warnings;
 Level	Code	Message
-Warning	150	Create  table `test`.`t2` with foreign key (a) constraint failed. Field type or character set for column 'a' does not mach referenced column 'f1'.
+Warning	150	Create  table `test`.`t2` with foreign key `fk_t2` constraint failed. Field type or character set for column 'a' does not mach referenced column 'f1'.
 Error	1005	Can't create table `test`.`t2` (errno: 150 "Foreign key constraint is incorrectly formed")
 Warning	1215	Cannot add foreign key constraint for `t2`
 drop table t1;

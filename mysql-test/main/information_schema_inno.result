@@ -87,7 +87,7 @@ select UNIQUE_CONSTRAINT_NAME
 from information_schema.referential_constraints
 where constraint_schema = schema();
 UNIQUE_CONSTRAINT_NAME
-NULL
+fk_t2
 drop table t2;
 set foreign_key_checks = 1;
 #
