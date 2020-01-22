@@ -489,43 +489,44 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   return false;
 }
 
+bool fk_install_shadow_frm(Table_name old_name, Table_name new_name)
+{
+  char shadow_path[FN_REFLEN + 1];
+  char path[FN_REFLEN];
+  char shadow_frm_name[FN_REFLEN + 1];
+  char frm_name[FN_REFLEN + 1];
+  MY_STAT stat_info;
+  build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
+                              old_name.db, old_name.name);
+  build_table_filename(path, sizeof(path), new_name.db.str,
+                       new_name.name.str, "", 0);
+  strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
+  strxnmov(frm_name, sizeof(frm_name), path, reg_ext, NullS);
+  if (!mysql_file_stat(key_file_frm, shadow_frm_name, &stat_info, MYF(MY_WME)))
+    return true;
+  if (mysql_file_delete(key_file_frm, frm_name, MYF(MY_WME)))
+    return true;
+  if (mysql_file_rename(key_file_frm, shadow_frm_name, frm_name, MYF(MY_WME)))
+    return true;
+  return false;
+}
+
 bool TABLE_SHARE::fk_install_shadow_frm()
+{
+  return ::fk_install_shadow_frm({db, table_name}, {db, table_name});
+}
+
+void fk_drop_shadow_frm(Table_name table)
 {
   char shadow_path[FN_REFLEN+1];
   char shadow_frm_name[FN_REFLEN+1];
-  char frm_name[FN_REFLEN+1];
-  MY_STAT stat_info;
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              db, table_name);
+                              table.db, table.name);
   strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
-  strxnmov(frm_name, sizeof(frm_name), normalized_path.str, reg_ext, NullS);
-  if (!mysql_file_stat(key_file_frm, shadow_frm_name, &stat_info, MYF(0)))
-  {
-    my_error(ER_FILE_NOT_FOUND, MYF(0), shadow_frm_name, my_errno);
-    return true;
-  }
-  if (mysql_file_delete(key_file_frm, frm_name, MYF(MY_WME)))
-  {
-    // FIXME: error
-    return true;
-  }
-  if (mysql_file_rename(key_file_frm, shadow_frm_name, frm_name, MYF(MY_WME)))
-  {
-    // FIXME: error
-    return true;
-  }
-  return false;
+  mysql_file_delete(key_file_frm, shadow_frm_name, MYF(0));
 }
 
 void TABLE_SHARE::fk_drop_shadow_frm()
 {
-  char shadow_path[FN_REFLEN+1];
-  char shadow_frm_name[FN_REFLEN+1];
-  build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              db, table_name);
-  strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
-  if (mysql_file_delete(key_file_frm, shadow_frm_name, MYF(MY_WME)))
-  {
-    // FIXME: push warning
-  }
+  ::fk_drop_shadow_frm({db, table_name});
 }

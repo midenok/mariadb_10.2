@@ -44,7 +44,6 @@ public:
   {
     share= NULL;
   }
-protected:
   void rollback()
   {
     DBUG_ASSERT(share);
@@ -58,14 +57,11 @@ protected:
 class FK_ref_backup : public FK_table_backup
 {
 public:
+  bool install_shadow;
+  FK_ref_backup(bool inst_shadw) : install_shadow(inst_shadw) {}
   virtual ~FK_ref_backup()
   {
     commit();
-  }
-  void rollback_frm()
-  {
-    rollback();
-    share->fk_drop_shadow_frm();
   }
 };
 
@@ -404,7 +400,7 @@ public:
   // NB: share is owned and released by fk_shares
   map<TABLE_SHARE *, FK_ref_backup> fk_ref_backup;
   // NB: backup is added only if not exists
-  bool fk_add_backup(TABLE_SHARE *share);
+  bool fk_add_backup(TABLE_SHARE *share, bool install_shadow);
   void fk_rollback();
   bool fk_install_frms();
 

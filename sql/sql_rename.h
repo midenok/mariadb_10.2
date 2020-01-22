@@ -30,6 +30,7 @@ public:
   FK_list foreign_keys;
   FK_list referenced_keys;
 
+  FK_ddl_backup() {}
   FK_ddl_backup(Share_acquire&& _sa);
   FK_ddl_backup(const FK_ddl_backup&)= delete;
   FK_ddl_backup(FK_ddl_backup&& src) :
@@ -41,7 +42,19 @@ public:
   void rollback();
 };
 
-class FK_backup_vector: public vector<FK_ddl_backup> {};
+class FK_rename_backup : public FK_ddl_backup
+{
+public:
+  FK_rename_backup(Share_acquire&& _sa);
+  FK_rename_backup(Table_name _old_name, Table_name _new_name) :
+    self_ref(true), old_name(_old_name), new_name(_new_name) {}
+  bool self_ref;
+  Table_name old_name;
+  Table_name new_name;
+};
+
+class FK_create_vector: public vector<FK_ddl_backup> {};
+class FK_rename_vector: public vector<FK_rename_backup> {};
 
 bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent);
 

@@ -9325,7 +9325,7 @@ void FK_info::print(String& out)
     if (i)
       out.append("; ");
     out.append("[");
-    out.append(i++);
+    out.append(i++, true);
     out.append("]: ");
     out.append(fld.print());
   }
@@ -9338,7 +9338,7 @@ void FK_info::print(String& out)
     if (i)
       out.append("; ");
     out.append("[");
-    out.append(i++);
+    out.append(i++, true);
     out.append("]: ");
     out.append(fld.print());
   }

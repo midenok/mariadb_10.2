@@ -277,7 +277,7 @@ bool execute_ddl_log_entry(THD *thd, uint first_entry);
 
 bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db,
                       const LEX_CSTRING *new_table_name,
-                      vector<FK_ddl_backup> &fk_rename_backup);
+                      FK_rename_vector &fk_rename_backup);
 
 template<typename T> class List;
 void promote_first_timestamp_column(List<Create_field> *column_definitions);

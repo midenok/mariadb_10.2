@@ -5143,7 +5143,7 @@ int ha_create_table(THD *thd, const char *path,
   char name_buff[FN_REFLEN];
   const char *name;
   TABLE_SHARE share;
-  FK_backup_vector fk_shares;
+  FK_create_vector fk_shares;
   bool temp_table __attribute__((unused)) =
     create_info->options & (HA_LEX_CREATE_TMP_TABLE | HA_CREATE_TMP_ALTER);
   DBUG_ENTER("ha_create_table");
@@ -5198,18 +5198,29 @@ int ha_create_table(THD *thd, const char *path,
   }
 
   (void) closefrm(&table);
-  for (FK_ddl_backup &bak: fk_shares)
+  if (error)
+    goto err;
+
+  if (fk_update_refs)
   {
-    bak.sa.share->fk_install_shadow_frm();
-    // FIXME: MDEV-21053 (now there is no right for error)
-    thd->clear_error();
+    for (FK_ddl_backup &bak: fk_shares)
+    {
+      bak.sa.share->fk_install_shadow_frm();
+      /* TODO: (MDEV-21053) Now there is no right for error.
+        Actually it should drop table if install shadow fails. */
+      thd->clear_error();
+    }
   }
 
-err:
-  for (FK_ddl_backup &bak: fk_shares)
-    bak.rollback();
   free_table_share(&share);
-  DBUG_RETURN(error != 0);
+  DBUG_RETURN(0);
+
+err:
+  if (fk_update_refs)
+    for (FK_ddl_backup &bak: fk_shares)
+      bak.rollback();
+  free_table_share(&share);
+  DBUG_RETURN(1);
 }
 
 void st_ha_check_opt::init()
