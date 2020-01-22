@@ -119,6 +119,7 @@ class Share_acquire
 public:
   TABLE_SHARE *share;
 
+  Share_acquire() : share(NULL) {}
   Share_acquire(THD *thd, TABLE_LIST &tl)
   {
     share= tdc_acquire_share(thd, &tl, GTS_TABLE);

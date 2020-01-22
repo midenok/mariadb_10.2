@@ -50,7 +50,7 @@ struct TABLE_LIST;
 class ACL_internal_schema_access;
 class ACL_internal_table_access;
 class Field;
-class FK_backup_vector;
+class FK_create_vector;
 class Table_name;
 class Table_name_set;
 class Table_statistics;
@@ -647,7 +647,7 @@ struct TABLE_SHARE
   KEY  *key_info;			/* data of keys in database */
   FK_list foreign_keys;
   FK_list referenced_keys;
-  bool fk_handle_create(THD *thd, FK_backup_vector &shares);
+  bool fk_handle_create(THD *thd, FK_create_vector &shares);
   void fk_revert_create(THD *thd, Table_name_set &ref_tables);
 #ifndef DBUG_OFF
   bool dbug_check_foreign_keys(THD *thd);

@@ -962,13 +962,6 @@ public:
     size_t len= (uint32) (charset()->cset->longlong10_to_str)(charset(), buf, l, base, num);
     return append(buf, len);
   }
-  bool append(int num) { return append(num, false); }
-  bool append(uint num) { return append(num, true); }
-  bool append(long num) { return append(num, false); }
-  bool append(ulong num) { return append(num, true); }
-  bool append(longlong num) { return append(num, false); }
-  bool append(ulonglong num) { return append((longlong)num, true); }
-
 
   void strip_sp();
   friend int sortcmp(const String *a,const String *b, CHARSET_INFO *cs);
