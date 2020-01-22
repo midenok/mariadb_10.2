@@ -161,8 +161,6 @@ PRIMARY KEY  (staff_id),
 KEY idx_fk_store_id (store_id),
 CONSTRAINT fk_staff_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB;
-Warnings:
-Error	1146	Table 'test.store' doesn't exist
 CREATE TABLE store (
 store_id TINYINT UNSIGNED NOT NULL AUTO_INCREMENT,
 manager_staff_id TINYINT UNSIGNED NOT NULL,
@@ -174,8 +172,6 @@ SET FOREIGN_KEY_CHECKS=DEFAULT;
 LOCK TABLE staff WRITE;
 UNLOCK TABLES;
 DROP TABLES staff, store;
-Warnings:
-Error	1146	Table 'test.staff' doesn't exist
 SET FOREIGN_KEY_CHECKS=1;
 #
 # MDEV-17531 Crash in RENAME TABLE with FOREIGN KEY and FULLTEXT INDEX
@@ -239,8 +235,6 @@ DROP TABLE t2, t1;
 CREATE TABLE t1 (f VARCHAR(256)) ENGINE=InnoDB;
 SET SESSION FOREIGN_KEY_CHECKS = OFF;
 ALTER TABLE t1 ADD FOREIGN KEY (f) REFERENCES non_existing_table (x);
-Warnings:
-Error	1146	Table 'test.non_existing_table' doesn't exist
 SET SESSION FOREIGN_KEY_CHECKS = ON;
 ALTER TABLE t1 ADD FULLTEXT INDEX ft1 (f);
 Warnings:
@@ -249,22 +243,16 @@ ALTER TABLE t1 ADD FULLTEXT INDEX ft2 (f);
 Warnings:
 Warning	1088	failed to load FOREIGN KEY constraints
 DROP TABLE t1;
-Warnings:
-Error	1146	Table 'test.non_existing_table' doesn't exist
 CREATE TABLE t1 (f VARCHAR(256), FTS_DOC_ID BIGINT UNSIGNED PRIMARY KEY)
 ENGINE=InnoDB;
 SET SESSION FOREIGN_KEY_CHECKS = OFF;
 ALTER TABLE t1 ADD FOREIGN KEY (f) REFERENCES non_existing_table (x);
-Warnings:
-Error	1146	Table 'test.non_existing_table' doesn't exist
 SET SESSION FOREIGN_KEY_CHECKS = ON;
 ALTER TABLE t1 ADD FULLTEXT INDEX ft1 (f);
 Warnings:
 Warning	1088	failed to load FOREIGN KEY constraints
 ALTER TABLE t1 ADD FULLTEXT INDEX ft2 (f);
 DROP TABLE t1;
-Warnings:
-Error	1146	Table 'test.non_existing_table' doesn't exist
 #
 # MDEV-18630 Conditional jump or move depends on uninitialised value
 # in ib_push_warning / dict_create_foreign_constraints_low
@@ -274,7 +262,6 @@ ALTER IGNORE TABLE t1 ADD FOREIGN KEY (a) REFERENCES t2 (b);
 ERROR 42S02: Table 'test.t2' doesn't exist
 SHOW WARNINGS;
 Level	Code	Message
-Error	1146	Table 'test.t2' doesn't exist
 DROP TABLE t1;
 #
 # MDEV-18139 ALTER IGNORE ... ADD FOREIGN KEY causes bogus error
@@ -439,8 +426,6 @@ PRIMARY KEY  (staff_id),
 KEY idx_fk_store_id (store_id),
 CONSTRAINT fk_staff_store FOREIGN KEY (store_id) REFERENCES store (store_id) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB;
-Warnings:
-Error	1146	Table 'test.store' doesn't exist
 CREATE TABLE store (
 store_id TINYINT UNSIGNED NOT NULL AUTO_INCREMENT,
 manager_staff_id TINYINT UNSIGNED NOT NULL,
@@ -451,8 +436,6 @@ CONSTRAINT fk_store_staff FOREIGN KEY (manager_staff_id) REFERENCES staff (staff
 LOCK TABLE staff WRITE;
 UNLOCK TABLES;
 DROP TABLES staff, store;
-Warnings:
-Error	1146	Table 'test.staff' doesn't exist
 SET FOREIGN_KEY_CHECKS=1;
 #
 # MDEV-17541 KILL QUERY during lock wait in FOREIGN KEY check hangs

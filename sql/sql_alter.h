@@ -393,7 +393,7 @@ public:
   MDL_request_list fk_mdl_reqs;
   map<Table_name, Share_acquire, Table_name_lt> fk_shares;
 
-  bool fk_update_shares_and_frms(THD *thd);
+  bool fk_handle_alter(THD *thd);
   void fk_release_locks(THD *thd);
 
   FK_table_backup fk_table_backup;

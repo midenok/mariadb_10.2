@@ -7811,7 +7811,7 @@ static bool mysql_inplace_alter_table(THD *thd,
   if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME))
     goto rollback;
 
-  if (alter_ctx->fk_update_shares_and_frms(thd))
+  if (alter_ctx->fk_handle_alter(thd))
     goto rollback;
 
   /* Set MDL_BACKUP_DDL */
@@ -10630,7 +10630,7 @@ do_continue:;
   if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME))
     goto err_new_table_cleanup;
 
-  if (alter_ctx.fk_update_shares_and_frms(thd))
+  if (alter_ctx.fk_handle_alter(thd))
     // NB: now after lock upgrade it jumps to "err_with_mdl" as well
     goto err_new_table_cleanup;
 
@@ -11937,7 +11937,7 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
 
 
 // Used in ALTER TABLE
-bool Alter_table_ctx::fk_update_shares_and_frms(THD *thd)
+bool Alter_table_ctx::fk_handle_alter(THD *thd)
 {
   set<TABLE_SHARE *> shares_to_write; // write FRMs to disk
 
@@ -12178,10 +12178,10 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<FK_ddl_backup> &shares,
                                              table->table_name.str,
                                              MDL_INTENTION_EXCLUSIVE));
   DBUG_ASSERT(!table->view);
-  Share_acquire s(thd, *table);
-  TABLE_SHARE *share= s.share;
-  if (!share)
-    return true;
+  Share_acquire sa(thd, *table);
+  if (sa.is_error(thd))
+    return thd->is_error();
+  TABLE_SHARE *share= sa.share;
   if (thd->variables.check_foreign())
   {
     for (const FK_info &rk: share->referenced_keys)
@@ -12288,9 +12288,9 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
   /* NB: we have to acquire share before rename because it must read referenced
      keys from foreign table by its old name. */
   Share_acquire sa(thd, *old_table);
+  if (sa.is_error(thd))
+    return thd->is_error();
   TABLE_SHARE *share= sa.share;
-  if (!share)
-    return true;
   if (share->foreign_keys.is_empty() && share->referenced_keys.is_empty())
     return false;
   bool self_refs= false;

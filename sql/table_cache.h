@@ -120,11 +120,7 @@ public:
   TABLE_SHARE *share;
 
   Share_acquire() : share(NULL) {}
-  Share_acquire(THD *thd, TABLE_LIST &tl)
-  {
-    share= tdc_acquire_share(thd, &tl, GTS_TABLE);
-  }
-
+  Share_acquire(THD *thd, TABLE_LIST &tl);
   Share_acquire(const Share_acquire &src)= delete;
 
   // NB: noexcept is required for STL containers
@@ -138,6 +134,7 @@ public:
     if (share)
       tdc_release_share(share);
   }
+  bool is_error(THD *thd);
   void release()
   {
     if (share)
