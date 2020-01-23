@@ -3482,6 +3482,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 {
   Lex_cstring   key_name;
   Lex_cstring_set key_names;
+  Lex_cstring_set key_names2;
   Create_field	*sql_field,*dup_field;
   uint		field,null_fields,max_key_length;
   ulong		record_offset= 0;
@@ -4206,7 +4207,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	  key_name= key->foreign ?
             make_unique_key_name(thd, table_name, key_names, true) :
             make_unique_key_name(thd, sql_field->field_name, key_names, false);
-	if (key_names.find(key_name) != key_names.end())
+	if (key_names2.find(key_name) != key_names2.end())
 	{
 	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
 	  DBUG_RETURN(TRUE);
@@ -4220,7 +4221,9 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
         }
 	key_info->name= key_name;
         if (key_names.insert(key_name))
-          DBUG_RETURN(TRUE);				// Out of memory
+          DBUG_RETURN(TRUE);
+        if (key_names2.insert(key_name))
+          DBUG_RETURN(TRUE);
       } //  if (column_nr == 0)
     }
     if (!key_info->name.str || check_column_name(key_info->name.str))
@@ -8107,7 +8110,6 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List<Create_field> new_create_list;
   /* New key definitions are added here */
   List<Key> new_key_list;
-  Lex_cstring_set fk_names;
   Table_name_set fk_tables_to_lock;
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
   List_iterator<Create_field> def_it(alter_info->create_list);
@@ -8648,13 +8650,12 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       goto err;
     }
+    key->ignore= true;
     if (new_key_list.push_back(key, thd->mem_root))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       goto err;
     }
-    if (fk_names.insert(fk.foreign_id))
-      goto err;
   } //  for (const FK_info &fk: table->s->foreign_keys)
   /*
     Collect all keys which isn't in drop list. Add only those
@@ -8665,8 +8666,6 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   {
     bool long_hash_key= false;
     if (key_info->flags & HA_INVISIBLE_KEY)
-      continue;
-    if (fk_names.find(key_info->name) != fk_names.end())
       continue;
     const char *key_name= key_info->name.str;
     Alter_drop *drop;
@@ -12032,7 +12031,7 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
     if (!fk_table.share)
       return true;
     TABLE_SHARE *fk_share= fk_table.share;
-    if (fk_add_backup(fk_share, true))
+    if (fk_add_backup(fk_share, false))
       return true;
     bool modified= false;
     for (FK_info &rk: fk_share->foreign_keys)
@@ -12051,8 +12050,16 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
         modified= true;
       }
     }
-    if (modified)
-      shares_to_write.insert(fk_share);
+    if (!modified)
+      continue;
+    if (shares_to_write.insert(fk_share))
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    auto found= fk_ref_backup.find(fk_share);
+    DBUG_ASSERT(found != fk_ref_backup.end());
+    found->second.install_shadow= true;
   }
 
   /* Add new referenced_keys to referenced tables. FRM write is required. */
@@ -12134,7 +12141,11 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
       return true;
     }
 
-    shares_to_write.insert(ref_share);
+    if (shares_to_write.insert(ref_share))
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
   } // for (const FK_add_new &new_fk: fk_added_new)
 
   /* Remove dropped referenced_keys in referenced tables. FRM write is required. */
@@ -12150,7 +12161,7 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
     if (!ref_table.share)
       return true;
     TABLE_SHARE *ref_share= ref_table.share;
-    if (fk_add_backup(ref_share, true))
+    if (fk_add_backup(ref_share, false))
       return true;
     FK_info *rk;
     List_iterator<FK_info> ref_it(ref_share->referenced_keys);
@@ -12161,8 +12172,16 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
       ref_it.remove();
       break;
     }
-    DBUG_ASSERT(rk);
-    shares_to_write.insert(ref_share);
+    if (!rk)
+      continue;
+    if (shares_to_write.insert(ref_share))
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    auto found= fk_ref_backup.find(ref_share);
+    DBUG_ASSERT(found != fk_ref_backup.end());
+    found->second.install_shadow= true;
   }
 
   /* Update EXTRA2_FOREIGN_KEY_INFO section in FRM files. */
