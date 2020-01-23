@@ -12237,14 +12237,11 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<FK_ddl_backup> &shares,
                                              MDL_INTENTION_EXCLUSIVE));
   DBUG_ASSERT(!table->view);
   Share_acquire sa(thd, *table);
-  if (sa.is_error(thd))
+  if (!sa.share)
   {
-    if (thd->get_stmt_da()->sql_errno() == ER_NOT_FORM_FILE)
-    {
-      // We drop the table even if we can't read it (main.show_check)
-      thd->clear_error();
-    }
-    return thd->is_error();
+    // We drop the table even if we can't read it (main.show_check)
+    thd->clear_error();
+    return false;
   }
   TABLE_SHARE *share= sa.share;
   if (thd->variables.check_foreign())
