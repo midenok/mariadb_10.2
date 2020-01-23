@@ -29,9 +29,9 @@ create table t1 (
 
 create index a on t1 (a);
 create unique index b on t1 (a,b);
---error ER_ROW_IS_REFERENCED
+--error ER_ROW_IS_REFERENCED_2
 drop tables t2;
---error ER_ROW_IS_REFERENCED
+--error ER_ROW_IS_REFERENCED_2
 drop tables t3;
 drop tables t1, t2, t3;
 

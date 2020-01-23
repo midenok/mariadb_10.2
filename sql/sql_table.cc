@@ -8655,7 +8655,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     }
     if (fk_names.insert(fk.foreign_id))
       goto err;
-  }
+  } //  for (const FK_info &fk: table->s->foreign_keys)
   /*
     Collect all keys which isn't in drop list. Add only those
     for which some fields exists.
@@ -12251,7 +12251,7 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<FK_ddl_backup> &shares,
       if (0 != cmp_table(rk.foreign_db, table->db) ||
           (!drop_db && 0 != cmp_table(rk.foreign_table, table->table_name)))
       {
-        my_error(ER_ROW_IS_REFERENCED, MYF(0));
+        my_printf_error(ER_ROW_IS_REFERENCED_2, ER(ER_ROW_IS_REFERENCED), MYF(0));
         return true;
       }
     }
