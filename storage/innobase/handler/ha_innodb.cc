@@ -12311,7 +12311,7 @@ create_table_info_t::create_foreign_keys()
 	const bool	      tmp_table = m_flags2 & DICT_TF2_TEMPORARY;
 	const CHARSET_INFO*   cs	= innobase_get_charset(m_thd);
 	const char*	      name	= m_table_name;
-	dict_table_t* table_to_alter = NULL;
+	uint		      old_fkeys = m_create_info->alter_info->tmp_old_fkeys;
 
 	bool alter = enum_sql_command(thd_sql_command(m_thd)) == SQLCOM_ALTER_TABLE;
 	const char*	 operation = alter ? "Alter " : "Create ";
@@ -12330,6 +12330,7 @@ create_table_info_t::create_foreign_keys()
 	}
 
 	if (alter) {
+		dict_table_t* table_to_alter;
 		mem_heap_t*   heap = mem_heap_create(10000);
 		ulint	      highest_id_so_far;
 		char*	      n = dict_get_referenced_table(
@@ -12380,6 +12381,12 @@ create_table_info_t::create_foreign_keys()
 	}
 
 	while (FK_info* fk = key_it++) {
+
+		if (old_fkeys)
+		{
+			old_fkeys--;
+			continue;
+		}
 
 		LEX_CSTRING*   col;
 		bool	       success;
@@ -12564,7 +12571,7 @@ create_table_info_t::create_foreign_keys()
 		fields and in the right order, and the types are the same as in
 		foreign->foreign_index */
 
-		if (m_trx->check_foreigns && foreign->referenced_table) {
+		if (foreign->referenced_table) {
 			index = dict_foreign_find_index(
 				foreign->referenced_table, NULL,
 				ref_column_names, i, foreign->foreign_index,
@@ -12692,8 +12699,7 @@ create_table_info_t::create_foreign_keys()
 
 	trx_set_dict_operation(m_trx, TRX_DICT_OP_TABLE);
 
-	error = dict_create_add_foreigns_to_dictionary(local_fk_set, table,
-						       table_to_alter, m_trx);
+	error = dict_create_add_foreigns_to_dictionary(local_fk_set, table, m_trx);
 
 	if (error == DB_SUCCESS) {
 

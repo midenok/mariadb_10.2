@@ -8652,6 +8652,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     }
     // NB: add index component from table->s->keys below
     key->ignore= true;
+    alter_info->tmp_old_fkeys++;
     if (new_key_list.push_back(key, thd->mem_root))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));

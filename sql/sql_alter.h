@@ -128,8 +128,9 @@ public:
 
   // Columns and keys to be dropped.
   List<Alter_drop>              drop_list;
-  // FIXME: remove in MDEV-21052
+  // FIXME: these two to be removed in MDEV-21052
   List<Alter_drop>              tmp_drop_list;
+  uint                          tmp_old_fkeys;
   // Columns for ALTER_CHANGE_COLUMN_DEFAULT.
   List<Alter_column>            alter_list;
   // List of keys, used by both CREATE and ALTER TABLE.
@@ -158,7 +159,8 @@ public:
 
 
   Alter_info() :
-  flags(0), partition_flags(0),
+    tmp_old_fkeys(0),
+    flags(0), partition_flags(0),
     keys_onoff(LEAVE_AS_IS),
     num_parts(0),
     requested_algorithm(ALTER_TABLE_ALGORITHM_DEFAULT),
@@ -168,6 +170,8 @@ public:
   void reset()
   {
     drop_list.empty();
+    tmp_drop_list.empty();
+    tmp_old_fkeys= 0;
     alter_list.empty();
     key_list.empty();
     create_list.empty();
