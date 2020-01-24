@@ -2388,6 +2388,7 @@ struct dict_foreign_add_to_referenced_table {
 		if (dict_table_t* table = foreign->referenced_table) {
 			std::pair<dict_foreign_set::iterator, bool>	ret
 				= table->referenced_set.insert(foreign);
+			ut_a(ret.second);
 		}
 	}
 };

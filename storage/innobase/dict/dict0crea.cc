@@ -1997,13 +1997,6 @@ dict_foreigns_has_s_base_col(
 	return(false);
 }
 
-bool
-innobase_drop_foreign_try(
-/*======================*/
-	trx_t*			trx,
-	const char*		table_name,
-	const char*		foreign_id);
-
 /** Adds the given set of foreign key objects to the dictionary tables
 in the database. This function does not modify the dictionary cache. The
 caller must ensure that all foreign key objects contain a valid constraint
@@ -2017,9 +2010,8 @@ local_fk_set belong to
 dberr_t
 dict_create_add_foreigns_to_dictionary(
 /*===================================*/
-	dict_foreign_set&	local_fk_set,
+	const dict_foreign_set&	local_fk_set,
 	const dict_table_t*	table,
-	dict_table_t* 		table_to_alter,
 	trx_t*			trx)
 {
 	dict_foreign_t*	foreign;
@@ -2036,14 +2028,6 @@ dict_create_add_foreigns_to_dictionary(
 	}
 
 	error = DB_SUCCESS;
-
-	if (table_to_alter != NULL) {
-		for (dict_foreign_t *fk: table_to_alter->foreign_set) {
-			if (innobase_drop_foreign_try(trx, table_to_alter->name.m_name, fk->id)) {
-				return DB_ERROR;
-			}
-		}
-	}
 
 	for (dict_foreign_set::const_iterator it = local_fk_set.begin();
 	     it != local_fk_set.end();

@@ -149,11 +149,10 @@ local_fk_set belong to
 dberr_t
 dict_create_add_foreigns_to_dictionary(
 /*===================================*/
-	dict_foreign_set&	local_fk_set,
+	const dict_foreign_set&	local_fk_set,
 	const dict_table_t*	table,
-	dict_table_t*		table_to_alter,
 	trx_t*			trx)
-	MY_ATTRIBUTE((warn_unused_result));
+	MY_ATTRIBUTE((nonnull, warn_unused_result));
 
 /** Check if a foreign constraint is on columns server as base columns
 of any stored column. This is to prevent creating SET NULL or CASCADE
