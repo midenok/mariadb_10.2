@@ -8878,6 +8878,18 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
               goto err;
           }
         }
+        if (key->name.str)
+        {
+          for (const Key &k: new_key_list)
+          {
+            if (k.foreign && k.name.str && 0 == cmp_ident(k.name, key->name))
+            {
+              my_error(ER_DUP_CONSTRAINT_NAME, MYF(0), "FOREIGN KEY",
+                       k.name.str);
+              goto err;
+            }
+          }
+        }
       }
       new_key_list.push_back(key, thd->mem_root);
       if (key->name.str &&
