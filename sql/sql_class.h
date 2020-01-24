@@ -274,7 +274,6 @@ typedef struct st_copy_info {
 } COPY_INFO;
 
 
-
 /* Convert STL exceptions to my_error() */
 
 template <class Base>
@@ -287,23 +286,24 @@ public:
      Both lvalue and rvalue types are covered by perfect forwarding.
   */
   template <class T>
-  bool insert(T&& value) noexcept
+  typename Base::iterator insert(T&& value) noexcept
   {
     try
     {
-      Base::insert(std::forward<T>(value));
+      auto ret= Base::insert(std::forward<T>(value));
+      return ret.first;
     }
     catch (std::bad_alloc())
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
+      return Base::end();
     }
     catch (...)
     {
       my_error(ER_INTERNAL_ERROR, MYF(0), "Unexpected exception");
-      return true;
+      return Base::end();
     }
-    return false;
+    return Base::end();
   }
   template <class T>
   bool push_back(T&& value) noexcept
@@ -327,6 +327,8 @@ public:
 };
 
 
+/* std::vector adapter for returning true instead of throwing exception */
+
 template <class T, class Allocator = std::allocator<T> >
 class vector :
   public exception_wrapper<std::vector<T, Allocator> >
@@ -344,23 +346,31 @@ public:
   }
 };
 
+
+/* std::set adapter for returning NULL instead of throwing exception */
+
 template <class Key, class Compare = std::less<Key>,
   class Allocator = std::allocator<Key> >
 class set :
   public exception_wrapper<std::set<Key, Compare, Allocator> >
 {
 public:
-  bool insert(const Key& value)
+  const Key* insert(const Key& value)
   {
-    return exception_wrapper<std::set<Key, Compare, Allocator> >::
+    auto ret= exception_wrapper<std::set<Key, Compare, Allocator> >::
       insert(value);
+    return &*ret;
   }
-  bool insert(Key&& value)
+  const Key* insert(Key&& value)
   {
-    return exception_wrapper<std::set<Key, Compare, Allocator> >::
+    auto ret= exception_wrapper<std::set<Key, Compare, Allocator> >::
       insert(std::forward<Key>(value));
+    return &*ret;
   }
 };
+
+
+/* std::map adapter for returning NULL instead of throwing exception */
 
 template<class Key, class T, class Compare = std::less<Key>,
   class Allocator = std::allocator<std::pair<const Key, T> > >
@@ -368,17 +378,20 @@ class map :
   public exception_wrapper<std::map<Key, T, Compare, Allocator> >
 {
 public:
-  bool insert(const Key& key, const T& value)
+  T* insert(const Key& key, const T& value)
   {
-    return exception_wrapper<std::map<Key, T, Compare, Allocator> >::
+    auto ret= exception_wrapper<std::map<Key, T, Compare, Allocator> >::
       insert(std::make_pair(key, value));
+    return &ret->second;
   }
-  bool insert(const Key& key, T&& value)
+  T* insert(const Key& key, T&& value)
   {
-    return exception_wrapper<std::map<Key, T, Compare, Allocator> >::
+    auto ret= exception_wrapper<std::map<Key, T, Compare, Allocator> >::
       insert(std::make_pair(key, std::forward<T>(value)));
+    return &ret->second;
   }
 };
+
 
 /*
    NB: Table_ident is parser-oriented class that contains SELECT_LEX_UNIT and
