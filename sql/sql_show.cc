@@ -7085,8 +7085,8 @@ static int get_schema_key_column_usage_record(THD *thd,
                                 (longlong) f_idx);
           table->field[8]->store((longlong) f_idx, TRUE);
           table->field[8]->set_notnull();
-          table->field[9]->store(f_key_info->referenced_db.str,
-                                f_key_info->referenced_db.length,
+          table->field[9]->store(f_key_info->ref_db().str,
+                                f_key_info->ref_db().length,
                                 system_charset_info);
           table->field[9]->set_notnull();
           table->field[10]->store(f_key_info->referenced_table.str,
@@ -7824,8 +7824,8 @@ get_referential_constraints_record(THD *thd, TABLE_LIST *tables,
       table->field[2]->store(f_key_info->foreign_id.str,
                              f_key_info->foreign_id.length, cs);
       table->field[3]->store(STRING_WITH_LEN("def"), cs);
-      table->field[4]->store(f_key_info->referenced_db.str,
-                             f_key_info->referenced_db.length, cs);
+      table->field[4]->store(f_key_info->ref_db().str,
+                             f_key_info->ref_db().length, cs);
       table->field[10]->store(f_key_info->referenced_table.str,
                              f_key_info->referenced_table.length, cs);
       if (f_key_info->referenced_key_name.str)
