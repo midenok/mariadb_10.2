@@ -12496,7 +12496,7 @@ create_table_info_t::create_foreign_keys()
 		       i * sizeof(void*));
 
 		foreign->referenced_table_name = dict_get_referenced_table(
-			name, LEX_STRING_WITH_LEN(fk->referenced_db),
+			name, LEX_STRING_WITH_LEN(fk->ref_db()),
 			LEX_STRING_WITH_LEN(fk->referenced_table),
 			&foreign->referenced_table, foreign->heap, cs);
 

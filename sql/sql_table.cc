@@ -8287,7 +8287,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       {
         for (const FK_info &fk: table->s->foreign_keys)
         {
-          if (0 == cmp_table(fk.referenced_db, table->s->db) &&
+          if (0 == cmp_table(fk.ref_db(), table->s->db) &&
               0 == cmp_table(fk.referenced_table, table->s->table_name))
             continue;
           for (Lex_cstring &fld: fk.foreign_fields)
@@ -8298,10 +8298,10 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
               /* Update foreign_fields of referenced tables.
                  No FRM write required. */
               if (!alter_ctx->fk_renamed_cols.insert({
-                    Table_name(fk.referenced_db, fk.referenced_table),
+                    Table_name(fk.ref_db(), fk.referenced_table),
                     def->change, def->field_name}))
                 DBUG_RETURN(1);
-              if (!fk_tables_to_lock.insert(fk.referenced_db, fk.referenced_table))
+              if (!fk_tables_to_lock.insert(fk.ref_db(), fk.referenced_table))
                 DBUG_RETURN(1);
             }
           }
@@ -8317,7 +8317,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
                 DBUG_RETURN(1);
             }
           }
-          if (0 != cmp_table(fk.referenced_db, table->s->db) ||
+          if (0 != cmp_table(fk.ref_db(), table->s->db) ||
               0 != cmp_table(fk.referenced_table, table->s->table_name))
             continue;
           for (Lex_cstring &fld: fk.referenced_fields)
@@ -8366,7 +8366,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
               }
             }
           }
-          if (0 != cmp_table(rk.referenced_db, table->s->db) ||
+          if (0 != cmp_table(rk.ref_db(), table->s->db) ||
               0 != cmp_table(rk.referenced_table, table->s->table_name))
             continue;
           for (Lex_cstring &fld: rk.referenced_fields)
@@ -11893,9 +11893,9 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
 
   for (FK_info &fk: foreign_keys)
   {
-    if (!cmp(&fk.referenced_db, &db) && !cmp(&fk.referenced_table, &table_name))
+    if (!cmp_table(fk.ref_db(), db) && !cmp_table(fk.referenced_table, table_name))
       continue; // subject table name is already prelocked by caller DDL
-    if (!tables.insert(fk.referenced_db, fk.referenced_table))
+    if (!tables.insert(fk.ref_db(), fk.referenced_table))
       return true;
   }
   if (tables.empty())
@@ -11954,7 +11954,7 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
     for (const FK_info &fk: foreign_keys)
     {
       // Find keys referencing the acquired share and add them to referenced_keys
-      if (cmp_table(fk.referenced_db, ref_share->db) ||
+      if (cmp_table(fk.ref_db(), ref_share->db) ||
           cmp_table(fk.referenced_table, ref_share->table_name))
         continue;
 
@@ -12271,10 +12271,10 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<FK_ddl_backup> &shares,
   Table_name_set tables;
   for (const FK_info &fk: share->foreign_keys)
   {
-    if (0 == cmp_table(fk.referenced_db, table->db) &&
+    if (0 == cmp_table(fk.ref_db(), table->db) &&
         (drop_db || 0 == cmp_table(fk.referenced_table, table->table_name)))
       continue;
-    if (!tables.insert(fk.referenced_db, fk.referenced_table))
+    if (!tables.insert(fk.ref_db(), fk.referenced_table))
       return true;
   }
   if (tables.empty())
@@ -12373,23 +12373,27 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
     if (fk.foreign_db.strdup(&share->mem_root, *new_db) ||
         fk.foreign_table.strdup(&share->mem_root, *new_table_name))
       goto mem_error;
-    if (0 == cmp_table(fk.referenced_db, old_table->db) &&
+    if (0 == cmp_table(fk.ref_db(), old_table->db) &&
         0 == cmp_table(fk.referenced_table, old_table->table_name))
     {
       // NB: we don't have to lock self-references but we have to update share
-      if (fk.referenced_db.strdup(&share->mem_root, *new_db) ||
-          fk.referenced_table.strdup(&share->mem_root, *new_table_name))
+      if (0 != cmp_table(old_table->db, *new_db) &&
+          fk.referenced_db.strdup(&share->mem_root, *new_db))
+        goto mem_error;
+      if (fk.referenced_table.strdup(&share->mem_root, *new_table_name))
         goto mem_error;
       self_refs= true;
       continue;
     }
-    if (!tables.insert(fk.referenced_db, fk.referenced_table))
+    if (!tables.insert(fk.ref_db(), fk.referenced_table))
       goto mem_error;
   }
   for (FK_info &rk: share->referenced_keys)
   {
-    if (rk.referenced_db.strdup(&share->mem_root, *new_db) ||
-        rk.referenced_table.strdup(&share->mem_root, *new_table_name))
+    if (0 != cmp_table(old_table->db, *new_db) &&
+        rk.referenced_db.strdup(&share->mem_root, *new_db))
+      goto mem_error;
+    if (rk.referenced_table.strdup(&share->mem_root, *new_table_name))
       goto mem_error;
     if (0 == cmp_table(rk.foreign_db, old_table->db) &&
         0 == cmp_table(rk.foreign_table, old_table->table_name))
@@ -12455,11 +12459,13 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
     DBUG_ASSERT(ref_share);
     for (FK_info &fk: ref_share->foreign_keys)
     {
-      if (cmp_table(fk.referenced_db, old_table->db) ||
+      if (cmp_table(fk.ref_db(), old_table->db) ||
           cmp_table(fk.referenced_table, old_table->table_name))
         continue;
-      if (fk.referenced_db.strdup(&ref_share->mem_root, *new_db) ||
-          fk.referenced_table.strdup(&ref_share->mem_root, *new_table_name))
+      if (0 != cmp_table(old_table->db, *new_db) &&
+          fk.referenced_db.strdup(&share->mem_root, *new_db))
+        goto mem_error;
+      if (fk.referenced_table.strdup(&ref_share->mem_root, *new_table_name))
         goto mem_error;
     }
     for (FK_info &rk: ref_share->referenced_keys)
