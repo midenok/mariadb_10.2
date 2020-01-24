@@ -58,7 +58,7 @@ class FK_ref_backup : public FK_table_backup
 {
 public:
   bool install_shadow;
-  FK_ref_backup(bool inst_shadw) : install_shadow(inst_shadw) {}
+  FK_ref_backup() : install_shadow(false) {}
   virtual ~FK_ref_backup()
   {
     commit();
@@ -400,7 +400,7 @@ public:
   // NB: share is owned and released by fk_shares
   map<TABLE_SHARE *, FK_ref_backup> fk_ref_backup;
   // NB: backup is added only if not exists
-  bool fk_add_backup(TABLE_SHARE *share, bool install_shadow);
+  FK_ref_backup* fk_add_backup(TABLE_SHARE *share);
   void fk_rollback();
   bool fk_install_frms();
 
