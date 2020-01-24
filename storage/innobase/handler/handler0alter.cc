@@ -2816,13 +2816,19 @@ innobase_get_foreign_key_info(
 	ulint		num_fk = 0;
 	Alter_info*	alter_info = ha_alter_info->alter_info;
 	const CHARSET_INFO*	cs = innobase_get_charset(trx->mysql_thd);
+	uint		old_fkeys = alter_info->tmp_old_fkeys;
 
 	DBUG_ENTER("innobase_get_foreign_key_info");
 
 	*n_add_fk = 0;
 
 	for (Key& key : alter_info->key_list) {
-		if (!key.foreign || key.ignore) {
+		if (!key.foreign) {
+			continue;
+		}
+
+		if (old_fkeys) {
+			old_fkeys--;
 			continue;
 		}
 
