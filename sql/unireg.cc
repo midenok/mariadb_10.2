@@ -183,6 +183,7 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                              HA_CREATE_INFO *create_info,
                              List<Create_field> &create_fields,
                              uint keys, KEY *key_info,  FK_list &foreign_keys,
+                             FK_list &referenced_keys,
                              handler *db_file)
 {
   LEX_CSTRING str_db_type;
@@ -266,7 +267,7 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                     MYF(0), table.str);
     DBUG_RETURN(frm);
   }
-  if (foreign_key_io.store(foreign_keys))
+  if (foreign_key_io.store(foreign_keys, referenced_keys))
   {
     my_printf_error(ER_CANT_CREATE_TABLE,
                     "Cannot create table %`s: "
@@ -1214,11 +1215,11 @@ void Foreign_key_io::store_hint(FK_info &rk, uchar *&pos)
   pos= store_string(pos, rk.foreign_table);
 }
 
-bool Foreign_key_io::store(FK_list &foreign_keys, FK_list *referenced_keys)
+bool Foreign_key_io::store(FK_list &foreign_keys, FK_list &referenced_keys)
 {
   ulonglong fk_count= 0, rk_count= 0;
 
-  if (foreign_keys.is_empty() && (!referenced_keys || referenced_keys->is_empty()))
+  if (foreign_keys.is_empty() && referenced_keys.is_empty())
     return false;
 
   ulonglong store_size= net_length_size(fk_io_version);
@@ -1229,13 +1230,10 @@ bool Foreign_key_io::store(FK_list &foreign_keys, FK_list *referenced_keys)
   }
   store_size+= net_length_size(fk_count);
 
-  if (referenced_keys)
+  for (FK_info &rk: referenced_keys)
   {
-    for (FK_info &rk: *referenced_keys)
-    {
-      rk_count++;
-      store_size+= hint_size(rk);
-    }
+    rk_count++;
+    store_size+= hint_size(rk);
   }
   store_size+= net_length_size(rk_count);
 
@@ -1252,11 +1250,8 @@ bool Foreign_key_io::store(FK_list &foreign_keys, FK_list *referenced_keys)
     store_fk(fk, pos);
 
   pos= store_length(pos, rk_count);
-  if (referenced_keys)
-  {
-    for (FK_info &rk: *referenced_keys)
-      store_hint(rk, pos);
-  }
+  for (FK_info &rk: referenced_keys)
+    store_hint(rk, pos);
 
   size_t new_length= (char *) pos - ptr();
   DBUG_ASSERT(new_length < alloced_length());
@@ -1350,6 +1345,9 @@ bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
                         "Foreign_key_io failed to read reference hints count");
     return true;
   }
+  if (s->tmp_table)
+    return false;
+  // Resolve hints to referenced keys for non-temporary shares
   for (uint i= 0; i < rk_count; ++i)
   {
     if (read_string(hint_db, &s->mem_root, p))

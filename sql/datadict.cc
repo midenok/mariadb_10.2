@@ -446,7 +446,7 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   const size_t rest_size= frm_size - FRM_HEADER_SIZE - extra2.read_size;
   ulong forminfo_off= uint4korr(rest_src);
 
-  foreign_key_io.store(foreign_keys, &referenced_keys);
+  foreign_key_io.store(foreign_keys, referenced_keys);
   extra2.foreign_key_info= foreign_key_io.lex_custring();
   if (!extra2.foreign_key_info.length)
     extra2.foreign_key_info.str= NULL;

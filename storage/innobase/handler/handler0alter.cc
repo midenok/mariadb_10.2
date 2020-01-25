@@ -2820,7 +2820,7 @@ innobase_get_foreign_key_info(
 
 	*n_add_fk = 0;
 
-	for (FK_info& fk_key: ha_alter_info->alter_ctx->fk_list) {
+	for (FK_info& fk_key: ha_alter_info->alter_ctx->foreign_keys) {
 
 		if (old_fkeys) {
 			old_fkeys--;

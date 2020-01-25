@@ -1831,7 +1831,7 @@ bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags)
   strxmov(shadow_frm_name, shadow_path, reg_ext, NullS);
   if (flags & WFRM_WRITE_SHADOW)
   {
-    FK_list foreign_keys;
+    FK_list foreign_keys, referenced_keys;
     if (mysql_prepare_create_table(lpt->thd, lpt->create_info, lpt->alter_info,
                                    &lpt->db_options, lpt->table->file,
                                    &lpt->key_info_buffer, &lpt->key_count,
@@ -1860,7 +1860,7 @@ bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags)
                                       lpt->create_info,
                                       lpt->alter_info->create_list,
                                       lpt->key_count, lpt->key_info_buffer,
-                                      foreign_keys,
+                                      foreign_keys, referenced_keys,
                                       lpt->table->file);
     if (!frm.str)
     {
@@ -4629,7 +4629,8 @@ handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
                                 HA_CREATE_INFO *create_info,
                                 Alter_info *alter_info, int create_table_mode,
                                 KEY **key_info, uint *key_count,
-                                FK_list &fk_list, LEX_CUSTRING *frm)
+                                FK_list &foreign_keys, FK_list &referenced_keys,
+                                LEX_CUSTRING *frm)
 {
   uint		db_options;
   handler       *file;
@@ -4866,14 +4867,14 @@ handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
   }
 
   if (mysql_prepare_create_table(thd, create_info, alter_info, &db_options,
-                                 file, key_info, key_count, fk_list,
+                                 file, key_info, key_count, foreign_keys,
                                  create_table_mode, db, table_name))
     goto err;
   create_info->table_options=db_options;
 
   *frm= build_frm_image(thd, table_name, create_info,
                         alter_info->create_list, *key_count,
-                        *key_info, fk_list, file);
+                        *key_info, foreign_keys, referenced_keys, file);
 
   if (frm->str)
     DBUG_RETURN(file);
@@ -4925,7 +4926,8 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
                       const char *path, const DDL_options_st options,
                       HA_CREATE_INFO *create_info, Alter_info *alter_info,
                       int create_table_mode, bool *is_trans, KEY **key_info,
-                      uint *key_count, FK_list &fk_list, LEX_CUSTRING *frm)
+                      uint *key_count, FK_list &foreign_keys,
+                      FK_list &referenced_keys, LEX_CUSTRING *frm)
 {
   LEX_CSTRING	*alias;
   handler	*file= 0;
@@ -5112,7 +5114,7 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
   {
     file= mysql_create_frm_image(thd, orig_db, orig_table_name, create_info,
                                  alter_info, create_table_mode, key_info,
-                                 key_count, fk_list, frm);
+                                 key_count, foreign_keys, referenced_keys, frm);
     /*
     TODO: remove this check of thd->is_error() (now it intercept
     errors in some val_*() methods and bring some single place to
@@ -5197,7 +5199,7 @@ int mysql_create_table_no_lock(THD *thd, const LEX_CSTRING *db,
   int res;
   char path[FN_REFLEN + 1];
   LEX_CUSTRING frm= {0,0};
-  FK_list foreign_keys;
+  FK_list foreign_keys, referenced_keys;
 
   if (create_info->tmp_table())
     build_tmptable_filename(thd, path, sizeof(path));
@@ -5218,7 +5220,8 @@ int mysql_create_table_no_lock(THD *thd, const LEX_CSTRING *db,
   res= create_table_impl(thd, *db, *table_name, *db, *table_name, path,
                          *create_info, create_info,
                          alter_info, create_table_mode,
-                         is_trans, &not_used_1, &not_used_2, foreign_keys, &frm);
+                         is_trans, &not_used_1, &not_used_2, foreign_keys, referenced_keys,
+                         &frm);
   my_free(const_cast<uchar*>(frm.str));
 
   if (!res && create_info->sequence)
@@ -10348,7 +10351,8 @@ do_continue:;
                            alter_ctx.get_tmp_path(),
                            thd->lex->create_info, create_info, alter_info,
                            C_ALTER_TABLE_FRM_ONLY, NULL,
-                           &key_info, &key_count, alter_ctx.fk_list, &frm);
+                           &key_info, &key_count, alter_ctx.foreign_keys,
+                           table->s->referenced_keys, &frm);
   reenable_binlog(thd);
   if (unlikely(error))
   {
@@ -12075,8 +12079,8 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
 
   /* Add new referenced_keys to referenced tables. FRM write is required. */
   // Remove existing keys from fk_list, keep only newly added:
-  for (int i= 0; i < fk_list.elements - fk_added.size(); ++i)
-    fk_list.pop();
+  for (int i= 0; i < foreign_keys.elements - fk_added.size(); ++i)
+    foreign_keys.pop();
   for (const FK_add_new &new_fk: fk_added)
   {
     auto i= fk_shares.find(new_fk.ref);
@@ -12095,7 +12099,7 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
     ref_bak->install_shadow= true;
     // Find prepared FK in fk_list. If ID exists, use it.
     FK_info *fk;
-    List_iterator<FK_info> fk_it(fk_list);
+    List_iterator<FK_info> fk_it(foreign_keys);
     if (new_fk.fk->constraint_name.str)
     {
       while ((fk= fk_it++))

@@ -159,6 +159,7 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                              HA_CREATE_INFO *create_info,
                              List<Create_field> &create_fields,
                              uint keys, KEY *key_info, FK_list &foreign_keys,
+                             FK_list &referenced_keys,
                              handler *db_file);
 
 #define FRM_HEADER_SIZE 64
@@ -243,7 +244,7 @@ public:
   ulonglong hint_size(FK_info &rk);
   void store_fk(FK_info &fk, uchar *&pos);
   void store_hint(FK_info &rk, uchar *&pos);
-  bool store(FK_list &foreign_keys, FK_list *referenced_keys= NULL);
+  bool store(FK_list &foreign_keys, FK_list &referenced_keys);
 };
 
 #endif
