@@ -3482,7 +3482,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 {
   Lex_cstring   key_name;
   Lex_cstring_set key_names;
-  Lex_cstring_set key_names2;
+  Lex_cstring_set dup_check;
   Create_field	*sql_field,*dup_field;
   uint		field,null_fields,max_key_length;
   ulong		record_offset= 0;
@@ -4207,7 +4207,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	  key_name= key->foreign ?
             make_unique_key_name(thd, table_name, key_names, true) :
             make_unique_key_name(thd, sql_field->field_name, key_names, false);
-	if (key_names2.find(key_name) != key_names2.end())
+	if (dup_check.find(key_name) != dup_check.end())
 	{
 	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);
 	  DBUG_RETURN(TRUE);
@@ -4222,7 +4222,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	key_info->name= key_name;
         if (!key_names.insert(key_name))
           DBUG_RETURN(TRUE);
-        if (!key_names2.insert(key_name))
+        if (!dup_check.insert(key_name))
           DBUG_RETURN(TRUE);
       } //  if (column_nr == 0)
     }
