@@ -12382,8 +12382,7 @@ create_table_info_t::create_foreign_keys()
 
 	while (FK_info* fk = key_it++) {
 
-		if (old_fkeys)
-		{
+		if (old_fkeys) {
 			old_fkeys--;
 			continue;
 		}

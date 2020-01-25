@@ -5115,7 +5115,7 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
                                  key_count, fk_list, frm);
     /*
     TODO: remove this check of thd->is_error() (now it intercept
-    errors in some val_*() methoids and bring some single place to
+    errors in some val_*() methods and bring some single place to
     such error interception).
     */
     if (!file || thd->is_error())
@@ -10331,7 +10331,7 @@ do_continue:;
     will be used later to construct Alter_inplace_info object
     and by fill_alter_inplace_info() call.
   */
-  KEY *key_info;
+  KEY *key_info; // TODO: move to alter_ctx
   uint key_count;
   /*
     Remember if the new definition has new VARCHAR column;
@@ -10361,7 +10361,7 @@ do_continue:;
 
   if (alter_info->requested_algorithm != Alter_info::ALTER_TABLE_ALGORITHM_COPY)
   {
-    Alter_inplace_info ha_alter_info(create_info, alter_info,
+    Alter_inplace_info ha_alter_info(create_info, alter_info, &alter_ctx,
                                      key_info, key_count,
                                      IF_PARTITIONING(thd->work_part_info, NULL),
                                      ignore);

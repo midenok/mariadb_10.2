@@ -4622,11 +4622,13 @@ handler::check_if_supported_inplace_alter(TABLE *altered_table,
 
 Alter_inplace_info::Alter_inplace_info(HA_CREATE_INFO *create_info_arg,
                      Alter_info *alter_info_arg,
+                     Alter_table_ctx *alter_ctx_arg,
                      KEY *key_info_arg, uint key_count_arg,
                      partition_info *modified_part_info_arg,
                      bool ignore_arg)
     : create_info(create_info_arg),
     alter_info(alter_info_arg),
+    alter_ctx(alter_ctx_arg),
     key_info_buffer(key_info_arg),
     key_count(key_count_arg),
     index_drop_count(0),

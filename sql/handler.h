@@ -46,6 +46,7 @@
 #include "mem_root_array.h"
 
 class Alter_info;
+class Alter_table_ctx;
 class Virtual_column_info;
 class sequence_definition;
 class Rowid_filter;
@@ -2343,6 +2344,7 @@ public:
           Field instance for old version of table.
   */
   Alter_info *alter_info;
+  Alter_table_ctx *alter_ctx;
 
   /**
     Array of KEYs for new version of table - including KEYs to be added.
@@ -2464,6 +2466,7 @@ public:
 
   Alter_inplace_info(HA_CREATE_INFO *create_info_arg,
                      Alter_info *alter_info_arg,
+                     Alter_table_ctx *alter_ctx_arg,
                      KEY *key_info_arg, uint key_count_arg,
                      partition_info *modified_part_info_arg,
                      bool ignore_arg);
