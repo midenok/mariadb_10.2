@@ -1361,10 +1361,13 @@ bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
     Share_acquire fs(thd, tl);
     if (!fs.share)
     {
-      if (true /* FIXME: ENOTFOUND */)
+      DBUG_ASSERT(thd->is_error());
+      if (thd->get_stmt_da()->sql_errno() == ER_NO_SUCH_TABLE)
       {
+        thd->clear_error();
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, ER_UNKNOWN_ERROR,
-                            "Reference hint to non-existent table skipped");
+                            "Reference hint to non-existent table `%s.%s` skipped",
+                            hint_db.str, hint_table.str);
         continue;
       }
       return true;
