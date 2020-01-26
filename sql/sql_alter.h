@@ -348,7 +348,7 @@ public:
   LEX_CSTRING  alias;
   LEX_CSTRING  new_db;
   LEX_CSTRING  new_name;
-  LEX_CSTRING  new_alias;
+  LEX_CSTRING  new_alias; // TODO: why new_alias is needed?
   LEX_CSTRING  tmp_name;
   char         tmp_buff[80];
   /**
@@ -392,6 +392,8 @@ public:
   set<FK_rename_col> rk_renamed_cols;
   vector<FK_add_new> fk_added;
   vector<FK_drop_old> fk_dropped;
+  vector<Table_name> fk_renamed_table;
+  vector<Table_name> rk_renamed_table;
   /** FK list prepared by prepare_create_table() */
   FK_list            foreign_keys;
   MDL_request_list fk_mdl_reqs;

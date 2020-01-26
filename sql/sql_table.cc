@@ -4626,6 +4626,8 @@ static bool vers_prepare_keys(THD *thd, HA_CREATE_INFO *create_info,
 
 handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
                                 const LEX_CSTRING &table_name,
+                                const LEX_CSTRING &new_db,
+                                const LEX_CSTRING &new_table_name,
                                 HA_CREATE_INFO *create_info,
                                 Alter_info *alter_info, int create_table_mode,
                                 KEY **key_info, uint *key_count,
@@ -4868,7 +4870,7 @@ handler *mysql_create_frm_image(THD *thd, const LEX_CSTRING &db,
 
   if (mysql_prepare_create_table(thd, create_info, alter_info, &db_options,
                                  file, key_info, key_count, foreign_keys,
-                                 create_table_mode, db, table_name))
+                                 create_table_mode, new_db, new_table_name))
     goto err;
   create_info->table_options=db_options;
 
@@ -4923,6 +4925,7 @@ static
 int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
                       const LEX_CSTRING &orig_table_name,
                       const LEX_CSTRING &db, const LEX_CSTRING &table_name,
+                      const LEX_CSTRING &new_name,
                       const char *path, const DDL_options_st options,
                       HA_CREATE_INFO *create_info, Alter_info *alter_info,
                       int create_table_mode, bool *is_trans, KEY **key_info,
@@ -5112,7 +5115,7 @@ int create_table_impl(THD *thd, const LEX_CSTRING &orig_db,
   }
   else
   {
-    file= mysql_create_frm_image(thd, orig_db, orig_table_name, create_info,
+    file= mysql_create_frm_image(thd, orig_db, orig_table_name, db, new_name, create_info,
                                  alter_info, create_table_mode, key_info,
                                  key_count, foreign_keys, referenced_keys, frm);
     /*
@@ -5217,8 +5220,8 @@ int mysql_create_table_no_lock(THD *thd, const LEX_CSTRING *db,
     }
   }
 
-  res= create_table_impl(thd, *db, *table_name, *db, *table_name, path,
-                         *create_info, create_info,
+  res= create_table_impl(thd, *db, *table_name, *db, *table_name, *table_name,
+                         path, *create_info, create_info,
                          alter_info, create_table_mode,
                          is_trans, &not_used_1, &not_used_2, foreign_keys, referenced_keys,
                          &frm);
@@ -8661,7 +8664,38 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       goto err;
     }
+    if (alter_ctx->is_table_renamed())
+    {
+      if (0 == cmp_table(fk.ref_db(), table->s->db) &&
+          0 == cmp_table(fk.referenced_table, table->s->table_name))
+      {
+        key->ref_db= {NULL, 0};
+        key->ref_table= alter_ctx->new_name;
+      }
+      else
+      {
+        if (!fk_tables_to_lock.insert(fk.ref_db(), fk.referenced_table))
+          goto err;
+        // Update foreign_table of referenced_keys. FRM write required.
+        if (alter_ctx->fk_renamed_table.push_back({fk.ref_db(), fk.referenced_table}))
+          goto err;
+      }
+    }
   } //  for (const FK_info &fk: table->s->foreign_keys)
+  if (alter_ctx->is_table_renamed())
+  {
+    for (const FK_info &rk: table->s->referenced_keys)
+    {
+      if (0 == cmp_table(rk.foreign_db, table->s->db) &&
+          0 == cmp_table(rk.foreign_table, table->s->table_name))
+        continue;
+      if (!fk_tables_to_lock.insert(rk.foreign_db, rk.foreign_table))
+        goto err;
+      // Update referenced_table of foreign_keys. FRM write required.
+      if (alter_ctx->rk_renamed_table.push_back({rk.foreign_db, rk.foreign_table}))
+        goto err;
+    }
+  }
   /*
     Collect all keys which isn't in drop list. Add only those
     for which some fields exists.
@@ -9594,6 +9628,7 @@ simple_rename_or_index_change(THD *thd, TABLE_LIST *table_list,
   if (likely(!error) && alter_ctx->is_table_renamed())
   {
     THD_STAGE_INFO(thd, stage_rename);
+    FK_rename_vector fk_rename_backup;
     handlerton *old_db_type= table->s->db_type();
     /*
       Then do a 'simple' rename of the table. First we need to close all
@@ -9605,31 +9640,56 @@ simple_rename_or_index_change(THD *thd, TABLE_LIST *table_list,
     */
     if (wait_while_table_is_used(thd, table, extra_func))
       DBUG_RETURN(true);
+
+    if (fk_handle_rename(thd, table_list, &alter_ctx->new_db,
+                         &alter_ctx->new_name, fk_rename_backup))
+      DBUG_RETURN(true);
+
     close_all_tables_for_name(thd, table->s, HA_EXTRA_PREPARE_FOR_RENAME,
                               NULL);
 
     if (mysql_rename_table(old_db_type, &alter_ctx->db, &alter_ctx->table_name,
-                           &alter_ctx->new_db, &alter_ctx->new_alias, 0))
+                           &alter_ctx->new_db, &alter_ctx->new_name, 0))
       error= -1;
     else if (Table_triggers_list::change_table_name(thd,
                                                  &alter_ctx->db,
                                                  &alter_ctx->alias,
                                                  &alter_ctx->table_name,
                                                  &alter_ctx->new_db,
-                                                 &alter_ctx->new_alias))
+                                                 &alter_ctx->new_name))
     {
       (void) mysql_rename_table(old_db_type,
-                                &alter_ctx->new_db, &alter_ctx->new_alias,
+                                &alter_ctx->new_db, &alter_ctx->new_name,
                                 &alter_ctx->db, &alter_ctx->table_name,
                                 NO_FK_CHECKS);
       error= -1;
     }
     /* Update stat tables last. This is to be able to handle rename of a stat table */
     if (error == 0)
+    {
       (void) rename_table_in_stat_tables(thd, &alter_ctx->db,
                                          &alter_ctx->table_name,
                                          &alter_ctx->new_db,
-                                         &alter_ctx->new_alias);
+                                         &alter_ctx->new_name);
+      for (FK_rename_backup &bak: fk_rename_backup)
+      {
+        error= bak.self_ref ?
+          fk_install_shadow_frm(bak.old_name, bak.new_name) :
+          bak.sa.share->fk_install_shadow_frm();
+        if (error)
+          break;
+      }
+    }
+    else
+    {
+      for (FK_rename_backup &bak: fk_rename_backup)
+      {
+        if (bak.self_ref)
+          fk_drop_shadow_frm(bak.old_name);
+        else
+          bak.rollback();
+      }
+    }
   }
 
   if (likely(!error))
@@ -10348,7 +10408,7 @@ do_continue:;
   create_info->options|=HA_CREATE_TMP_ALTER;
   error= create_table_impl(thd, alter_ctx.db, alter_ctx.table_name,
                            alter_ctx.new_db, alter_ctx.tmp_name,
-                           alter_ctx.get_tmp_path(),
+                           alter_ctx.new_name, alter_ctx.get_tmp_path(),
                            thd->lex->create_info, create_info, alter_info,
                            C_ALTER_TABLE_FRM_ONLY, NULL,
                            &key_info, &key_count, alter_ctx.foreign_keys,
@@ -11997,6 +12057,10 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
 {
   set<TABLE_SHARE *> shares_to_write; // write FRMs to disk
 
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, db.str,
+                                             table_name.str, MDL_EXCLUSIVE));
+
+
   MDL_request_list::Iterator it(fk_mdl_reqs);
   while (MDL_request *req= it++)
   {
@@ -12078,9 +12142,13 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
   }
 
   /* Add new referenced_keys to referenced tables. FRM write is required. */
+
   // Remove existing keys from fk_list, keep only newly added:
-  for (int i= 0; i < foreign_keys.elements - fk_added.size(); ++i)
-    foreign_keys.pop();
+  FK_list new_foreign_keys(foreign_keys);
+  uint old_fkeys= foreign_keys.elements - fk_added.size();
+  for (uint i= 0; i < old_fkeys; ++i)
+    new_foreign_keys.pop();
+
   for (const FK_add_new &new_fk: fk_added)
   {
     auto i= fk_shares.find(new_fk.ref);
@@ -12099,7 +12167,7 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
     ref_bak->install_shadow= true;
     // Find prepared FK in fk_list. If ID exists, use it.
     FK_info *fk;
-    List_iterator<FK_info> fk_it(foreign_keys);
+    List_iterator<FK_info> fk_it(new_foreign_keys);
     if (new_fk.fk->constraint_name.str)
     {
       while ((fk= fk_it++))
@@ -12193,6 +12261,89 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
       return true;
     ref_bak->install_shadow= true;
   }
+
+  /* Handle table rename. FRM write is required. */
+  for (const Table_name &ref: fk_renamed_table)
+  {
+    DBUG_ASSERT(is_table_renamed());
+    auto i= fk_shares.find(ref);
+    if (i == fk_shares.end())
+    {
+      DBUG_ASSERT(!thd->variables.check_foreign());
+      continue;
+    }
+    Share_acquire &ref_table= i->second;
+    if (!ref_table.share)
+      return true;
+    TABLE_SHARE *ref_share= ref_table.share;
+    FK_ref_backup *ref_bak= fk_add_backup(ref_share);
+    if (!ref_bak)
+      return true;
+    // Update foreign_table of referenced_keys.
+    for (FK_info &rk: ref_share->referenced_keys)
+    {
+      if (0 == cmp_table(rk.foreign_db, db) &&
+          0 == cmp_table(rk.foreign_table, table_name))
+      {
+        if (is_database_changed() &&
+            rk.foreign_db.strdup(&ref_share->mem_root, new_db))
+        {
+          my_error(ER_OUT_OF_RESOURCES, MYF(0));
+          return true;
+        }
+        if (new_name.str != table_name.str &&
+            rk.foreign_table.strdup(&ref_share->mem_root, new_name))
+        {
+          my_error(ER_OUT_OF_RESOURCES, MYF(0));
+          return true;
+        }
+      }
+    }
+    if (!shares_to_write.insert(ref_share))
+      return true;
+    ref_bak->install_shadow= true;
+  } // for (const Table_name &ref: fk_renamed_table)
+
+  for (const Table_name &ref: rk_renamed_table)
+  {
+    DBUG_ASSERT(is_table_renamed());
+    auto i= fk_shares.find(ref);
+    if (i == fk_shares.end())
+    {
+      DBUG_ASSERT(!thd->variables.check_foreign());
+      continue;
+    }
+    Share_acquire &fk_table= i->second;
+    if (!fk_table.share)
+      return true;
+    TABLE_SHARE *fk_share= fk_table.share;
+    FK_ref_backup *ref_bak= fk_add_backup(fk_share);
+    if (!ref_bak)
+      return true;
+    // Update referenced_table of foreign_keys.
+    for (FK_info &fk: fk_share->foreign_keys)
+    {
+      if (0 == cmp_table(fk.ref_db(), db) &&
+          0 == cmp_table(fk.referenced_table, table_name))
+      {
+        if (is_database_changed() &&
+            fk.referenced_db.strdup(&fk_share->mem_root, new_db))
+        {
+          my_error(ER_OUT_OF_RESOURCES, MYF(0));
+          return true;
+        }
+        if (new_name.str != table_name.str &&
+            fk.referenced_table.strdup(&fk_share->mem_root, new_name))
+        {
+          my_error(ER_OUT_OF_RESOURCES, MYF(0));
+          return true;
+        }
+      }
+    }
+    if (!shares_to_write.insert(fk_share))
+      return true;
+    ref_bak->install_shadow= true;
+  } // for (const Table_name &ref: rk_renamed_table)
 
   /* Update EXTRA2_FOREIGN_KEY_INFO section in FRM files. */
   for (TABLE_SHARE *s: shares_to_write)
@@ -12382,7 +12533,6 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
   TABLE_SHARE *share= sa.share;
   if (share->foreign_keys.is_empty() && share->referenced_keys.is_empty())
     return false;
-  bool self_refs= false;
   Table_name_set tables;
   MDL_request_list mdl_list;
   for (FK_info &fk: share->foreign_keys)
@@ -12399,7 +12549,6 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
         goto mem_error;
       if (fk.referenced_table.strdup(&share->mem_root, *new_table_name))
         goto mem_error;
-      self_refs= true;
       continue;
     }
     if (!tables.insert(fk.ref_db(), fk.referenced_table))
@@ -12418,21 +12567,18 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
       if (rk.foreign_db.strdup(&share->mem_root, *new_db) ||
           rk.foreign_table.strdup(&share->mem_root, *new_table_name))
         goto mem_error;
-      self_refs= true;
       continue;
     }
     if (!tables.insert(rk.foreign_db, rk.foreign_table))
       goto mem_error;
   }
 
-  if (self_refs)
-  {
-    if (share->fk_write_shadow_frm())
-      return true;
-    // NB: share is closed before rename, we can't store it into fk_rename_backup
-    fk_rename_backup.push_back({{old_table->db, old_table->table_name},
-                               {*new_db, *new_table_name}});
-  }
+  if (share->fk_write_shadow_frm())
+    return true;
+
+  // NB: share is closed before rename, we can't store it into fk_rename_backup
+  fk_rename_backup.push_back({{old_table->db, old_table->table_name},
+                              {*new_db, *new_table_name}});
 
   if (tables.empty())
     return false;
@@ -12473,7 +12619,8 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
   for (FK_ddl_backup &ref: fk_rename_backup)
   {
     TABLE_SHARE *ref_share= ref.sa.share;
-    DBUG_ASSERT(ref_share);
+    if (!ref_share)
+      continue; // renamed table backup
     for (FK_info &fk: ref_share->foreign_keys)
     {
       if (cmp_table(fk.ref_db(), old_table->db) ||

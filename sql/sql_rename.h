@@ -22,7 +22,7 @@
 class THD;
 struct TABLE_LIST;
 
-// NB: FK_ddl_backup responds to share release unlike FK_alter_backup
+// NB: FK_ddl_backup responds for share release unlike FK_alter_backup
 class FK_ddl_backup
 {
 public:
