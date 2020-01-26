@@ -3718,7 +3718,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
   Key *key, *key2;
   uint tmp, key_number;
 
-  /* Calculate number of key segements */
+  /* Calculate number of key segments */
   *key_count= 0;
 
   while ((key=key_iterator++))
@@ -3728,7 +3728,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     if (key->foreign)
     {
       Foreign_key *fk_key= (Foreign_key*) key;
-      if (fk_key->validate(alter_info->create_list))
+      if (!fk_key->ignore && fk_key->validate(alter_info->create_list))
         DBUG_RETURN(TRUE);
       if (fk_key->ref_columns.elements &&
 	  fk_key->ref_columns.elements != fk_key->columns.elements)
