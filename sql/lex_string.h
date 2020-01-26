@@ -90,6 +90,10 @@ class Lex_cstring : public LEX_CSTRING, public Sql_alloc
     str= _str;
     length= _len;
   }
+  Lex_cstring print() const
+  {
+    return str ? *this : "(NULL)";
+  }
   int cmp(const Lex_cstring& rhs) const
   {
     if (length < rhs.length)
@@ -106,19 +110,8 @@ class Lex_cstring : public LEX_CSTRING, public Sql_alloc
       return 1;
     return strcmp(str, rhs);
   }
-  Lex_cstring print() const
-  {
-    return str ? *this : "(NULL)";
-  }
 };
 
-struct Lex_cstring_lt
-{
-  bool operator() (const Lex_cstring &lhs, const Lex_cstring &rhs) const
-  {
-    return lhs.cmp(rhs) < 0;
-  }
-};
 
 class Lex_cstring_strlen: public Lex_cstring
 {
@@ -171,14 +164,21 @@ static inline bool cmp(const LEX_CSTRING a, const LEX_CSTRING b)
 {
   return a.length != b.length || memcmp(a.str, b.str, a.length);
 }
-static inline bool cmp_ident(const LEX_CSTRING a, const LEX_CSTRING b)
+static inline int cmp_ident(const LEX_CSTRING a, const LEX_CSTRING b)
 {
-  return lex_string_cmp(system_charset_info, &a, &b);
+  return my_strcasecmp(system_charset_info, a.str, b.str);
 }
-static inline bool cmp_table(const LEX_CSTRING a, const LEX_CSTRING b)
+static inline int cmp_table(const LEX_CSTRING a, const LEX_CSTRING b)
 {
-  return lex_string_cmp(table_alias_charset, &a, &b);
+  return my_strcasecmp(table_alias_charset, a.str, b.str);
 }
+struct Lex_ident_lt
+{
+  bool operator() (const Lex_cstring &lhs, const Lex_cstring &rhs) const
+  {
+    return cmp_ident(lhs, rhs) < 0;
+  }
+};
 
 
 /*

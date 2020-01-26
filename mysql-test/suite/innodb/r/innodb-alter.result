@@ -842,27 +842,27 @@ t2	CREATE TABLE `t2` (
   KEY `fk_t2_2` (`BB`),
   KEY `fk_t2_3` (`CC`),
   KEY `fk_t2_4` (`DD`),
-  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`),
-  CONSTRAINT `t2_ibfk_2` FOREIGN KEY (`bb`) REFERENCES `t1` (`b`),
-  CONSTRAINT `t2_ibfk_3` FOREIGN KEY (`cc`) REFERENCES `t1` (`c`),
-  CONSTRAINT `t2_ibfk_4` FOREIGN KEY (`dd`) REFERENCES `t1` (`d`)
+  CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`),
+  CONSTRAINT `fk_t2_2` FOREIGN KEY (`bb`) REFERENCES `t1` (`b`),
+  CONSTRAINT `fk_t2_3` FOREIGN KEY (`cc`) REFERENCES `t1` (`c`),
+  CONSTRAINT `fk_t2_4` FOREIGN KEY (`dd`) REFERENCES `t1` (`d`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 DELETE FROM t1 WHERE a=1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
 DELETE FROM t1 WHERE A=1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
 DELETE FROM t1 WHERE b=1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
 DELETE FROM t1 WHERE B=1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
 DELETE FROM t1 WHERE c=1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
 DELETE FROM t1 WHERE C=1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
 DELETE FROM t1 WHERE d=1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
 DELETE FROM t1 WHERE D=1;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk_t2` FOREIGN KEY (`aa`) REFERENCES `t1` (`a`))
 DROP TABLE t2, t1;
 # virtual columns case too
 CREATE TABLE t1 (a INT, b INT GENERATED ALWAYS AS (a) VIRTUAL) ENGINE = InnoDB;

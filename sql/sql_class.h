@@ -394,7 +394,7 @@ public:
 
 
 /*
-   NB: Table_ident is parser-oriented class that contains SELECT_LEX_UNIT and
+   TODO: Table_ident is parser-oriented class that contains SELECT_LEX_UNIT and
    depends on sql_lex.h, so it can't be declared in this place and is not declared
    in many headers. Table_ident should be derived from Table_name.
    Classes containing (db, table_name) pairs such as TABLE_LIST, TABLE_SHARE, etc.
@@ -411,12 +411,12 @@ public:
     : db(_db), name(_name) {}
   int cmp(const Table_name &rhs) const
   {
-    int db_cmp= db.cmp(rhs.db);
+    int db_cmp= cmp_table(db, rhs.db);
     if (db_cmp < 0)
       return -1;
     if (db_cmp > 0)
       return 1;
-    return name.cmp(rhs.name);
+    return cmp_table(name, rhs.name);
   }
 };
 
@@ -447,7 +447,7 @@ public:
       insert({db, table});
   }
 };
-typedef set<Lex_cstring, Lex_cstring_lt> Lex_cstring_set;
+typedef set<Lex_cstring, Lex_ident_lt> Lex_ident_set;
 
 
 
@@ -6566,15 +6566,6 @@ public:
       my_casedn_str(system_charset_info, (char *)table.str);
     }
     return false;
-  }
-  int cmp(const Table_ident &rhs) const
-  {
-    int db_cmp= db.cmp(rhs.db);
-    if (db_cmp < 0)
-      return -1;
-    if (db_cmp > 0)
-      return 1;
-    return table.cmp(rhs.table);
   }
 };
 

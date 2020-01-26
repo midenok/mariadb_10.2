@@ -65,7 +65,7 @@ const char *primary_key_name="PRIMARY";
 
 static Lex_cstring
 make_unique_key_name(THD* thd, LEX_CSTRING prefix,
-                     const Lex_cstring_set& key_names, bool foreign);
+                     const Lex_ident_set& key_names, bool foreign);
 static bool make_unique_constraint_name(THD *, LEX_CSTRING *, const char *,
                                         List<Virtual_column_info> *, uint *);
 static const char *make_unique_invisible_field_name(THD *, const char *,
@@ -3481,8 +3481,8 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
                            const LEX_CSTRING &table_name)
 {
   Lex_cstring   key_name;
-  Lex_cstring_set key_names;
-  Lex_cstring_set dup_check;
+  Lex_ident_set key_names;
+  Lex_ident_set dup_check;
   Create_field	*sql_field,*dup_field;
   uint		field,null_fields,max_key_length;
   ulong		record_offset= 0;
@@ -5411,7 +5411,7 @@ check_if_field_name_exists(const char *name, List<Create_field> * fields)
 */
 static Lex_cstring
 make_unique_key_name(THD *thd, LEX_CSTRING prefix,
-                     const Lex_cstring_set &key_names, bool foreign)
+                     const Lex_ident_set &key_names, bool foreign)
 {
   char buf[MAX_FIELD_NAME - 1];
   char *ptr= buf;
@@ -12026,7 +12026,7 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
         continue;
       for (Lex_cstring &col: fk.foreign_fields)
       {
-        if (0 != col.cmp(ren_col.col_name))
+        if (0 != cmp_ident(col, ren_col.col_name))
           continue;
         if (col.strdup(&ref_share->mem_root, ren_col.new_name))
         {
@@ -12060,7 +12060,7 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
         continue;
       for (Lex_cstring &col: rk.referenced_fields)
       {
-        if (0 != col.cmp(ren_col.col_name))
+        if (0 != cmp_ident(col, ren_col.col_name))
           continue;
         if (col.strdup(&fk_share->mem_root, ren_col.new_name))
         {
