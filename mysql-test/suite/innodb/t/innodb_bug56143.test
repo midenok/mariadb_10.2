@@ -4,9 +4,6 @@
 # http://bugs.mysql.com/56143
 #
 
--- disable_query_log
--- disable_result_log
-
 if ($VALGRIND_TEST)
 {
   call mtr.add_suppression("InnoDB: Warning: a long semaphore wait:");
@@ -19,6 +16,10 @@ DROP TABLE IF EXISTS bug56143_2;
 
 CREATE TABLE bug56143_1 (a INT, KEY(a)) ENGINE=INNODB;
 
+-- disable_query_log
+-- disable_result_log
+
+--error ER_CANT_CREATE_TABLE
 CREATE TABLE `bug56143_2` (
   `a` int(11) DEFAULT NULL,
   KEY `a` (`a`),
@@ -577,9 +578,9 @@ CREATE TABLE `bug56143_2` (
 -- enable_query_log
 -- enable_result_log
 
-SHOW CREATE TABLE bug56143_2;
+# SHOW CREATE TABLE bug56143_2;
 
 -- disable_query_log
 -- disable_result_log
 DROP TABLE bug56143_1;
-DROP TABLE bug56143_2;
+# DROP TABLE bug56143_2;

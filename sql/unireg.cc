@@ -267,6 +267,16 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                     MYF(0), table.str);
     DBUG_RETURN(frm);
   }
+  if (field_data_type_info_image.length() > 0xffff - FRM_HEADER_SIZE - 8)
+  {
+    my_printf_error(ER_CANT_CREATE_TABLE,
+                    "Cannot create table %`s: "
+                    "field data type info image is too large. "
+                    "Decrease the number of columns with "
+                    "extended data types.",
+                    MYF(0), table.str);
+    DBUG_RETURN(frm);
+  }
   if (foreign_key_io.store(foreign_keys, referenced_keys))
   {
     my_printf_error(ER_CANT_CREATE_TABLE,
@@ -275,6 +285,15 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
                     MYF(0), table.str);
     DBUG_RETURN(frm);
   }
+  if (foreign_key_io.length() > 0xffff - FRM_HEADER_SIZE - 8)
+  {
+    my_printf_error(ER_CANT_CREATE_TABLE,
+                    "Cannot create table %`s: "
+                    "foreign key info image is too large.",
+                    MYF(0), table.str);
+    DBUG_RETURN(frm);
+  }
+
   DBUG_PRINT("info", ("Field data type info length: %u",
                       (uint) field_data_type_info_image.length()));
   DBUG_EXECUTE_IF("frm_data_type_info",
@@ -408,33 +427,12 @@ LEX_CUSTRING build_frm_image(THD *thd, const LEX_CSTRING &table,
 
   if (field_data_type_info_image.length())
   {
-    if (field_data_type_info_image.length() > 0xFFFF)
-    {
-      my_printf_error(ER_CANT_CREATE_TABLE,
-                      "Cannot create table %`s: "
-                      "field data type info image is too large. "
-                      "Decrease the number of columns with "
-                      "extended data types.",
-                      MYF(0), table.str);
-      goto err;
-    }
     *pos= EXTRA2_FIELD_DATA_TYPE_INFO;
     pos= extra2_write_str(pos + 1, field_data_type_info_image.lex_cstring());
   }
 
   if (foreign_key_io.length())
   {
-    if (foreign_key_io.length() > 0xFFFFFFFF)
-    {
-      // FIXME: move this to class
-      my_printf_error(ER_CANT_CREATE_TABLE,
-                      "Cannot create table %`s: "
-                      "field data type info image is too large. "
-                      "Decrease the number of columns with "
-                      "extended data types.",
-                      MYF(0), table.str);
-      goto err;
-    }
     *pos= EXTRA2_FOREIGN_KEY_INFO;
     pos= extra2_write_str(pos + 1, foreign_key_io.lex_cstring());
   }
