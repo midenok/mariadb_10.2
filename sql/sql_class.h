@@ -592,7 +592,7 @@ public:
   Foreign_key(const FK_info &src, MEM_ROOT *mem_root)
     : Key(MULTIPLE, &src.foreign_id, default_key_create_info.algorithm, true,
           DDL_options()),
-    constraint_name(src.referenced_key_name),
+    constraint_name(src.foreign_id),
     ref_db(src.referenced_db),
     ref_table(src.referenced_table),
     delete_opt(src.delete_method),

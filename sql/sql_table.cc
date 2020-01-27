@@ -3822,13 +3822,13 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
       {
         if (key->foreign)
         {
-          key_name= key->name.str ? key->name :
-            make_unique_key_name(thd, table_name, key_names, true);
           FK_info *fk_info= new (thd->mem_root) FK_info();
           fk_info->assign(*(Foreign_key *) key, {db, table_name});
-          fk_info->foreign_id= key_name;
+          if (!fk_info->foreign_id.str)
+            fk_info->foreign_id= make_unique_key_name(thd, table_name,
+                                                      key_names, true);
           foreign_keys.push_back(fk_info);
-          if (!key_names.insert(key_name))
+          if (!key_names.insert(fk_info->foreign_id))
             DBUG_RETURN(TRUE);				// Out of memory
         }
         key=key_iterator++;
@@ -4203,10 +4203,16 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
             key->name= key_name;
           }
 	}
-	else if (!(key_name= key->name).str)
-	  key_name= key->foreign ?
-            make_unique_key_name(thd, table_name, key_names, true) :
-            make_unique_key_name(thd, sql_field->field_name, key_names, false);
+        else if (key->foreign)
+        {
+          Foreign_key *fkey= static_cast<Foreign_key *>(key);
+          key_name= fkey->constraint_name.str ? fkey->constraint_name : key->name;
+          if (!key_name.str)
+            key_name= make_unique_key_name(thd, table_name, key_names, true);
+        }
+        else if (!(key_name= key->name).str)
+	  key_name= make_unique_key_name(thd, sql_field->field_name,
+                                         key_names, false);
 	if (dup_check.find(key_name) != dup_check.end())
 	{
 	  my_error(ER_DUP_KEYNAME, MYF(0), key_name.str);

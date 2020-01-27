@@ -1156,7 +1156,6 @@ ulonglong Foreign_key_io::fk_size(FK_info &fk)
 {
   ulonglong store_size= 0;
   store_size+= string_size(fk.foreign_id);
-  store_size+= string_size(fk.referenced_key_name);
   store_size+= string_size(fk.referenced_db);
   store_size+= string_size(fk.referenced_table);
   store_size+= net_length_size(fk.update_method);
@@ -1189,7 +1188,6 @@ void Foreign_key_io::store_fk(FK_info &fk, uchar *&pos)
   uchar *old_pos= pos;
 #endif
   pos= store_string(pos, fk.foreign_id);
-  pos= store_string(pos, fk.referenced_key_name, true);
   pos= store_string(pos, fk.referenced_db, true);
   pos= store_string(pos, fk.referenced_table);
   pos= store_length(pos, fk.update_method);
@@ -1294,8 +1292,6 @@ bool Foreign_key_io::parse(THD *thd, TABLE_SHARE *s, LEX_CUSTRING& image)
       return true;
     dst->foreign_db= s->db;
     dst->foreign_table= s->table_name;
-    if (read_string(dst->referenced_key_name, &s->mem_root, p))
-      return true;
     if (read_string(dst->referenced_db, &s->mem_root, p))
       return true;
     if (!dst->referenced_db.length)

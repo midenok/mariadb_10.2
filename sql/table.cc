@@ -9247,14 +9247,13 @@ bool FK_info::assign(Foreign_key &src, Table_name table)
   DBUG_ASSERT(src.foreign);
   DBUG_ASSERT(src.type == Key::MULTIPLE);
 
-  foreign_id= src.name;
+  foreign_id= src.constraint_name.str ? src.constraint_name : src.name;
   foreign_db= table.db;
   foreign_table= table.name;
   referenced_db= src.ref_db;
   referenced_table= src.ref_table;
   update_method= src.update_opt;
   delete_method= src.delete_opt;
-  referenced_key_name= src.constraint_name;
 
   List_iterator_fast<Key_part_spec> ref_it(src.ref_columns);
 
@@ -9288,8 +9287,6 @@ FK_info * FK_info::clone(MEM_ROOT *mem_root) const
     return NULL;
   dst->update_method= update_method;
   dst->delete_method= delete_method;
-  if (dst->referenced_key_name.strdup(mem_root, foreign_id))
-    return NULL;
 
   for (const Lex_cstring &src_f: foreign_fields)
   {
@@ -9330,8 +9327,6 @@ void FK_info::print(String& out)
   out.append(referenced_db.print());
   out.append("; referenced_table: ");
   out.append(referenced_table.print());
-  out.append("; referenced_key_name: ");
-  out.append(referenced_key_name.print());
   out.append("; update_method: ");
   out.append(fk_option_name(update_method));
   out.append("; delete_method: ");

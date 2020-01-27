@@ -12187,8 +12187,8 @@ public:
 	key_text(FK_info* key)
 	{
 		char* ptr = buf;
-		if (key->referenced_key_name.str) {
-			Lex_cstring& name = key->referenced_key_name;
+		if (key->foreign_id.str) {
+			Lex_cstring& name = key->foreign_id;
 			size_t len = std::min(name.length, MAX_TEXT - 2);
 			*(ptr++)   = '`';
 			memcpy(ptr, name.str, len);

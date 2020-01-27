@@ -1711,8 +1711,6 @@ public:
   Lex_cstring referenced_table;
   enum_fk_option update_method;
   enum_fk_option delete_method;
-  // FIXME: now used as constraint_name, nowhere as "referenced key name"
-  Lex_cstring referenced_key_name;
   List<Lex_cstring> foreign_fields;
   List<Lex_cstring> referenced_fields;
 
