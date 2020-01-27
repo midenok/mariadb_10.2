@@ -5432,7 +5432,7 @@ make_unique_key_name(THD *thd, LEX_CSTRING prefix,
 
   memcpy(ptr, prefix.str, prefix.length);
   ptr+= prefix.length;
-  DBUG_ASSERT(ptr - buf + 1 < sizeof(buf));
+  DBUG_ASSERT(ptr - buf < sizeof(buf));
   *ptr= 0;
   prefix.str= buf;
   if (foreign)
