@@ -8063,6 +8063,19 @@ static void append_drop_column(THD *thd, bool dont, String *str,
 }
 
 
+/* DROP FK does not fail for non-existent ref (but other commands do) */
+struct FK_table_to_lock
+{
+  Table_name table;
+  bool fail; // fail on non-existent foreign/referenced table
+  FK_table_to_lock(Table_name _table) : table(_table), fail(false) {}
+  bool operator< (const FK_table_to_lock &rhs) const
+  {
+    return table.cmp(rhs.table) < 0;
+  }
+};
+
+
 /**
   Prepare column and key definitions for CREATE TABLE in ALTER TABLE.
 
@@ -8116,7 +8129,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List<Create_field> new_create_list;
   /* New key definitions are added here */
   List<Key> new_key_list;
-  Table_name_set fk_tables_to_lock;
+  set<FK_table_to_lock> fk_tables_to_lock;
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
   List_iterator<Create_field> def_it(alter_info->create_list);
   List_iterator<Alter_column> alter_it(alter_info->alter_list);
@@ -8301,14 +8314,16 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
             if (0 == cmp_ident(fld, def->change))
             {
               fld= def->field_name;
+              Table_name fk_table(fk.ref_db(), fk.referenced_table);
               /* Update foreign_fields of referenced tables.
                  No FRM write required. */
               if (!alter_ctx->fk_renamed_cols.insert({
-                    Table_name(fk.ref_db(), fk.referenced_table),
-                    def->change, def->field_name}))
+                    fk_table, def->change, def->field_name}))
                 DBUG_RETURN(1);
-              if (!fk_tables_to_lock.insert(fk.ref_db(), fk.referenced_table))
+              const FK_table_to_lock *x= fk_tables_to_lock.insert(fk_table);
+              if (!x)
                 DBUG_RETURN(1);
+              const_cast<FK_table_to_lock *>(x)->fail= true;
             }
           }
         }
@@ -8345,14 +8360,16 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
             if (0 == cmp_ident(fld, def->change))
             {
               fld= def->field_name;
+              Table_name rk_table(rk.foreign_db, rk.foreign_table);
               /* Update referenced_fields of foreign tables.
                  FRM write is required in this case. */
               if (!alter_ctx->rk_renamed_cols.insert({
-                    Table_name(rk.foreign_db, rk.foreign_table),
-                    def->change, def->field_name}))
+                    rk_table, def->change, def->field_name}))
                 DBUG_RETURN(1);
-              if (!fk_tables_to_lock.insert(rk.foreign_db, rk.foreign_table))
+              const FK_table_to_lock *x= fk_tables_to_lock.insert(rk_table);
+              if (!x)
                 DBUG_RETURN(1);
+              const_cast<FK_table_to_lock *>(x)->fail= true;
             }
           }
         }
@@ -8674,10 +8691,13 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       }
       else
       {
-        if (!fk_tables_to_lock.insert(fk.ref_db(), fk.referenced_table))
+        Table_name fk_table(fk.ref_db(), fk.referenced_table);
+        const FK_table_to_lock *x= fk_tables_to_lock.insert(fk_table);
+        if (!x)
           goto err;
+        const_cast<FK_table_to_lock *>(x)->fail= true;
         // Update foreign_table of referenced_keys. FRM write required.
-        if (alter_ctx->fk_renamed_table.push_back({fk.ref_db(), fk.referenced_table}))
+        if (alter_ctx->fk_renamed_table.push_back(fk_table))
           goto err;
       }
     }
@@ -8689,10 +8709,13 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       if (0 == cmp_table(rk.foreign_db, table->s->db) &&
           0 == cmp_table(rk.foreign_table, table->s->table_name))
         continue;
-      if (!fk_tables_to_lock.insert(rk.foreign_db, rk.foreign_table))
+      Table_name rk_table(rk.foreign_db, rk.foreign_table);
+      const FK_table_to_lock *x= fk_tables_to_lock.insert(rk_table);
+      if (!x)
         goto err;
+      const_cast<FK_table_to_lock *>(x)->fail= true;
       // Update referenced_table of foreign_keys. FRM write required.
-      if (alter_ctx->rk_renamed_table.push_back({rk.foreign_db, rk.foreign_table}))
+      if (alter_ctx->rk_renamed_table.push_back(rk_table))
         goto err;
     }
   }
@@ -8912,8 +8935,10 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           {
             if (alter_ctx->fk_added.push_back({t, fk}))
               goto err;
-            if (!fk_tables_to_lock.insert(t))
+            const FK_table_to_lock *x= fk_tables_to_lock.insert(t);
+            if (!x)
               goto err;
+            const_cast<FK_table_to_lock *>(x)->fail= true;
           }
         }
         if (key->name.str)
@@ -9084,7 +9109,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
 
   if (!fk_tables_to_lock.empty())
   {
-    for (const Table_name &t: fk_tables_to_lock)
+    for (const FK_table_to_lock &t: fk_tables_to_lock)
     {
       MDL_request *req= new (thd->mem_root) MDL_request;
       if (!req)
@@ -9092,8 +9117,8 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         my_error(ER_OUT_OF_RESOURCES, MYF(0));
         goto err;
       }
-      req->init(MDL_key::TABLE, t.db.str, t.name.str, MDL_INTENTION_EXCLUSIVE,
-                MDL_STATEMENT);
+      req->init(MDL_key::TABLE, t.table.db.str, t.table.name.str,
+                MDL_INTENTION_EXCLUSIVE, MDL_STATEMENT);
       alter_ctx->fk_mdl_reqs.push_front(req);
     }
     if (thd->mdl_context.acquire_locks(&alter_ctx->fk_mdl_reqs,
@@ -9103,14 +9128,15 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
                           "Could not lock referenced tables");
       goto err;
     }
-    for (const Table_name &t: fk_tables_to_lock)
+    /** Preacquire shares to get ER_NO_SUCH_TABLE before copy data */
+    for (const FK_table_to_lock &t: fk_tables_to_lock)
     {
       TABLE_LIST tl;
-      tl.init_one_table(&t.db, &t.name, NULL, TL_IGNORE);
+      tl.init_one_table(&t.table.db, &t.table.name, NULL, TL_IGNORE);
       Share_acquire sa(thd, tl);
       if (!sa.share)
       {
-        if (!thd->variables.check_foreign() && thd->is_error() &&
+        if (!(t.fail && thd->variables.check_foreign()) && thd->is_error() &&
             thd->get_stmt_da()->sql_errno() == ER_NO_SUCH_TABLE)
         {
           // skip non-existing referenced shares, allow ALTER
@@ -9119,8 +9145,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         }
         goto err;
       }
-      /** Preacquire shares to get ER_NO_SUCH_TABLE before copy data */
-      if (!alter_ctx->fk_shares.insert(t, std::move(sa)))
+      if (!alter_ctx->fk_shares.insert(t.table, std::move(sa)))
         goto err;
       DBUG_ASSERT(!sa.share);
     }
@@ -12235,10 +12260,7 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
   {
     auto i= fk_shares.find(dropped_fk.ref);
     if (i == fk_shares.end())
-    {
-      DBUG_ASSERT(!thd->variables.check_foreign());
       continue;
-    }
     Share_acquire &ref_table= i->second;
     if (!ref_table.share)
       return true;
