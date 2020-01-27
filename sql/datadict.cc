@@ -417,28 +417,28 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   Foreign_key_io foreign_key_io;
 
   if (read_frm_image(&frm_src, &frm_size))
-  {
-    // FIXME: error
     return true;
-  }
 
   Scope_malloc frm_src_freer(frm_src); // read_frm_image() passed ownership to us
 
   if (frm_size < FRM_HEADER_SIZE + FRM_FORMINFO_SIZE)
   {
-    // FIXME: error
+frm_err:
+    char path[FN_REFLEN + 1];
+    strxmov(path, normalized_path.str, reg_ext, NullS);
+    my_error(ER_NOT_FORM_FILE, MYF(0), path);
     return true;
   }
 
   if (!is_binary_frm_header(frm_src))
-  {
-    // FIXME: error
-    return true;
-  }
+    goto frm_err;
 
   if (extra2.read(frm_src, frm_size))
   {
-    // FIXME: error
+    my_printf_error(ER_CANT_CREATE_TABLE,
+                    "Cannot create table %`s: "
+                    "Read of extra2 section failed.",
+                    MYF(0), table_name.str);
     return true;
   }
 
@@ -450,9 +450,24 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   extra2.foreign_key_info= foreign_key_io.lex_custring();
   if (!extra2.foreign_key_info.length)
     extra2.foreign_key_info.str= NULL;
+  else if (extra2.foreign_key_info.length > 0xffff - FRM_HEADER_SIZE - 8)
+  {
+    my_printf_error(ER_CANT_CREATE_TABLE,
+                    "Cannot create table %`s: "
+                    "Building the foreign key info image failed.",
+                    MYF(0), table_name.str);
+    return true;
+  }
 
-  const ulong extra2_increase= extra2.store_size() - extra2.read_size;
+  const long extra2_increase= extra2.store_size() - extra2.read_size;
   frm_size+= extra2_increase;
+
+  if (frm_size > FRM_MAX_SIZE)
+  {
+    my_error(ER_TABLE_DEFINITION_TOO_BIG, MYF(0), table_name.str);
+    return true;
+  }
+
   Scope_malloc frm_dst_freer(frm_dst, frm_size, MY_WME);
   if (!frm_dst)
     return true;
@@ -461,7 +476,10 @@ bool TABLE_SHARE::fk_write_shadow_frm()
 
   if (!(pos= extra2.write(frm_dst, frm_size)))
   {
-    // FIXME: error
+    my_printf_error(ER_CANT_CREATE_TABLE,
+                    "Cannot create table %`s: "
+                    "Write of extra2 section failed.",
+                    MYF(0), table_name.str);
     return true;
   }
 
@@ -473,18 +491,11 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   int4store(frm_dst + 10, frm_size);
   memcpy((void *)pos, rest_src + 4, rest_size - 4);
 
-  {
-    char shadow_path[FN_REFLEN+1];
-//     char shadow_frm_name[FN_REFLEN+1];
-    build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                                db, table_name);
-//     strxmov(shadow_frm_name, shadow_path, reg_ext, NullS);
-    if (writefrm(shadow_path, db.str, table_name.str, false, frm_dst, frm_size))
-    {
-      // FIXME: error
-      return true;
-    }
-  }
+  char shadow_path[FN_REFLEN + 1];
+  build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
+                              db, table_name);
+  if (writefrm(shadow_path, db.str, table_name.str, false, frm_dst, frm_size))
+    return true;
 
   return false;
 }

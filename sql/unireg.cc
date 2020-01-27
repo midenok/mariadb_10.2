@@ -1188,7 +1188,6 @@ void Foreign_key_io::store_fk(FK_info &fk, uchar *&pos)
 #ifndef DBUG_OFF
   uchar *old_pos= pos;
 #endif
-  /* FIXME: charset validation? */
   pos= store_string(pos, fk.foreign_id);
   pos= store_string(pos, fk.referenced_key_name, true);
   pos= store_string(pos, fk.referenced_db, true);
