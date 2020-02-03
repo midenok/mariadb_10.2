@@ -2183,10 +2183,16 @@ static dberr_t row_update_vers_insert(que_thr_t* thr, upd_node_t* node)
 	ins_node_set_new_row(insert_node, row);
 
 	ut_ad(n_fields > 3);
-	// Exclude DB_ROW_ID, DB_TRX_ID, DB_ROLL_PTR
+	// Skip DB_ROW_ID, DB_TRX_ID, DB_ROLL_PTR
 	for (i = 0; i < n_fields - 3; i++) {
-		dfield_copy(dtuple_get_nth_field(row, i),
-			dtuple_get_nth_field(node->historical_row, i));
+		dfield_t* f = dtuple_get_nth_field(row, i);
+		const char* name = table->cols[i].name(*table);
+		if (0 == innobase_strcasecmp(name, FTS_DOC_ID_COL_NAME)
+		    && f->type.prtype & DATA_FTS_DOC_ID) {
+			dfield_set_null(f);
+			continue;
+		}
+		dfield_copy(f, dtuple_get_nth_field(node->historical_row, i));
 	}
 
 	for (i = 0; i < n_v_fields; i++) {
