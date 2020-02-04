@@ -656,6 +656,9 @@ struct TABLE_SHARE
   {
     return !referenced_keys.is_empty();
   }
+  /* write shadow FRM implementation */
+  bool fk_write_shadow_frm_impl(const char *shadow_path);
+  /* logged write shadow FRM */
   bool fk_write_shadow_frm();
   bool fk_install_shadow_frm();
   void fk_drop_shadow_frm();

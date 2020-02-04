@@ -407,7 +407,7 @@ Extra2_info::write(uchar *frm_image, size_t frm_size)
 }
 
 
-bool TABLE_SHARE::fk_write_shadow_frm()
+bool TABLE_SHARE::fk_write_shadow_frm_impl(const char *shadow_path)
 {
   const uchar * frm_src;
   uchar * frm_dst;
@@ -491,13 +491,65 @@ frm_err:
   int4store(frm_dst + 10, frm_size);
   memcpy((void *)pos, rest_src + 4, rest_size - 4);
 
-  char shadow_path[FN_REFLEN + 1];
-  build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              db, table_name);
   if (writefrm(shadow_path, db.str, table_name.str, false, frm_dst, frm_size))
     return true;
 
   return false;
+}
+
+static void release_log_entries(DDL_LOG_MEMORY_ENTRY *log_entry)
+{
+  while (log_entry)
+  {
+    release_ddl_log_memory_entry(log_entry);
+    log_entry= log_entry->next_active_log_entry;
+  }
+}
+
+static bool write_log_replace_delete_frm(uint next_entry,
+                                         const char *from_path,
+                                         const char *to_path,
+                                         bool replace_flag)
+{
+  DDL_LOG_ENTRY ddl_log_entry;
+  DDL_LOG_MEMORY_ENTRY *log_entry;
+  DDL_LOG_MEMORY_ENTRY *first_log_entry; // FIXME: set
+  DDL_LOG_MEMORY_ENTRY *exec_log_entry= NULL;
+
+  if (replace_flag)
+    ddl_log_entry.action_type= DDL_LOG_REPLACE_ACTION;
+  else
+    ddl_log_entry.action_type= DDL_LOG_DELETE_ACTION;
+  ddl_log_entry.next_entry= next_entry;
+  ddl_log_entry.handler_name= reg_ext;
+  ddl_log_entry.name= to_path;
+  if (replace_flag)
+    ddl_log_entry.from_name= from_path;
+  Mutex_lock lock_gdl(&LOCK_gdl);
+  if (write_ddl_log_entry(&ddl_log_entry, &log_entry))
+  {
+error:
+    release_log_entries(first_log_entry);
+    my_error(ER_DDL_LOG_ERROR, MYF(0));
+    return true;
+  }
+  if (write_execute_ddl_log_entry(log_entry->entry_pos,
+                                    FALSE, &exec_log_entry))
+    goto error;
+  // FIXME: see insert_part_info_log_entry_list()
+  // log_entry->next_active_log_entry= ;
+  // FIXME: release_part_info_log_entries()
+  return false;
+}
+
+bool TABLE_SHARE::fk_write_shadow_frm()
+{
+  char shadow_path[FN_REFLEN + 1];
+  build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
+                              db, table_name);
+  if (write_log_replace_delete_frm(0, NULL, shadow_path, false))
+    return true;
+  return fk_write_shadow_frm_impl(shadow_path);
 }
 
 bool fk_install_shadow_frm(Table_name old_name, Table_name new_name)
