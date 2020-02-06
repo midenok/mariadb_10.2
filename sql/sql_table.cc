@@ -12078,7 +12078,8 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
 bool Alter_table_ctx::fk_handle_alter(THD *thd)
 {
   set<TABLE_SHARE *> shares_to_write; // write FRMs to disk
-
+  if (ERROR_INJECT("fail_add_fk_1", "crash_add_fk_1"))
+    return true;
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, db.str,
                                              table_name.str, MDL_EXCLUSIVE));
 

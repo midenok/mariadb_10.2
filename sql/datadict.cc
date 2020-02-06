@@ -513,7 +513,7 @@ static bool write_log_replace_delete_frm(uint next_entry,
 {
   DDL_LOG_ENTRY ddl_log_entry;
   DDL_LOG_MEMORY_ENTRY *log_entry;
-  DDL_LOG_MEMORY_ENTRY *first_log_entry; // FIXME: set
+  DDL_LOG_MEMORY_ENTRY *first_log_entry; // FIXME: ???
   DDL_LOG_MEMORY_ENTRY *exec_log_entry= NULL;
 
   if (replace_flag)
@@ -529,16 +529,14 @@ static bool write_log_replace_delete_frm(uint next_entry,
   if (write_ddl_log_entry(&ddl_log_entry, &log_entry))
   {
 error:
-    release_log_entries(first_log_entry);
+    release_log_entries(log_entry); // FIXME: it was first_log_entry
     my_error(ER_DDL_LOG_ERROR, MYF(0));
     return true;
   }
   if (write_execute_ddl_log_entry(log_entry->entry_pos,
                                     FALSE, &exec_log_entry))
     goto error;
-  // FIXME: see insert_part_info_log_entry_list()
-  // log_entry->next_active_log_entry= ;
-  // FIXME: release_part_info_log_entries()
+  // FIXME: release on finish
   return false;
 }
 
