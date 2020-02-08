@@ -152,7 +152,8 @@ bool check_mysql50_prefix(const char *name);
 uint build_table_filename(char *buff, size_t bufflen, const char *db,
                           const char *table, const char *ext, uint flags);
 uint build_table_shadow_filename(char *buff, size_t bufflen,
-                                 LEX_CSTRING &db, LEX_CSTRING &table_name);
+                                 LEX_CSTRING &db, LEX_CSTRING &table_name,
+                                 const char *prefix= tmp_file_prefix);
 uint build_tmptable_filename(THD* thd, char *buff, size_t bufflen);
 bool mysql_create_table(THD *thd, TABLE_LIST *create_table,
                         Table_specification_st *create_info,

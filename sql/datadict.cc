@@ -16,10 +16,14 @@
 #include "mariadb.h"
 #include "datadict.h"
 #include "sql_priv.h"
+#include "sql_base.h"
 #include "sql_class.h"
 #include "sql_table.h"
 #include "ha_sequence.h"
 #include "discover.h"
+
+static const char * const tmp_fk_prefix= "#sqlf";
+static const char * const bak_ext= ".fbk";
 
 static int read_string(File file, uchar**to, size_t length)
 {
@@ -523,8 +527,10 @@ static bool write_log_replace_delete_frm(uint next_entry,
   ddl_log_entry.next_entry= next_entry;
   ddl_log_entry.handler_name= reg_ext;
   ddl_log_entry.name= to_path;
-  if (replace_flag)
+  if (replace_flag) // FIXME: remove if not needed
     ddl_log_entry.from_name= from_path;
+  if (ERROR_INJECT("fail_log_replace_delete_1", "crash_log_replace_delete_1"))
+    return true;
   Mutex_lock lock_gdl(&LOCK_gdl);
   if (write_ddl_log_entry(&ddl_log_entry, &log_entry))
   {
@@ -533,8 +539,12 @@ error:
     my_error(ER_DDL_LOG_ERROR, MYF(0));
     return true;
   }
+  if (ERROR_INJECT("fail_log_replace_delete_2", "crash_log_replace_delete_2"))
+    goto error;
   if (write_execute_ddl_log_entry(log_entry->entry_pos,
                                     FALSE, &exec_log_entry))
+    goto error;
+  if (ERROR_INJECT("fail_log_replace_delete_3", "crash_log_replace_delete_3"))
     goto error;
   // FIXME: release on finish
   return false;
@@ -544,28 +554,55 @@ bool TABLE_SHARE::fk_write_shadow_frm()
 {
   char shadow_path[FN_REFLEN + 1];
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              db, table_name);
+                              db, table_name, tmp_fk_prefix);
   if (write_log_replace_delete_frm(0, NULL, shadow_path, false))
     return true;
-  return fk_write_shadow_frm_impl(shadow_path);
+  bool err= fk_write_shadow_frm_impl(shadow_path);
+  if (ERROR_INJECT("fail_fk_write_shadow", "crash_fk_write_shadow"))
+    return true;
+  return err;
+}
+
+bool fk_backup_frm(Table_name table)
+{
+  MY_STAT stat_info;
+  DBUG_ASSERT(0 != strcmp(reg_ext, bak_ext));
+  char path[FN_REFLEN + 1];
+  char bak_name[FN_REFLEN + 1];
+  char frm_name[FN_REFLEN + 1];
+  build_table_filename(path, sizeof(path), table.db.str,
+                       table.name.str, "", 0);
+  strxnmov(frm_name, sizeof(frm_name), path, reg_ext, NullS);
+  strxnmov(bak_name, sizeof(bak_name), path, bak_ext, NullS);
+  if (mysql_file_stat(key_file_frm, bak_name, &stat_info, MYF(0)))
+  {
+    my_error(ER_FILE_EXISTS_ERROR, MYF(0), bak_name);
+    return true;
+  }
+  if (mysql_file_rename(key_file_frm, frm_name, bak_name, MYF(MY_WME)))
+    return true;
+  return false;
+}
+
+bool TABLE_SHARE::fk_backup_frm()
+{
+  return ::fk_backup_frm({db, table_name});
 }
 
 bool fk_install_shadow_frm(Table_name old_name, Table_name new_name)
 {
+  MY_STAT stat_info;
   char shadow_path[FN_REFLEN + 1];
-  char path[FN_REFLEN];
+  char path[FN_REFLEN + 1];
   char shadow_frm_name[FN_REFLEN + 1];
   char frm_name[FN_REFLEN + 1];
-  MY_STAT stat_info;
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              old_name.db, old_name.name);
+                              old_name.db, old_name.name, tmp_fk_prefix);
   build_table_filename(path, sizeof(path), new_name.db.str,
                        new_name.name.str, "", 0);
   strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
   strxnmov(frm_name, sizeof(frm_name), path, reg_ext, NullS);
   if (!mysql_file_stat(key_file_frm, shadow_frm_name, &stat_info, MYF(MY_WME)))
-    return true;
-  if (mysql_file_delete(key_file_frm, frm_name, MYF(MY_WME)))
     return true;
   if (mysql_file_rename(key_file_frm, shadow_frm_name, frm_name, MYF(MY_WME)))
     return true;
@@ -582,7 +619,7 @@ void fk_drop_shadow_frm(Table_name table)
   char shadow_path[FN_REFLEN+1];
   char shadow_frm_name[FN_REFLEN+1];
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              table.db, table.name);
+                              table.db, table.name, tmp_fk_prefix);
   strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
   mysql_file_delete(key_file_frm, shadow_frm_name, MYF(0));
 }
@@ -590,4 +627,19 @@ void fk_drop_shadow_frm(Table_name table)
 void TABLE_SHARE::fk_drop_shadow_frm()
 {
   ::fk_drop_shadow_frm({db, table_name});
+}
+
+void fk_drop_backup_frm(Table_name table)
+{
+  char path[FN_REFLEN + 1];
+  char bak_name[FN_REFLEN + 1];
+  build_table_filename(path, sizeof(path), table.db.str,
+                       table.name.str, "", 0);
+  strxnmov(bak_name, sizeof(bak_name), path, bak_ext, NullS);
+  mysql_file_delete(key_file_frm, bak_name, MYF(0));
+}
+
+void TABLE_SHARE::fk_drop_backup_frm()
+{
+  ::fk_drop_backup_frm({db, table_name});
 }

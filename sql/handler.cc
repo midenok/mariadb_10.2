@@ -5209,16 +5209,24 @@ int ha_create_table(THD *thd, const char *path,
   {
     for (FK_ddl_backup &bak: fk_shares)
     {
-      bak.sa.share->fk_install_shadow_frm();
-      /* TODO: (MDEV-21053) Now there is no right for error.
-        Actually it should drop table if install shadow fails. */
-      thd->clear_error();
+      error= bak.sa.share->fk_backup_frm();
+      if (error)
+        goto fk_err;
     }
+    for (FK_ddl_backup &bak: fk_shares)
+    {
+      error= bak.sa.share->fk_install_shadow_frm();
+      if (error)
+        goto fk_err;
+    }
+    for (FK_ddl_backup &bak: fk_shares)
+      bak.sa.share->fk_drop_backup_frm();
   }
 
   free_table_share(&share);
   DBUG_RETURN(0);
 
+fk_err:
 err:
   if (fk_update_refs)
     for (FK_ddl_backup &bak: fk_shares)

@@ -178,10 +178,19 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
   {
     for (FK_rename_backup &bak: fk_rename_backup)
     {
+      // NB: this can be foreign/ref table as well as renamed table
+      error= fk_backup_frm(bak.new_name);
+      if (error)
+        goto err;
+    }
+    for (FK_rename_backup &bak: fk_rename_backup)
+    {
       error= fk_install_shadow_frm(bak.old_name, bak.new_name);
       if (error)
         break;
     }
+    for (FK_rename_backup &bak: fk_rename_backup)
+      fk_drop_backup_frm(bak.new_name);
   }
 
   if (likely(!silent && !error))

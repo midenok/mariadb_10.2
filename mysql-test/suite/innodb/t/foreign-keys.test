@@ -259,6 +259,6 @@ let $insert_statement= insert into t1 values(1);
 let $insert_statement2= insert into t2 values(1);
 let $crash_statement= alter table t2 add foreign key (id) references t1(id), algorithm=copy;
 set @save_dbug=@@debug_dbug;
-set session debug_dbug="+d,crash_add_fk_1";
+set session debug_dbug="+d,crash_fk_alter_1";
 --source suite/parts/inc/partition_crash_t2.inc
 set session debug_dbug=@save_dbug;

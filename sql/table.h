@@ -660,8 +660,10 @@ struct TABLE_SHARE
   bool fk_write_shadow_frm_impl(const char *shadow_path);
   /* logged write shadow FRM */
   bool fk_write_shadow_frm();
+  bool fk_backup_frm();
   bool fk_install_shadow_frm();
   void fk_drop_shadow_frm();
+  void fk_drop_backup_frm();
 
   Virtual_column_info **check_constraints;
   uint	*blob_field;			/* Index to blobs in Field arrray*/
