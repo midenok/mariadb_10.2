@@ -525,9 +525,9 @@ static bool write_log_replace_delete_frm(uint next_entry,
   else
     ddl_log_entry.action_type= DDL_LOG_DELETE_ACTION;
   ddl_log_entry.next_entry= next_entry;
-  ddl_log_entry.handler_name= reg_ext;
+  ddl_log_entry.handler_name= file_action;
   ddl_log_entry.name= to_path;
-  if (replace_flag) // FIXME: remove if not needed
+  if (replace_flag)
     ddl_log_entry.from_name= from_path;
   if (ERROR_INJECT("fail_log_replace_delete_1", "crash_log_replace_delete_1"))
     return true;
@@ -546,7 +546,7 @@ error:
     goto error;
   if (ERROR_INJECT("fail_log_replace_delete_3", "crash_log_replace_delete_3"))
     goto error;
-  // FIXME: release on finish
+  // FIXME: release on finish (write_log_completed(), release_log_entries())
   return false;
 }
 
@@ -579,6 +579,8 @@ bool fk_backup_frm(Table_name table)
     my_error(ER_FILE_EXISTS_ERROR, MYF(0), bak_name);
     return true;
   }
+  if (write_log_replace_delete_frm(0, bak_name, frm_name, true))
+    return true;
   if (mysql_file_rename(key_file_frm, frm_name, bak_name, MYF(MY_WME)))
     return true;
   return false;

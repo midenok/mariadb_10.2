@@ -293,7 +293,8 @@ uint explain_filename(THD* thd, const char *from, char *to, uint to_length,
                       enum_explain_filename_mode explain_mode);
 
 
-extern MYSQL_PLUGIN_IMPORT const char *primary_key_name;
+extern MYSQL_PLUGIN_IMPORT const char * const primary_key_name;
+extern const char * const file_action;
 extern mysql_mutex_t LOCK_gdl;
 
 bool check_engine(THD *, const char *, const char *, HA_CREATE_INFO *);

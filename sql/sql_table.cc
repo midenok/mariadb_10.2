@@ -61,7 +61,8 @@
 #include <io.h>
 #endif
 
-const char *primary_key_name="PRIMARY";
+const char * const primary_key_name="PRIMARY";
+const char * const file_action= ".file";
 
 static Lex_cstring
 make_unique_key_name(THD* thd, LEX_CSTRING prefix,
@@ -1105,7 +1106,12 @@ static bool deactivate_ddl_log_entry_no_lock(uint entry_no)
 
 static int execute_ddl_log_action(THD *thd, DDL_LOG_ENTRY *ddl_log_entry)
 {
-  bool frm_action= FALSE;
+  enum
+  {
+    ACT_HANDLER,
+    ACT_PARTITION,
+    ACT_FILE
+  } frm_action= ACT_HANDLER;
   LEX_CSTRING handler_name;
   handler *file= NULL;
   MEM_ROOT mem_root;
@@ -1137,7 +1143,9 @@ static int execute_ddl_log_action(THD *thd, DDL_LOG_ENTRY *ddl_log_entry)
   init_sql_alloc(&mem_root, "execute_ddl_log_action", TABLE_ALLOC_BLOCK_SIZE,
                  0, MYF(MY_THREAD_SPECIFIC));
   if (!strcmp(ddl_log_entry->handler_name, reg_ext))
-    frm_action= TRUE;
+    frm_action= ACT_PARTITION;
+  else if (!strcmp(ddl_log_entry->handler_name, file_action))
+    frm_action= ACT_FILE;
   else
   {
     plugin_ref plugin= ha_resolve_by_name(thd, &handler_name, false);
@@ -1158,9 +1166,10 @@ static int execute_ddl_log_action(THD *thd, DDL_LOG_ENTRY *ddl_log_entry)
     {
       if (ddl_log_entry->phase == 0)
       {
-        if (frm_action)
+        if (frm_action != ACT_HANDLER)
         {
-          strxmov(to_path, ddl_log_entry->name, reg_ext, NullS);
+          if (frm_action == ACT_PARTITION)
+            strxmov(to_path, ddl_log_entry->name, reg_ext, NullS);
           if (unlikely((error= mysql_file_delete(key_file_frm, to_path,
                                                  MYF(MY_WME)))))
           {
@@ -1168,8 +1177,11 @@ static int execute_ddl_log_action(THD *thd, DDL_LOG_ENTRY *ddl_log_entry)
               break;
           }
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-          strxmov(to_path, ddl_log_entry->name, par_ext, NullS);
-          (void) mysql_file_delete(key_file_partition, to_path, MYF(MY_WME));
+          if (frm_action == ACT_PARTITION)
+          {
+            strxmov(to_path, ddl_log_entry->name, par_ext, NullS);
+            (void) mysql_file_delete(key_file_partition, to_path, MYF(MY_WME));
+          }
 #endif
         }
         else
@@ -1198,16 +1210,22 @@ static int execute_ddl_log_action(THD *thd, DDL_LOG_ENTRY *ddl_log_entry)
     case DDL_LOG_RENAME_ACTION:
     {
       error= TRUE;
-      if (frm_action)
+      if (frm_action != ACT_HANDLER)
       {
-        strxmov(to_path, ddl_log_entry->name, reg_ext, NullS);
-        strxmov(from_path, ddl_log_entry->from_name, reg_ext, NullS);
+        if (frm_action == ACT_PARTITION)
+        {
+          strxmov(to_path, ddl_log_entry->name, reg_ext, NullS);
+          strxmov(from_path, ddl_log_entry->from_name, reg_ext, NullS);
+        }
         if (mysql_file_rename(key_file_frm, from_path, to_path, MYF(MY_WME)))
           break;
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-        strxmov(to_path, ddl_log_entry->name, par_ext, NullS);
-        strxmov(from_path, ddl_log_entry->from_name, par_ext, NullS);
-        (void) mysql_file_rename(key_file_partition, from_path, to_path, MYF(MY_WME));
+        if (frm_action == ACT_PARTITION)
+        {
+          strxmov(to_path, ddl_log_entry->name, par_ext, NullS);
+          strxmov(from_path, ddl_log_entry->from_name, par_ext, NullS);
+          (void) mysql_file_rename(key_file_partition, from_path, to_path, MYF(MY_WME));
+        }
 #endif
       }
       else
