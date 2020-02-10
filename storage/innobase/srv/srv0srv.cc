@@ -2029,6 +2029,7 @@ static bool srv_task_execute()
 	return false;
 }
 
+Atomic_counter<int> srv_purge_thread_count_changed;
 
 /** Do the actual purge operation.
 @param[in,out]	n_total_purged	total number of purged pages
@@ -2041,7 +2042,7 @@ static uint32_t srv_do_purge(ulint* n_total_purged)
 	static ulint	n_use_threads = 0;
 	static uint32_t	rseg_history_len = 0;
 	ulint		old_activity_count = srv_get_activity_count();
-	const ulint	n_threads = srv_n_purge_threads;
+	static ulint	n_threads = srv_n_purge_threads;
 
 	ut_a(n_threads > 0);
 	ut_ad(!srv_read_only_mode);
@@ -2057,7 +2058,21 @@ static uint32_t srv_do_purge(ulint* n_total_purged)
 	}
 
 	do {
-		if (trx_sys.rseg_history_len > rseg_history_len
+		if (UNIV_UNLIKELY(srv_purge_thread_count_changed)) {
+			/* Read the fresh value of srv_n_purge_threads, reset
+			the changed flag. Both variables are protected by
+			LOCK_global_system_variables server mutex.
+
+			This code does not run concurrently, it is executed
+			by a single purge_coordinator thread, and no races
+			involving srv_purge_thread_count_changed are possible.
+			*/
+
+			mysql_mutex_lock(&LOCK_global_system_variables);
+			n_threads = n_use_threads = srv_n_purge_threads;
+			srv_purge_thread_count_changed = 0;
+			mysql_mutex_unlock(&LOCK_global_system_variables);
+		} else if (trx_sys.rseg_history_len > rseg_history_len
 		    || (srv_max_purge_lag > 0
 			&& rseg_history_len > srv_max_purge_lag)) {
 
@@ -2105,23 +2120,17 @@ static uint32_t srv_do_purge(ulint* n_total_purged)
 
 static std::queue<THD*> purge_thds;
 static std::mutex purge_thd_mutex;
-
-static void purge_create_background_thds(int n)
-{
-  THD *thd= current_thd;
-  std::unique_lock<std::mutex> lk(purge_thd_mutex);
-  while (n--)
-    purge_thds.push(innobase_create_background_thd("InnoDB purge worker"));
-  set_current_thd(thd);
-}
-
 extern void* thd_attach_thd(THD*);
 extern void thd_detach_thd(void *);
 
 THD* acquire_thd(void **ctx)
 {
 	std::unique_lock<std::mutex> lk(purge_thd_mutex);
-	ut_a(!purge_thds.empty());
+	if (purge_thds.empty()) {
+		THD* thd = current_thd;
+		purge_thds.push(innobase_create_background_thd("InnoDB purge worker"));
+		set_current_thd(thd);
+	}
 	THD* thd = purge_thds.front();
 	purge_thds.pop();
 	lk.unlock();
@@ -2220,10 +2229,8 @@ static void purge_coordinator_callback(void*)
   purge_state.m_running= 0;
 }
 
-void srv_init_purge_tasks(uint n_tasks)
+void srv_init_purge_tasks()
 {
-  purge_task_group.set_max_tasks(n_tasks - 1);
-  purge_create_background_thds(n_tasks);
   purge_coordinator_timer= srv_thread_pool->create_timer
     (purge_coordinator_timer_callback, nullptr);
 }

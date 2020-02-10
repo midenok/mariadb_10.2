@@ -19186,10 +19186,18 @@ static MYSQL_SYSVAR_ULONG(purge_batch_size, srv_purge_batch_size,
   1,			/* Minimum value */
   5000, 0);		/* Maximum value */
 
+static
+void
+innodb_purge_threads_update(THD*, struct st_mysql_sys_var*, void*, const void*save )
+{
+  srv_n_purge_threads= *static_cast<const ulong*>(save);
+  srv_purge_thread_count_changed= 1;
+}
+
 static MYSQL_SYSVAR_ULONG(purge_threads, srv_n_purge_threads,
-  PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+  PLUGIN_VAR_OPCMDARG,
   "Purge threads can be from 1 to 32. Default is 4.",
-  NULL, NULL,
+  NULL, innodb_purge_threads_update,
   4,			/* Default setting */
   1,			/* Minimum value */
   srv_max_purge_threads,/* Maximum value */
