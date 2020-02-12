@@ -510,10 +510,10 @@ static void release_log_entries(DDL_LOG_MEMORY_ENTRY *log_entry)
   }
 }
 
-static bool write_log_replace_delete_frm(uint next_entry,
-                                         const char *from_path,
-                                         const char *to_path,
-                                         bool replace_flag)
+bool ddl_log_info::write_log_replace_delete_frm(uint next_entry,
+                                                const char *from_path,
+                                                const char *to_path,
+                                                bool replace_flag)
 {
   DDL_LOG_ENTRY ddl_log_entry;
   DDL_LOG_MEMORY_ENTRY *log_entry;
@@ -541,8 +541,7 @@ error:
   }
   if (ERROR_INJECT("fail_log_replace_delete_2", "crash_log_replace_delete_2"))
     goto error;
-  if (write_execute_ddl_log_entry(log_entry->entry_pos,
-                                    FALSE, &exec_log_entry))
+  if (write_execute_ddl_log_entry(log_entry->entry_pos, FALSE, &exec_log_entry))
     goto error;
   if (ERROR_INJECT("fail_log_replace_delete_3", "crash_log_replace_delete_3"))
     goto error;
@@ -550,12 +549,12 @@ error:
   return false;
 }
 
-bool TABLE_SHARE::fk_write_shadow_frm()
+bool TABLE_SHARE::fk_write_shadow_frm(ddl_log_info &log_info)
 {
   char shadow_path[FN_REFLEN + 1];
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
                               db, table_name, tmp_fk_prefix);
-  if (write_log_replace_delete_frm(0, NULL, shadow_path, false))
+  if (log_info.write_log_replace_delete_frm(0, NULL, shadow_path, false))
     return true;
   bool err= fk_write_shadow_frm_impl(shadow_path);
   if (ERROR_INJECT("fail_fk_write_shadow", "crash_fk_write_shadow"))
@@ -563,7 +562,7 @@ bool TABLE_SHARE::fk_write_shadow_frm()
   return err;
 }
 
-bool fk_backup_frm(Table_name table)
+bool fk_backup_frm(ddl_log_info &log_info, Table_name table)
 {
   MY_STAT stat_info;
   DBUG_ASSERT(0 != strcmp(reg_ext, bak_ext));
@@ -579,19 +578,20 @@ bool fk_backup_frm(Table_name table)
     my_error(ER_FILE_EXISTS_ERROR, MYF(0), bak_name);
     return true;
   }
-  if (write_log_replace_delete_frm(0, bak_name, frm_name, true))
+  if (log_info.write_log_replace_delete_frm(0, bak_name, frm_name, true))
     return true;
   if (mysql_file_rename(key_file_frm, frm_name, bak_name, MYF(MY_WME)))
     return true;
   return false;
 }
 
-bool TABLE_SHARE::fk_backup_frm()
+bool TABLE_SHARE::fk_backup_frm(ddl_log_info &log_info)
 {
-  return ::fk_backup_frm({db, table_name});
+  return ::fk_backup_frm(log_info, {db, table_name});
 }
 
-bool fk_install_shadow_frm(Table_name old_name, Table_name new_name)
+bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name old_name,
+                           Table_name new_name)
 {
   MY_STAT stat_info;
   char shadow_path[FN_REFLEN + 1];
@@ -611,12 +611,12 @@ bool fk_install_shadow_frm(Table_name old_name, Table_name new_name)
   return false;
 }
 
-bool TABLE_SHARE::fk_install_shadow_frm()
+bool TABLE_SHARE::fk_install_shadow_frm(ddl_log_info &log_info)
 {
-  return ::fk_install_shadow_frm({db, table_name}, {db, table_name});
+  return ::fk_install_shadow_frm(log_info, {db, table_name}, {db, table_name});
 }
 
-void fk_drop_shadow_frm(Table_name table)
+void fk_drop_shadow_frm(ddl_log_info &log_info, Table_name table)
 {
   char shadow_path[FN_REFLEN+1];
   char shadow_frm_name[FN_REFLEN+1];
@@ -626,12 +626,12 @@ void fk_drop_shadow_frm(Table_name table)
   mysql_file_delete(key_file_frm, shadow_frm_name, MYF(0));
 }
 
-void TABLE_SHARE::fk_drop_shadow_frm()
+void TABLE_SHARE::fk_drop_shadow_frm(ddl_log_info &log_info)
 {
-  ::fk_drop_shadow_frm({db, table_name});
+  ::fk_drop_shadow_frm(log_info, {db, table_name});
 }
 
-void fk_drop_backup_frm(Table_name table)
+void fk_drop_backup_frm(ddl_log_info &log_info, Table_name table)
 {
   char path[FN_REFLEN + 1];
   char bak_name[FN_REFLEN + 1];
@@ -641,7 +641,7 @@ void fk_drop_backup_frm(Table_name table)
   mysql_file_delete(key_file_frm, bak_name, MYF(0));
 }
 
-void TABLE_SHARE::fk_drop_backup_frm()
+void TABLE_SHARE::fk_drop_backup_frm(ddl_log_info &log_info)
 {
-  ::fk_drop_backup_frm({db, table_name});
+  ::fk_drop_backup_frm(log_info, {db, table_name});
 }

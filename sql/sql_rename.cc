@@ -170,7 +170,7 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
     table_list= reverse_table_list(table_list);
 
     for (FK_rename_backup &bak: fk_rename_backup)
-      bak.rollback();
+      bak.rollback(fk_rename_backup);
 
     error= 1;
   }
@@ -179,18 +179,18 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
     for (FK_rename_backup &bak: fk_rename_backup)
     {
       // NB: this can be foreign/ref table as well as renamed table
-      error= fk_backup_frm(bak.new_name);
+      error= fk_backup_frm(fk_rename_backup, bak.new_name);
       if (error)
         goto err;
     }
     for (FK_rename_backup &bak: fk_rename_backup)
     {
-      error= fk_install_shadow_frm(bak.old_name, bak.new_name);
+      error= fk_install_shadow_frm(fk_rename_backup, bak.old_name, bak.new_name);
       if (error)
         break;
     }
     for (FK_rename_backup &bak: fk_rename_backup)
-      fk_drop_backup_frm(bak.new_name);
+      fk_drop_backup_frm(fk_rename_backup, bak.new_name);
   }
 
   if (likely(!silent && !error))

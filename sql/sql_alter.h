@@ -399,6 +399,7 @@ public:
   FK_list            foreign_keys;
   MDL_request_list fk_mdl_reqs;
   map<Table_name, Share_acquire, Table_name_lt> fk_shares;
+  ddl_log_info fk_ddl_info;
 
   bool fk_handle_alter(THD *thd);
   void fk_release_locks(THD *thd);

@@ -64,6 +64,7 @@ class Range_rowid_filter_cost_info;
 class derived_handler;
 class Pushdown_derived;
 struct Name_resolution_context;
+struct ddl_log_info;
 
 /*
   Used to identify NESTED_JOIN structures within a join (applicable only to
@@ -659,11 +660,11 @@ struct TABLE_SHARE
   /* write shadow FRM implementation */
   bool fk_write_shadow_frm_impl(const char *shadow_path);
   /* logged write shadow FRM */
-  bool fk_write_shadow_frm();
-  bool fk_backup_frm();
-  bool fk_install_shadow_frm();
-  void fk_drop_shadow_frm();
-  void fk_drop_backup_frm();
+  bool fk_write_shadow_frm(ddl_log_info& log_info);
+  bool fk_backup_frm(ddl_log_info& log_info);
+  bool fk_install_shadow_frm(ddl_log_info& log_info);
+  void fk_drop_shadow_frm(ddl_log_info& log_info);
+  void fk_drop_backup_frm(ddl_log_info& log_info);
 
   Virtual_column_info **check_constraints;
   uint	*blob_field;			/* Index to blobs in Field arrray*/

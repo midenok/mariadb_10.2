@@ -5209,18 +5209,18 @@ int ha_create_table(THD *thd, const char *path,
   {
     for (FK_ddl_backup &bak: fk_shares)
     {
-      error= bak.sa.share->fk_backup_frm();
+      error= bak.sa.share->fk_backup_frm(fk_shares);
       if (error)
         goto fk_err;
     }
     for (FK_ddl_backup &bak: fk_shares)
     {
-      error= bak.sa.share->fk_install_shadow_frm();
+      error= bak.sa.share->fk_install_shadow_frm(fk_shares);
       if (error)
         goto fk_err;
     }
     for (FK_ddl_backup &bak: fk_shares)
-      bak.sa.share->fk_drop_backup_frm();
+      bak.sa.share->fk_drop_backup_frm(fk_shares);
   }
 
   free_table_share(&share);
@@ -5230,7 +5230,7 @@ fk_err:
 err:
   if (fk_update_refs)
     for (FK_ddl_backup &bak: fk_shares)
-      bak.rollback();
+      bak.rollback(fk_shares);
   free_table_share(&share);
   DBUG_RETURN(1);
 }

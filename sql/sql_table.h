@@ -35,83 +35,12 @@ class handler;
 typedef struct st_ha_check_opt HA_CHECK_OPT;
 struct HA_CREATE_INFO;
 struct Table_specification_st;
+typedef struct st_ddl_log_entry DDL_LOG_ENTRY;
+typedef struct st_ddl_log_memory_entry DDL_LOG_MEMORY_ENTRY;
 typedef struct st_key KEY;
 typedef struct st_key_cache KEY_CACHE;
 typedef struct st_lock_param_type ALTER_PARTITION_PARAM_TYPE;
 typedef struct st_order ORDER;
-
-enum ddl_log_entry_code
-{
-  /*
-    DDL_LOG_EXECUTE_CODE:
-      This is a code that indicates that this is a log entry to
-      be executed, from this entry a linked list of log entries
-      can be found and executed.
-    DDL_LOG_ENTRY_CODE:
-      An entry to be executed in a linked list from an execute log
-      entry.
-    DDL_IGNORE_LOG_ENTRY_CODE:
-      An entry that is to be ignored
-  */
-  DDL_LOG_EXECUTE_CODE = 'e',
-  DDL_LOG_ENTRY_CODE = 'l',
-  DDL_IGNORE_LOG_ENTRY_CODE = 'i'
-};
-
-enum ddl_log_action_code
-{
-  /*
-    The type of action that a DDL_LOG_ENTRY_CODE entry is to
-    perform.
-    DDL_LOG_DELETE_ACTION:
-      Delete an entity
-    DDL_LOG_RENAME_ACTION:
-      Rename an entity
-    DDL_LOG_REPLACE_ACTION:
-      Rename an entity after removing the previous entry with the
-      new name, that is replace this entry.
-    DDL_LOG_EXCHANGE_ACTION:
-      Exchange two entities by renaming them a -> tmp, b -> a, tmp -> b.
-  */
-  DDL_LOG_DELETE_ACTION = 'd',
-  DDL_LOG_RENAME_ACTION = 'r',
-  DDL_LOG_REPLACE_ACTION = 's',
-  DDL_LOG_EXCHANGE_ACTION = 'e'
-};
-
-enum enum_ddl_log_exchange_phase {
-  EXCH_PHASE_NAME_TO_TEMP= 0,
-  EXCH_PHASE_FROM_TO_NAME= 1,
-  EXCH_PHASE_TEMP_TO_FROM= 2
-};
-
-
-typedef struct st_ddl_log_entry
-{
-  const char *name;
-  const char *from_name;
-  const char *handler_name;
-  const char *tmp_name;
-  uint next_entry;
-  uint entry_pos;
-  enum ddl_log_entry_code entry_type;
-  enum ddl_log_action_code action_type;
-  /*
-    Most actions have only one phase. REPLACE does however have two
-    phases. The first phase removes the file with the new name if
-    there was one there before and the second phase renames the
-    old name to the new name.
-  */
-  char phase;
-} DDL_LOG_ENTRY;
-
-typedef struct st_ddl_log_memory_entry
-{
-  uint entry_pos;
-  struct st_ddl_log_memory_entry *next_log_entry;
-  struct st_ddl_log_memory_entry *prev_log_entry;
-  struct st_ddl_log_memory_entry *next_active_log_entry;
-} DDL_LOG_MEMORY_ENTRY;
 
 
 enum enum_explain_filename_mode
