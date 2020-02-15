@@ -318,6 +318,7 @@ void ha_partition::init_handler_variables()
   m_mode= 0;
   m_open_test_lock= 0;
   m_file_buffer= NULL;
+  m_flags= 0;
   m_name_buffer_ptr= NULL;
   m_engine_array= NULL;
   m_connect_string= NULL;
@@ -2748,6 +2749,8 @@ bool ha_partition::create_handler_file(const char *name)
   tot_name_words= (tot_name_len + PAR_WORD_SIZE - 1) / PAR_WORD_SIZE;
   /* 4 static words (tot words, checksum, tot partitions, name length) */
   tot_len_words= 4 + tot_partition_words + tot_name_words;
+  if (m_part_info->flags)
+    tot_len_words++;
   tot_len_byte= PAR_WORD_SIZE * tot_len_words;
   if (!(file_buffer= (uchar *) my_malloc(tot_len_byte, MYF(MY_ZEROFILL))))
     DBUG_RETURN(TRUE);
@@ -2795,6 +2798,9 @@ bool ha_partition::create_handler_file(const char *name)
   int4store(file_buffer + PAR_ENGINES_OFFSET +
             (tot_partition_words * PAR_WORD_SIZE),
             tot_name_len);
+  if (m_part_info->flags)
+    int4store(file_buffer + (tot_len_words - 1) * PAR_WORD_SIZE,
+              m_part_info->flags);
   for (i= 0; i < tot_len_words; i++)
     chksum^= uint4korr(file_buffer + PAR_WORD_SIZE * i);
   int4store(file_buffer + PAR_CHECKSUM_OFFSET, chksum);
@@ -2984,7 +2990,7 @@ bool ha_partition::read_par_file(const char *name)
   uchar *tot_name_len_offset;
   File file;
   uchar *file_buffer;
-  uint i, len_bytes, len_words, tot_partition_words, tot_name_words, chksum;
+  uint i, len_bytes, len_words, left_words, tot_partition_words, tot_name_words, chksum;
   DBUG_ENTER("ha_partition::read_par_file");
   DBUG_PRINT("enter", ("table name: '%s'", name));
 
@@ -3024,10 +3030,15 @@ bool ha_partition::read_par_file(const char *name)
     Verify the total length = tot size word, checksum word, num parts word +
     engines array + name length word + name array.
   */
-  if (len_words != (tot_partition_words + tot_name_words + 4))
+  left_words= len_words - (tot_partition_words + tot_name_words + 4);
+  if (left_words > 1)
     goto err2;
   m_file_buffer= file_buffer;          // Will be freed in clear_handler_file()
   m_name_buffer_ptr= (char*) (tot_name_len_offset + PAR_WORD_SIZE);
+  if (left_words == 1)
+    m_flags= uint4korr((file_buffer) + PAR_WORD_SIZE * (len_words - 1));
+  else
+    m_flags= 0;
 
   if (!(m_connect_string= (LEX_CSTRING*)
         alloc_root(&m_mem_root, m_tot_parts * sizeof(LEX_CSTRING))))

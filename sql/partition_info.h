@@ -24,6 +24,8 @@
 #include "partition_element.h"
 #include "sql_partition.h"
 
+#define PART_ROTATION_AUTO_INC 1
+
 class partition_info;
 struct TABLE_LIST;
 /* Some function typedefs */
@@ -236,6 +238,7 @@ public:
   part_elem_value *curr_list_val;
   uint curr_list_object;
   uint num_columns;
+  uint flags;
 
   TABLE *table;
   /*
@@ -319,7 +322,7 @@ public:
     list_array(NULL), vers_info(NULL), err_value(0),
     part_info_string(NULL),
     curr_part_elem(NULL), current_partition(NULL),
-    curr_list_object(0), num_columns(0), table(NULL),
+    curr_list_object(0), num_columns(0), flags(0), table(NULL),
     default_engine_type(NULL),
     part_type(NOT_A_PARTITION), subpart_type(NOT_A_PARTITION),
     part_info_len(0),

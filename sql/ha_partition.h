@@ -289,6 +289,7 @@ private:
   int  m_mode;                          // Open mode
   uint m_open_test_lock;                // Open test_if_locked
   uchar *m_file_buffer;                 // Content of the .par file
+  uint m_flags;
   char *m_name_buffer_ptr;		// Pointer to first partition name
   MEM_ROOT m_mem_root;
   plugin_ref *m_engine_array;           // Array of types of the handlers

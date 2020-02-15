@@ -1464,6 +1464,8 @@ End SQL_MODE_ORACLE_SPECIFIC */
         condition_number
         opt_versioning_interval_start
 
+%type <ulong_num> opt_rotation_auto
+
 %type <item_param> param_marker
 
 %type <item_num>
@@ -5306,24 +5308,28 @@ opt_part_option:
 
 opt_versioning_rotation:
          /* empty */ {}
-       | INTERVAL_SYM expr interval opt_versioning_interval_start
+       | INTERVAL_SYM expr interval opt_versioning_interval_start opt_rotation_auto
          {
            partition_info *part_info= Lex->part_info;
+           if ($5)
+            part_info->flags|= PART_ROTATION_AUTO_INC;
            const char *table_name= Lex->create_last_non_select_table->table_name.str;
            if (unlikely(part_info->vers_set_interval(thd, $2, $3, $4, table_name)))
              MYSQL_YYABORT;
          }
-       | LIMIT ulonglong_num
-       {
-         partition_info *part_info= Lex->part_info;
-         if (unlikely(part_info->vers_set_limit($2)))
+       | LIMIT ulonglong_num opt_rotation_auto
          {
-           my_error(ER_PART_WRONG_VALUE, MYF(0),
-                    Lex->create_last_non_select_table->table_name.str,
-                    "LIMIT");
-           MYSQL_YYABORT;
+           partition_info *part_info= Lex->part_info;
+           if ($3)
+             part_info->flags|= PART_ROTATION_AUTO_INC;
+           if (unlikely(part_info->vers_set_limit($2)))
+           {
+             my_error(ER_PART_WRONG_VALUE, MYF(0),
+                      Lex->create_last_non_select_table->table_name.str,
+                      "LIMIT");
+             MYSQL_YYABORT;
+           }
          }
-       }
        ;
 
 
@@ -5338,6 +5344,16 @@ opt_versioning_interval_start:
          }
        ;
 
+opt_rotation_auto:
+         /* empty */
+         {
+           $$= 0;
+         }
+       | AUTO_INC
+         {
+           $$= 1;
+         }
+       ;
 /*
  End of partition parser part
 */
