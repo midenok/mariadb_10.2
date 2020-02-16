@@ -322,13 +322,11 @@ bool partition_info::set_partition_bitmaps_from_table(TABLE_LIST *table_list)
     The external routine needing this code is check_partition_info
 */
 
-#define MAX_PART_NAME_SIZE 8
-
 char *partition_info::create_default_partition_names(THD *thd, uint part_no,
                                                      uint num_parts_arg,
                                                      uint start_no)
 {
-  char *ptr= (char*) thd->calloc(num_parts_arg * MAX_PART_NAME_SIZE);
+  char *ptr= (char*) thd->calloc(num_parts_arg * MAX_PART_NAME_SIZE + 1);
   char *move_ptr= ptr;
   uint i= 0;
   DBUG_ENTER("create_default_partition_names");
@@ -337,7 +335,8 @@ char *partition_info::create_default_partition_names(THD *thd, uint part_no,
   {
     do
     {
-      sprintf(move_ptr, "p%u", (start_no + i));
+      if (make_partition_name(move_ptr, (start_no + i)))
+        DBUG_RETURN(NULL);
       move_ptr+= MAX_PART_NAME_SIZE;
     } while (++i < num_parts_arg);
   }
@@ -881,7 +880,7 @@ void partition_info::vers_set_hist_part(THD *thd)
                  table->s->db.str, table->s->table_name.str,
                  vers_info->hist_part->partition_name, "INTERVAL");
     }
-    if (vers_info->interval >= VERS_MIN_INTERVAL)
+    if (vers_info->interval.ge(VERS_MIN_INTERVAL))
       goto add_hist_part;
   }
 
