@@ -903,6 +903,18 @@ add_hist_part:
   case SQLCOM_DELETE_MULTI:
   case SQLCOM_UPDATE_MULTI:
   {
+    Alter_info alter_info;
+    alter_info.partition_flags= ALTER_PARTITION_ADD;
+    HA_CREATE_INFO create_info;
+    bzero(&create_info, sizeof(create_info));
+    table->m_needs_reopen= true;
+    DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, table->s->db.str,
+                                               table->s->table_name.str,
+                                               MDL_SHARED_NO_WRITE));
+    fast_alter_partition_table(thd, table, &alter_info, &create_info,
+                               table->pos_in_table_list,
+                               &table->s->db, &table->s->table_name);
+#if 0
     time_t &timeout= table->s->vers_hist_part_timeout;
     if (!thd->slave_thread &&
         vers_info->hist_part->id + VERS_MIN_EMPTY == vers_info->now_part->id)
@@ -916,6 +928,7 @@ add_hist_part:
                 table->s->vers_hist_part_error);
       }
     }
+#endif
   }
   default:;
   }
