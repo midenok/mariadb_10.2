@@ -6601,7 +6601,7 @@ static int compare_uint(const uint *s, const uint *t)
 
 enum class Compare_keys : uint32_t
 {
-  Equal,
+  Equal= 0,
   EqualButKeyPartLength,
   EqualButComment,
   NotEqual
@@ -6696,6 +6696,36 @@ Compare_keys compare_keys_but_name(const KEY *table_key, const KEY *new_key,
 
   return result;
 }
+
+
+/**
+  Look-up KEY object by index name using case-insensitive comparison.
+
+  @param key_name   Index name.
+  @param key_start  Start of array of KEYs for table.
+  @param key_end    End of array of KEYs for table.
+
+  @note Skips indexes which are marked as renamed.
+  @note Case-insensitive comparison is necessary to correctly
+        handle renaming of keys.
+
+  @retval non-NULL - pointer to KEY object for index found.
+  @retval NULL     - no index with such name found (or it is marked
+                     as renamed).
+*/
+
+static KEY *find_key_ci(const char *key_name, KEY *key_start, KEY *key_end)
+{
+  for (KEY *key = key_start; key < key_end; key++)
+  {
+    /* Skip already renamed keys. */
+    if (!(key->flags & HA_KEY_RENAMED) &&
+        !my_strcasecmp(system_charset_info, key_name, key->name.str))
+      return key;
+  }
+  return NULL;
+}
+
 
 /**
    Compare original and new versions of a table and fill Alter_inplace_info
@@ -7047,6 +7077,39 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table, bool varchar,
 
   DBUG_PRINT("info", ("index count old: %d  new: %d",
                       table->s->keys, ha_alter_info->key_count));
+
+  /*
+    First, we need to handle keys being renamed, otherwise code handling
+    dropping/addition of keys might be confused in some situations.
+  */
+  for (table_key= table->key_info; table_key < table_key_end; table_key++)
+    table_key->flags&= ~HA_KEY_RENAMED;
+  for (new_key= ha_alter_info->key_info_buffer; new_key < new_key_end;
+       new_key++)
+    new_key->flags&= ~HA_KEY_RENAMED;
+
+  for (const Alter_rename_key &rename_key: alter_info->alter_rename_key_list)
+  {
+    table_key = find_key_ci(rename_key.old_name, table->key_info, table_key_end);
+    new_key = find_key_ci(rename_key.new_name, ha_alter_info->key_info_buffer,
+                          new_key_end);
+
+    table_key->flags |= HA_KEY_RENAMED;
+    new_key->flags |= HA_KEY_RENAMED;
+
+//     if (!has_index_def_changed(ha_alter_info, table_key, new_key))
+//     {
+      /* Key was not modified in any significant way but still was renamed. */
+      ha_alter_info->handler_flags|= ALTER_RENAME_INDEX;
+      ha_alter_info->rename_keys.push_back(
+        Alter_inplace_info::Rename_key_pair(table_key, new_key));
+//     }
+//     else
+//     {
+//       /* Key was modified. */
+//       ha_alter_info->add_modified_key(table_key, new_key);
+//     }
+  }
 
   /*
     Step through all keys of the old table and search matching new keys.
@@ -7998,6 +8061,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   List<Create_field> new_create_list;
   /* New key definitions are added here */
   List<Key> new_key_list;
+  List<Alter_rename_key> rename_key_list(alter_info->alter_rename_key_list);
   List_iterator<Alter_drop> drop_it(alter_info->drop_list);
   List_iterator<Create_field> def_it(alter_info->create_list);
   List_iterator<Alter_column> alter_it(alter_info->alter_list);
@@ -8448,6 +8512,39 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       continue;
     }
 
+    /* If this index is to stay in the table check if it has to be renamed. */
+    List_iterator<Alter_rename_key> rename_key_it(rename_key_list);
+    Alter_rename_key *rename_key;
+
+    while ((rename_key= rename_key_it++))
+    {
+      if (!my_strcasecmp(system_charset_info, key_name, rename_key->old_name))
+      {
+        if (!my_strcasecmp(system_charset_info, key_name, primary_key_name))
+        {
+          my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), rename_key->old_name);
+          goto err;
+        }
+        else if (!my_strcasecmp(system_charset_info, rename_key->new_name,
+                                primary_key_name))
+        {
+          my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), rename_key->new_name);
+          goto err;
+        }
+
+        key_name= rename_key->new_name;
+        rename_key_it.remove();
+        /*
+          If the user has explicitly renamed the key, we should no longer
+          treat it as generated. Otherwise this key might be automatically
+          dropped by mysql_prepare_create_table() and this will confuse
+          code in fill_alter_inplace_info().
+        */
+        key_info->flags&= ~HA_GENERATED_KEY;
+        break;
+      }
+    }
+
     if (key_info->algorithm == HA_KEY_ALG_LONG_HASH)
     {
       setup_keyinfo_hash(key_info);
@@ -8772,6 +8869,13 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         break;
       }
     }
+  }
+
+  if (rename_key_list.elements)
+  {
+    my_error(ER_KEY_DOES_NOT_EXITS, MYF(0), rename_key_list.head()->old_name,
+             table->s->table_name.str);
+    goto err;
   }
 
   if (!create_info->comment.str)

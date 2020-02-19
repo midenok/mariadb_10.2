@@ -2304,6 +2304,26 @@ public:
 
 
 /**
+  Structure describing changes to an index to be caused by ALTER TABLE.
+*/
+
+struct KEY_PAIR
+{
+  /**
+    Pointer to KEY object describing old version of index in
+    TABLE::key_info array for TABLE instance representing old
+    version of table.
+  */
+  KEY *old_key;
+  /**
+    Pointer to KEY object describing new version of index in
+    Alter_inplace_info::key_info_buffer array.
+  */
+  KEY *new_key;
+};
+
+
+/**
   Class describing changes to be done by ALTER TABLE.
   Instance of this class is passed to storage engine in order
   to determine if this ALTER TABLE can be done using in-place
@@ -2376,6 +2396,19 @@ public:
      sorted in increasing order.
   */
   uint *index_add_buffer;
+
+  /** Size of index_rename_buffer array. */
+  uint index_rename_count;
+
+  /**
+    Array of KEY_PAIR objects describing indexes being renamed.
+    For each index renamed it contains object with KEY_PAIR::old_key
+    pointing to KEY object belonging to the TABLE instance for old
+    version of table representing old version of index and with
+    KEY_PAIR::new_key pointing to KEY object for new version of
+    index in key_info_buffer member.
+  */
+  KEY_PAIR *index_rename_buffer;
 
   /**
      Old and new index names. Used for index rename.
