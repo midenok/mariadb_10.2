@@ -704,7 +704,7 @@ THD::THD(my_thread_id id, bool is_wsrep_applier)
    wsrep_current_gtid_seqno(0),
    wsrep_affected_rows(0),
    wsrep_has_ignored_error(false),
-   wsrep_nbo_notify_ctx(0),
+   wsrep_nbo_ctx(),
    wsrep_ignore_table(false),
 
 /* wsrep-lib */
@@ -1306,7 +1306,7 @@ void THD::init()
   wsrep_rbr_buf           = NULL;
   wsrep_affected_rows     = 0;
   m_wsrep_next_trx_id     = WSREP_UNDEFINED_TRX_ID;
-  wsrep_nbo_notify_ctx    = 0;
+  wsrep_nbo_ctx.clear();
 #endif /* WITH_WSREP */
 
   if (variables.sql_log_bin)
