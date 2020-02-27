@@ -358,10 +358,10 @@ public:
 class Alter_rename_key : public Sql_alloc
 {
 public:
-  const char *old_name;
-  const char *new_name;
+  LEX_CSTRING old_name;
+  LEX_CSTRING new_name;
 
-  Alter_rename_key(const char *old_name_arg, const char *new_name_arg)
+  Alter_rename_key(LEX_CSTRING old_name_arg, LEX_CSTRING new_name_arg)
       : old_name(old_name_arg), new_name(new_name_arg) {}
 
   Alter_rename_key *clone(MEM_ROOT *mem_root) const

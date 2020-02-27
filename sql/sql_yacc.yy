@@ -7736,7 +7736,7 @@ alter_list_item:
           {
             LEX *lex=Lex;
             Alter_rename_key *ak= new (thd->mem_root)
-                                    Alter_rename_key($3.str, $5.str);
+                                    Alter_rename_key($3, $5);
             if (ak == NULL)
               MYSQL_YYABORT;
             lex->alter_info.alter_rename_key_list.push_back(ak);

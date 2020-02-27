@@ -8453,21 +8453,21 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
 
     while ((rename_key= rename_key_it++))
     {
-      if (!my_strcasecmp(system_charset_info, key_name, rename_key->old_name))
+      if (!my_strcasecmp(system_charset_info, key_name, rename_key->old_name.str))
       {
         if (!my_strcasecmp(system_charset_info, key_name, primary_key_name))
         {
-          my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), rename_key->old_name);
+          my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), rename_key->old_name.str);
           goto err;
         }
-        else if (!my_strcasecmp(system_charset_info, rename_key->new_name,
+        else if (!my_strcasecmp(system_charset_info, rename_key->new_name.str,
                                 primary_key_name))
         {
-          my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), rename_key->new_name);
+          my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), rename_key->new_name.str);
           goto err;
         }
 
-        key_name= rename_key->new_name;
+        key_name= rename_key->new_name.str;
         rename_key_it.remove();
         /*
           If the user has explicitly renamed the key, we should no longer
@@ -8808,7 +8808,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
 
   if (rename_key_list.elements)
   {
-    my_error(ER_KEY_DOES_NOT_EXITS, MYF(0), rename_key_list.head()->old_name,
+    my_error(ER_KEY_DOES_NOT_EXITS, MYF(0), rename_key_list.head()->old_name.str,
              table->s->table_name.str);
     goto err;
   }
