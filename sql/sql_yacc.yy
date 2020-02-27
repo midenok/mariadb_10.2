@@ -7705,13 +7705,12 @@ alter_list_item:
           }
         | ALTER opt_column opt_if_exists_table_element field_ident SET DEFAULT column_default_expr
           {
-            if (unlikely(Lex->add_alter_list($4.str, $7, $3)))
+            if (unlikely(Lex->add_alter_list($4, $7, $3)))
               MYSQL_YYABORT;
           }
         | ALTER opt_column opt_if_exists_table_element field_ident DROP DEFAULT
           {
-            if (unlikely(Lex->add_alter_list($4.str, (Virtual_column_info*) 0,
-                                             $3)))
+            if (unlikely(Lex->add_alter_list($4, (Virtual_column_info*) 0, $3)))
               MYSQL_YYABORT;
           }
         | RENAME opt_to table_ident
@@ -7730,7 +7729,7 @@ alter_list_item:
           }
         | RENAME COLUMN_SYM ident TO_SYM ident
           {
-            if (unlikely(Lex->add_alter_list($3.str, $5.str)))
+            if (unlikely(Lex->add_alter_list($3, $5)))
               MYSQL_YYABORT;
           }
         | RENAME key_or_index field_ident TO_SYM field_ident

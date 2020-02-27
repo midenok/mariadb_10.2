@@ -333,13 +333,13 @@ public:
 
 class Alter_column :public Sql_alloc {
 public:
-  const char *name;
-  const char *new_name;
+  LEX_CSTRING name;
+  LEX_CSTRING new_name;
   Virtual_column_info *default_value;
   bool alter_if_exists;
-  Alter_column(const char *par_name, Virtual_column_info *expr, bool par_exists)
-    :name(par_name), new_name(NULL), default_value(expr), alter_if_exists(par_exists) {}
-  Alter_column(const char *par_name, const char *_new_name)
+  Alter_column(LEX_CSTRING par_name, Virtual_column_info *expr, bool par_exists)
+    :name(par_name), new_name{NULL, 0}, default_value(expr), alter_if_exists(par_exists) {}
+  Alter_column(LEX_CSTRING par_name, LEX_CSTRING _new_name)
     :name(par_name), new_name(_new_name), default_value(NULL), alter_if_exists(false) {}
   /**
     Used to make a clone of this object for ALTER/CREATE TABLE
@@ -349,8 +349,8 @@ public:
     { return new (mem_root) Alter_column(*this); }
   bool is_rename()
   {
-    DBUG_ASSERT(!new_name || !default_value);
-    return new_name;
+    DBUG_ASSERT(!new_name.str || !default_value);
+    return new_name.str;
   }
 };
 

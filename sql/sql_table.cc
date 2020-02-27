@@ -6167,7 +6167,7 @@ drop_create_field:
       for (f_ptr=table->field; *f_ptr; f_ptr++)
       {
         if (my_strcasecmp(system_charset_info,
-                           acol->name, (*f_ptr)->field_name.str) == 0)
+                           acol->name.str, (*f_ptr)->field_name.str) == 0)
           break;
       }
       if (unlikely(*f_ptr == NULL))
@@ -6175,7 +6175,7 @@ drop_create_field:
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_NOTE,
                             ER_BAD_FIELD_ERROR,
                             ER_THD(thd, ER_BAD_FIELD_ERROR),
-                            acol->name, table->s->table_name.str);
+                            acol->name.str, table->s->table_name.str);
         it.remove();
         if (alter_info->alter_list.is_empty())
         {
@@ -8212,17 +8212,15 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       while ((alter=alter_it++))
       {
 	if (!my_strcasecmp(system_charset_info,field->field_name.str,
-                           alter->name))
+                           alter->name.str))
 	  break;
       }
       if (alter)
       {
         if (alter->is_rename())
         {
-          def->change.str= alter->name;
-          def->change.length= strlen(alter->name);
-          def->field_name.str= alter->new_name;
-          def->field_name.length= strlen(alter->new_name);
+          def->change= alter->name;
+          def->field_name= alter->new_name;
           column_rename_param.fields.push_back(def);
         }
         else
@@ -8249,7 +8247,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     {
       if (alter->is_rename())
       {
-        my_error(ER_BAD_FIELD_ERROR, MYF(0), alter->name,
+        my_error(ER_BAD_FIELD_ERROR, MYF(0), alter->name.str,
                  table->s->table_name.str);
         goto err;
       }
@@ -8384,7 +8382,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     while ((alter=alter_it++))
     {
       if (!my_strcasecmp(system_charset_info,def->field_name.str,
-                         alter->name))
+                         alter->name.str))
         break;
     }
     if (alter)
@@ -8399,7 +8397,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
   if (unlikely(alter_info->alter_list.elements))
   {
     my_error(ER_BAD_FIELD_ERROR, MYF(0),
-             alter_info->alter_list.head()->name, table->s->table_name.str);
+             alter_info->alter_list.head()->name.str, table->s->table_name.str);
     goto err;
   }
   if (unlikely(!new_create_list.elements))
