@@ -5942,6 +5942,119 @@ finish:
 #endif
   }
 
+#ifdef WITH_PARTITION_STORAGE_ENGINE
+  // TODO: test multiple increments in one command, in several commands
+  if (thd->is_error())
+    goto skip_vers_inc;
+  for (TABLE &table: thd->vers_tables_auto_part)
+  {
+    Field **f_ptr, *field;
+    // TODO: test view, derived, tmp table
+    DBUG_ASSERT(table.s->get_table_ref_type() == TABLE_REF_BASE_TABLE);
+    DBUG_ASSERT(table.versioned());
+    DBUG_ASSERT(table.part_info);
+    DBUG_ASSERT(table.part_info->vers_info);
+    Alter_info alter_info;
+    alter_info.partition_flags= ALTER_PARTITION_ADD;
+    ulonglong flags= 0;
+    flags= table.file->alter_table_flags(alter_info.flags);
+    HA_CREATE_INFO create_info;
+    bzero(&create_info, sizeof(create_info));
+    if (thd->mdl_context.upgrade_shared_lock(table.mdl_ticket, MDL_SHARED_NO_WRITE,
+                                             thd->variables.lock_wait_timeout))
+      goto skip_vers_inc; // TODO: test error
+    table.m_needs_reopen= true;
+
+    create_info.db_type= table.s->db_type();
+    create_info.options|= HA_VERSIONED_TABLE;
+    DBUG_ASSERT(create_info.db_type);
+
+    for (f_ptr= table.field; (field= *f_ptr); f_ptr++)
+    {
+      /* TODO: test default value, virtual column, explicit vers fields,
+        null-non-null, autoinc, period, test with data, test subpartitions */
+      Create_field *def= new (thd->mem_root) Create_field(thd, field, field);
+      alter_info.create_list.push_back(def);
+      if (field->flags & VERS_SYS_START_FLAG)
+      {
+        create_info.vers_info.set_start(field->field_name);
+      }
+      else if (field->flags & VERS_SYS_END_FLAG)
+      {
+        create_info.vers_info.set_end(field->field_name);
+      }
+    }
+    DBUG_ASSERT(create_info.vers_info.is_set());
+
+    // NB: set_ok_status() requires DA_EMPTY
+    thd->get_stmt_da()->reset_diagnostics_area();
+
+    partition_info *work_part_info= thd->work_part_info;
+    partition_info *part_info= thd->work_part_info= new partition_info();
+    if (unlikely(!part_info))
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      goto skip_vers_inc;
+    }
+    part_info->use_default_num_partitions= false;
+    part_info->use_default_num_subpartitions= false;
+    part_info->num_parts= 1;
+    part_info->num_subparts= table.part_info->num_subparts;
+    part_info->subpart_type= table.part_info->subpart_type;
+    if (unlikely(part_info->vers_init_info(thd)))
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      return true;
+    }
+    /* Choose first non-occupied name suffix starting from id + 1 */
+    uint32 suffix= table.part_info->num_parts;
+    char part_name[MAX_PART_NAME_SIZE + 1];
+    if (make_partition_name(part_name, suffix))
+    {
+vers_make_name_err:
+      sql_print_warning("vers_add_hist_part name generation failed for suffix %d",
+                      suffix);
+      my_error(WARN_VERS_HIST_PART_ERROR, MYF(ME_WARNING),
+              table.s->db.str, table.s->table_name.str, 0);
+      goto skip_vers_inc;
+    }
+    List_iterator_fast<partition_element> it(table.part_info->partitions);
+    partition_element *el;
+    while ((el= it++))
+    {
+      if (0 == my_strcasecmp(&my_charset_latin1, el->partition_name, part_name))
+      {
+        if (make_partition_name(part_name, ++suffix))
+          goto vers_make_name_err;
+        it.rewind();
+      }
+    }
+    if (part_info->set_up_defaults_for_partitioning(thd, table.file,
+                                                    NULL, suffix))
+    {
+      // TODO: warning?
+      thd->work_part_info= work_part_info;
+      goto skip_vers_inc; // TODO: test error
+    }
+    bool partition_changed= false;
+    bool fast_alter_partition= false;
+    if (prep_alter_part_table(thd, &table, &alter_info, &create_info,
+                              &partition_changed, &fast_alter_partition) ||
+       !fast_alter_partition)
+    {
+      // TODO: warning?
+      thd->work_part_info= work_part_info;
+      goto skip_vers_inc; // TODO: test error
+    }
+    DBUG_ASSERT(partition_changed);
+
+    fast_alter_partition_table(thd, &table, &alter_info, &create_info,
+                               table.pos_in_table_list,
+                               &table.s->db, &table.s->table_name);
+  }
+skip_vers_inc:
+#endif /* WITH_PARTITION_STORAGE_ENGINE */
+
   /* Free tables. Set stage 'closing tables' */
   close_thread_tables(thd);
 
@@ -7449,6 +7562,10 @@ void THD::reset_for_next_command(bool do_clear_error)
       global_system_variables.auto_increment_increment;
   }
 #endif /* WITH_WSREP */
+#ifdef WITH_PARTITION_STORAGE_ENGINE
+  vers_tables_auto_part.empty();
+#endif /* WITH_PARTITION_STORAGE_ENGINE */
+
   query_start_sec_part_used= 0;
   is_fatal_error= time_zone_used= 0;
   log_current_statement= 0;

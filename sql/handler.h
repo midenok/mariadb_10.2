@@ -2024,7 +2024,6 @@ struct Vers_parse_info: public Table_period_info
 
   Table_period_info::start_end_t as_row;
 
-protected:
   friend struct Table_scope_and_contents_source_st;
   void set_start(const LEX_CSTRING field_name)
   {
@@ -2036,6 +2035,8 @@ protected:
     as_row.end= field_name;
     period.end= field_name;
   }
+
+protected:
   bool is_start(const char *name) const;
   bool is_end(const char *name) const;
   bool is_start(const Create_field &f) const;

@@ -451,7 +451,7 @@ bool partition_info::set_up_default_partitions(THD *thd, handler *file,
       default_name+=MAX_PART_NAME_SIZE;
       if (part_type == VERSIONING_PARTITION)
       {
-        if (i < num_parts - 1) {
+        if (num_parts == 1 || i < num_parts - 1) {
           part_elem->type= partition_element::HISTORY;
         } else {
           part_elem->type= partition_element::CURRENT;
@@ -887,8 +887,10 @@ void partition_info::vers_set_hist_part(THD *thd)
   return;
 
 add_hist_part:
-  if (!vers_info->auto_inc)
+  if (!vers_info->auto_inc || thd->slave_thread ||
+      vers_info->hist_part->id + VERS_MIN_EMPTY < vers_info->now_part->id)
     return;
+
   switch (thd->lex->sql_command)
   {
   case SQLCOM_DELETE:
@@ -903,17 +905,19 @@ add_hist_part:
   case SQLCOM_DELETE_MULTI:
   case SQLCOM_UPDATE_MULTI:
   {
-    Alter_info alter_info;
-    alter_info.partition_flags= ALTER_PARTITION_ADD;
-    HA_CREATE_INFO create_info;
-    bzero(&create_info, sizeof(create_info));
-    table->m_needs_reopen= true;
-    DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, table->s->db.str,
-                                               table->s->table_name.str,
-                                               MDL_SHARED_NO_WRITE));
-    fast_alter_partition_table(thd, table, &alter_info, &create_info,
-                               table->pos_in_table_list,
-                               &table->s->db, &table->s->table_name);
+    TABLE *t;
+    List_iterator_fast<TABLE> it(thd->vers_tables_auto_part);
+    while ((t= it++))
+    {
+      if (table->s == t->s)
+        break;
+    }
+    if (!t && thd->vers_tables_auto_part.push_back(table))
+    {
+      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    }
+
+
 #if 0
     time_t &timeout= table->s->vers_hist_part_timeout;
     if (!thd->slave_thread &&

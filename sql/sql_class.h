@@ -3259,6 +3259,10 @@ public:
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   partition_info *work_part_info;
+  /**
+    List of tables requiring new history partition.
+  */
+  List<TABLE> vers_tables_auto_part;
 #endif
 
 #ifndef EMBEDDED_LIBRARY
