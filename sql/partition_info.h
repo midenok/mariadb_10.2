@@ -34,6 +34,14 @@ typedef bool (*check_constants_func)(THD *thd, partition_info *part_info);
  
 struct st_ddl_log_memory_entry;
 
+
+/* Auto-create history partition configuration */
+static const uint VERS_MIN_EMPTY= 1;
+static const uint VERS_MIN_INTERVAL= 3600; // seconds
+static const uint VERS_MIN_LIMIT= 1000;
+static const uint VERS_ERROR_TIMEOUT= 300; // seconds
+
+
 struct Vers_part_info : public Sql_alloc
 {
   Vers_part_info() :
@@ -418,13 +426,7 @@ public:
   bool vers_set_interval(THD *thd, Item *interval,
                          interval_type int_type, Item *starts,
                          bool auto_inc, const char *table_name);
-  bool vers_set_limit(ulonglong limit, bool auto_inc)
-  {
-    DBUG_ASSERT(part_type == VERSIONING_PARTITION);
-    vers_info->limit= limit;
-    vers_info->auto_inc= auto_inc;
-    return !limit;
-  }
+  bool vers_set_limit(ulonglong limit, bool auto_inc, const char *table_name);
   void vers_set_hist_part(THD *thd);
   bool vers_fix_field_list(THD *thd);
   void vers_update_el_ids();

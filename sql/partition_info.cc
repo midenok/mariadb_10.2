@@ -807,13 +807,6 @@ bool partition_info::has_unique_name(partition_element *element)
 }
 
 
-/* Auto-create history partition configuration */
-static const uint VERS_MIN_EMPTY= 1;
-static const uint VERS_MIN_INTERVAL= 3600; // seconds
-static const uint VERS_MIN_LIMIT= 1000;
-static const uint VERS_ERROR_TIMEOUT= 300; // seconds
-
-
 /**
   @brief Switch history partition according limit or interval
 
@@ -826,6 +819,7 @@ void partition_info::vers_set_hist_part(THD *thd)
 {
   if (vers_info->limit)
   {
+    DBUG_ASSERT(!vers_info->interval.is_set());
     ha_partition *hp= (ha_partition*)(table->file);
     partition_element *next= NULL;
     List_iterator<partition_element> it(partitions);
@@ -851,12 +845,8 @@ void partition_info::vers_set_hist_part(THD *thd)
       else
         vers_info->hist_part= next;
     }
-    if (vers_info->limit >= VERS_MIN_LIMIT)
-      goto add_hist_part;
-    return;
   }
-
-  if (vers_info->interval.is_set())
+  else if (vers_info->interval.is_set())
   {
     if (vers_info->hist_part->range_value <= thd->query_start())
     {
@@ -880,13 +870,8 @@ void partition_info::vers_set_hist_part(THD *thd)
                  table->s->db.str, table->s->table_name.str,
                  vers_info->hist_part->partition_name, "INTERVAL");
     }
-    if (vers_info->interval.ge(VERS_MIN_INTERVAL))
-      goto add_hist_part;
   }
 
-  return;
-
-add_hist_part:
   if (!vers_info->auto_inc || thd->slave_thread ||
       vers_info->hist_part->id + VERS_MIN_EMPTY < vers_info->now_part->id)
     return;
@@ -2737,6 +2722,13 @@ bool partition_info::vers_set_interval(THD* thd, Item* interval,
     return true;
   }
 
+  if (auto_inc && vers_info->interval.lt(VERS_MIN_INTERVAL))
+  {
+    DBUG_ASSERT(VERS_MIN_INTERVAL == 3600);
+    my_error(ER_PART_WRONG_VALUE, MYF(0), table_name, "INTERVAL (< 1 HOUR)");
+    return true;
+  }
+
   /* 2. assign STARTS to interval.start */
   if (starts)
   {
@@ -2800,6 +2792,30 @@ interval_set_starts:
 interval_starts_error:
   my_error(ER_PART_WRONG_VALUE, MYF(0), table_name, "STARTS");
   return true;
+}
+
+
+bool partition_info::vers_set_limit(ulonglong limit, bool auto_inc,
+                                    const char *table_name)
+{
+  DBUG_ASSERT(part_type == VERSIONING_PARTITION);
+
+  if (auto_inc && limit < VERS_MIN_LIMIT)
+  {
+    DBUG_ASSERT(VERS_MIN_LIMIT == 1000);
+    my_error(ER_PART_WRONG_VALUE, MYF(0), table_name, "LIMIT (< 1000)");
+    return true;
+  }
+
+  if (limit < 1)
+  {
+    my_error(ER_PART_WRONG_VALUE, MYF(0), table_name, "LIMIT");
+    return true;
+  }
+
+  vers_info->limit= limit;
+  vers_info->auto_inc= auto_inc;
+  return !limit;
 }
 
 

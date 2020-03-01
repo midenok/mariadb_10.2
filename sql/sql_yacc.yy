@@ -5318,13 +5318,9 @@ opt_versioning_rotation:
        | LIMIT ulonglong_num opt_vers_auto_inc
          {
            partition_info *part_info= Lex->part_info;
-           if (unlikely(part_info->vers_set_limit($2, $3)))
-           {
-             my_error(ER_PART_WRONG_VALUE, MYF(0),
-                      Lex->create_last_non_select_table->table_name.str,
-                      "LIMIT");
+           const char *table_name= Lex->create_last_non_select_table->table_name.str;
+           if (unlikely(part_info->vers_set_limit($2, $3, table_name)))
              MYSQL_YYABORT;
-           }
          }
        ;
 
