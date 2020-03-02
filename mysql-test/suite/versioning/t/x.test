@@ -1,0 +1,58 @@
+--source include/have_partition.inc
+--error ER_PART_WRONG_VALUE
+create or replace table t1 (x int) with system versioning
+partition by system_time limit 999 auto_increment;
+--error ER_PART_WRONG_VALUE
+create or replace table t1 (x int) with system versioning
+partition by system_time interval 3599 second auto_increment;
+
+create or replace table t1 (x int) with system versioning
+partition by system_time limit 1000 auto_increment;
+show create table t1;
+
+insert into t1 values (1);
+show create table t1;
+
+--echo # AUTO_INCREMENT from 2 to 5
+create or replace table t1 (x int) with system versioning
+partition by system_time interval 3600 second
+starts '2000-01-01 00:00:00' auto_increment;
+show create table t1;
+
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
+insert into t1 values (1);
+show create table t1;
+
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
+update t1 set x= x + 1;
+show create table t1;
+
+set timestamp= unix_timestamp('2000-01-01 02:00:00');
+update t1 set x= x + 1;
+show create table t1;
+
+--echo # AUTO_INCREMENT from 3 to 6, manual names
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
+create or replace table t1 (x int) with system versioning
+partition by system_time interval 1 hour auto_increment (
+    partition p1 history,
+    partition p3 history,
+    partition pn current);
+show create table t1;
+
+insert into t1 values (1);
+show create table t1;
+
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
+update t1 set x= x + 1;
+show create table t1;
+
+set timestamp= unix_timestamp('2000-01-01 02:00:00');
+update t1 set x= x + 1;
+show create table t1;
+
+set timestamp= unix_timestamp('2000-01-01 03:00:00');
+update t1 set x= x + 1;
+show create table t1;
+
+drop tables t1;

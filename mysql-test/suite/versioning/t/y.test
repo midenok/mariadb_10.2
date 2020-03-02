@@ -1,0 +1,6 @@
+--source include/have_partition.inc
+create or replace table t1 (x int) with system versioning
+partition by system_time limit 1000 auto_increment;
+alter table t1 add partition (partition x1 history, partition x2 history, partition x3 history);
+show create table t1;
+drop tables t1;

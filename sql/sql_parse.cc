@@ -5972,7 +5972,8 @@ finish:
     for (f_ptr= table.field; (field= *f_ptr); f_ptr++)
     {
       /* TODO: test default value, virtual column, explicit vers fields,
-        null-non-null, autoinc, period, test with data, test subpartitions */
+        null-non-null, autoinc, period, test with data, test subpartitions,
+        manual part names */
       Create_field *def= new (thd->mem_root) Create_field(thd, field, field);
       alter_info.create_list.push_back(def);
       if (field->flags & VERS_SYS_START_FLAG)
@@ -6006,8 +6007,9 @@ finish:
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
-    /* Choose first non-occupied name suffix starting from id + 1 */
-    uint32 suffix= table.part_info->num_parts;
+    /* Choose first non-occupied name suffix */
+    uint32 suffix= table.part_info->num_parts - 1;
+    DBUG_ASSERT(suffix > 0);
     char part_name[MAX_PART_NAME_SIZE + 1];
     if (make_partition_name(part_name, suffix))
     {
