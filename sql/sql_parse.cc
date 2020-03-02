@@ -5949,7 +5949,6 @@ finish:
   for (TABLE &table: thd->vers_tables_auto_part)
   {
     Field **f_ptr, *field;
-    // TODO: test view, derived, tmp table
     DBUG_ASSERT(table.s->get_table_ref_type() == TABLE_REF_BASE_TABLE);
     DBUG_ASSERT(table.versioned());
     DBUG_ASSERT(table.part_info);
@@ -5971,9 +5970,7 @@ finish:
 
     for (f_ptr= table.field; (field= *f_ptr); f_ptr++)
     {
-      /* TODO: test default value, virtual column, explicit vers fields,
-        null-non-null, autoinc, period, test with data, test subpartitions,
-        manual part names */
+      /* TODO: test with data, test subpartitions */
       Create_field *def= new (thd->mem_root) Create_field(thd, field, field);
       alter_info.create_list.push_back(def);
       if (field->flags & VERS_SYS_START_FLAG)
