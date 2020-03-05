@@ -92,6 +92,7 @@
 #include "events.h"
 #include "sql_trigger.h"
 #include "transaction.h"
+#include "sql_alter.h"
 #include "sql_audit.h"
 #include "sql_prepare.h"
 #include "sql_cte.h"
@@ -5955,10 +5956,11 @@ finish:
     DBUG_ASSERT(table.part_info->vers_info);
     Alter_info alter_info;
     alter_info.partition_flags= ALTER_PARTITION_ADD;
-    ulonglong flags= 0;
-    flags= table.file->alter_table_flags(alter_info.flags);
     HA_CREATE_INFO create_info;
-    bzero(&create_info, sizeof(create_info));
+    bzero((void *)&create_info, sizeof(create_info));
+    Alter_table_ctx alter_ctx(thd, table.pos_in_table_list, 1, &table.s->db,
+                              &table.s->table_name);
+
     if (thd->mdl_context.upgrade_shared_lock(table.mdl_ticket, MDL_SHARED_NO_WRITE,
                                              thd->variables.lock_wait_timeout))
       goto skip_vers_inc; // TODO: test error
@@ -5968,21 +5970,46 @@ finish:
     create_info.options|= HA_VERSIONED_TABLE;
     DBUG_ASSERT(create_info.db_type);
 
-    for (f_ptr= table.field; (field= *f_ptr); f_ptr++)
+    if (table.versioned())
     {
-      /* TODO: test with data, test subpartitions */
-      Create_field *def= new (thd->mem_root) Create_field(thd, field, field);
-      alter_info.create_list.push_back(def);
-      if (field->flags & VERS_SYS_START_FLAG)
+      create_info.vers_info.set_start(table.s->vers_start_field()->field_name);
+      create_info.vers_info.set_end(table.s->vers_end_field()->field_name);
+    }
+// FIXME: remove
+#if 0
+    if (table.s->period.name)
+    {
+      Table_period_info &info= create_info.period_info;
+      info.name= table.s->period.name;
+      info.period.start= table.s->period_start_field()->field_name;
+      info.period.end= table.s->period_end_field()->field_name;
+
+      info.constr= new Virtual_column_info();
+      if (unlikely(!info.constr))
       {
-        create_info.vers_info.set_start(field->field_name);
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        goto skip_vers_inc;
       }
-      else if (field->flags & VERS_SYS_END_FLAG)
+      Item_field *start= new (thd->mem_root) Item_field(thd, NULL, info.period.start);
+      if (unlikely(!start))
       {
-        create_info.vers_info.set_end(field->field_name);
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        goto skip_vers_inc;
+      }
+      Item_field *end= new (thd->mem_root) Item_field(thd, NULL, info.period.end);
+      if (unlikely(!end))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        goto skip_vers_inc;
+      }
+      info.constr->expr= lt_creator.create(thd, start, end);
+      if (unlikely(!info.constr->expr))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        goto skip_vers_inc;
       }
     }
-    DBUG_ASSERT(create_info.vers_info.is_set());
+#endif
 
     // NB: set_ok_status() requires DA_EMPTY
     thd->get_stmt_da()->reset_diagnostics_area();
@@ -6002,7 +6029,7 @@ finish:
     if (unlikely(part_info->vers_init_info(thd)))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return true;
+      goto skip_vers_inc;
     }
     /* Choose first non-occupied name suffix */
     uint32 suffix= table.part_info->num_parts - 1;
@@ -6045,6 +6072,14 @@ vers_make_name_err:
       thd->work_part_info= work_part_info;
       goto skip_vers_inc; // TODO: test error
     }
+    if (mysql_prepare_alter_table(thd, &table, &create_info, &alter_info,
+                                  &alter_ctx))
+    {
+      // TODO: warning?
+      thd->work_part_info= work_part_info;
+      goto skip_vers_inc; // TODO: test error
+    }
+    // FIXME: fill alter_info->key_list
     DBUG_ASSERT(partition_changed);
 
     fast_alter_partition_table(thd, &table, &alter_info, &create_info,

@@ -67,6 +67,7 @@ drop view v1;
 drop tables t1;
 
 --echo # Test complex table
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
 create or replace table t1 (
   x int primary key auto_increment,
   t timestamp(6) default '2001-11-11 11:11:11',
@@ -86,7 +87,11 @@ create or replace table t1 (
   period for app_time (ps, pe),
   constraint check_constr check (u > -1))
 with system versioning
-partition by system_time limit 1000 auto_increment;
+partition by system_time interval 1 hour auto_increment;
+show create table t1;
+
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
+update t1 set x= x + 1;
 show create table t1;
 
 drop tables t1;
