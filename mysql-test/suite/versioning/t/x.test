@@ -13,7 +13,7 @@ show create table t1;
 insert into t1 values (1);
 show create table t1;
 
---echo # AUTO_INCREMENT from 2 to 5
+--echo # Increment from 2 to 5
 create or replace table t1 (x int) with system versioning
 partition by system_time interval 3600 second
 starts '2000-01-01 00:00:00' auto_increment;
@@ -31,7 +31,7 @@ set timestamp= unix_timestamp('2000-01-01 02:00:00');
 update t1 set x= x + 2;
 show create table t1;
 
---echo # AUTO_INCREMENT from 3 to 6, manual names
+--echo # Increment from 3 to 6, manual names, LOCK TABLES
 set timestamp= unix_timestamp('2000-01-01 00:00:00');
 create or replace table t1 (x int) with system versioning
 partition by system_time interval 1 hour auto_increment (
@@ -51,17 +51,26 @@ set timestamp= unix_timestamp('2000-01-01 02:00:00');
 update t1 set x= x + 4;
 show create table t1;
 
+lock tables t1 write;
 set timestamp= unix_timestamp('2000-01-01 03:00:00');
 update t1 set x= x + 5;
 show create table t1;
+unlock tables;
 
---echo # Test VIEW
+--echo # Test VIEW, LOCK TABLES
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
 create or replace table t1 (x int) with system versioning
-partition by system_time limit 1000 auto_increment;
+partition by system_time interval 1 hour auto_increment;
 create or replace view v1 as select * from t1;
 
 insert into v1 values (1);
 show create table t1;
+
+lock tables t1 write;
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
+update t1 set x= x + 3;
+show create table t1;
+unlock tables;
 
 drop view v1;
 drop tables t1;
@@ -87,14 +96,48 @@ update t1, t2 set x= x + 1, y= y + 1;
 show create table t1;
 show create table t2;
 
+drop tables t1, t2;
+
+--echo # PS, SP, LOCK TABLES
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
+create or replace table t1 (x int) with system versioning
+partition by system_time interval 1 hour auto_increment;
+
+execute immediate 'insert into t1 values (1)';
+show create table t1;
+
+prepare s from 'update t1 set x= x + 6';
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
+execute s; execute s;
+show create table t1;
+
+lock tables t1 write;
+set timestamp= unix_timestamp('2000-01-01 02:00:00');
+execute s; execute s;
+show create table t1;
+unlock tables;
+drop prepare s;
+
+create procedure sp() update t1 set x= x + 7;
+set timestamp= unix_timestamp('2000-01-01 03:00:00');
+call sp; call sp;
+show create table t1;
+lock tables t1 write;
+set timestamp= unix_timestamp('2000-01-01 04:00:00');
+call sp; call sp;
+show create table t1;
+unlock tables;
+drop procedure sp;
+
 --echo # Complex table
 set timestamp= unix_timestamp('2000-01-01 00:00:00');
 create or replace table t1 (
   x int primary key auto_increment,
   t timestamp(6) default '2001-11-11 11:11:11',
-  b blob(4096) NULL,
-  c varchar(1033) NOT NULL,
+  b blob(4096) compressed null,
+  c varchar(1033) character set utf8 not null,
   u int unique,
+  m enum('a', 'b', 'c') not null default 'a' comment 'absolute',
   i1 tinyint, i2 smallint, i3 bigint,
   index three(i1, i2, i3),
   v1 timestamp(6) generated always as (t + interval 1 day),
@@ -116,7 +159,7 @@ values (1, 'cc', 0, 1, 2, 3, '1999-01-01', '2000-01-01');
 show create table t1;
 
 set timestamp= unix_timestamp('2000-01-01 01:00:00');
-update t1 set x= x + 6;
+update t1 set x= x + 8;
 show create table t1;
 
 drop tables t1;

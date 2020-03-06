@@ -5944,147 +5944,127 @@ finish:
   }
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-  // TODO: test multiple increments in one command, in several commands
-  if (thd->is_error())
-    goto skip_vers_inc;
-  for (TABLE &table: thd->vers_tables_auto_part)
   {
-    Field **f_ptr, *field;
-    DBUG_ASSERT(table.s->get_table_ref_type() == TABLE_REF_BASE_TABLE);
-    DBUG_ASSERT(table.versioned());
-    DBUG_ASSERT(table.part_info);
-    DBUG_ASSERT(table.part_info->vers_info);
-    Alter_info alter_info;
-    alter_info.partition_flags= ALTER_PARTITION_ADD;
-    HA_CREATE_INFO create_info;
-    bzero((void *)&create_info, sizeof(create_info));
-    Alter_table_ctx alter_ctx(thd, table.pos_in_table_list, 1, &table.s->db,
-                              &table.s->table_name);
-
-    if (thd->mdl_context.upgrade_shared_lock(table.mdl_ticket, MDL_SHARED_NO_WRITE,
-                                             thd->variables.lock_wait_timeout))
-      goto skip_vers_inc; // TODO: test error
-    table.m_needs_reopen= true;
-
-    create_info.db_type= table.s->db_type();
-    create_info.options|= HA_VERSIONED_TABLE;
-    DBUG_ASSERT(create_info.db_type);
-
-    if (table.versioned())
-    {
-      create_info.vers_info.set_start(table.s->vers_start_field()->field_name);
-      create_info.vers_info.set_end(table.s->vers_end_field()->field_name);
-    }
-// FIXME: remove
-#if 0
-    if (table.s->period.name)
-    {
-      Table_period_info &info= create_info.period_info;
-      info.name= table.s->period.name;
-      info.period.start= table.s->period_start_field()->field_name;
-      info.period.end= table.s->period_end_field()->field_name;
-
-      info.constr= new Virtual_column_info();
-      if (unlikely(!info.constr))
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        goto skip_vers_inc;
-      }
-      Item_field *start= new (thd->mem_root) Item_field(thd, NULL, info.period.start);
-      if (unlikely(!start))
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        goto skip_vers_inc;
-      }
-      Item_field *end= new (thd->mem_root) Item_field(thd, NULL, info.period.end);
-      if (unlikely(!end))
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        goto skip_vers_inc;
-      }
-      info.constr->expr= lt_creator.create(thd, start, end);
-      if (unlikely(!info.constr->expr))
-      {
-        my_error(ER_OUT_OF_RESOURCES, MYF(0));
-        goto skip_vers_inc;
-      }
-    }
-#endif
-
-    // NB: set_ok_status() requires DA_EMPTY
-    thd->get_stmt_da()->reset_diagnostics_area();
-
-    partition_info *work_part_info= thd->work_part_info;
-    partition_info *part_info= thd->work_part_info= new partition_info();
-    if (unlikely(!part_info))
-    {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    List_iterator<TABLE> it(thd->vers_tables_auto_part);
+    if (thd->is_error())
       goto skip_vers_inc;
-    }
-    part_info->use_default_num_partitions= false;
-    part_info->use_default_num_subpartitions= false;
-    part_info->num_parts= 1;
-    part_info->num_subparts= table.part_info->num_subparts;
-    part_info->subpart_type= table.part_info->subpart_type;
-    if (unlikely(part_info->vers_init_info(thd)))
+    while (TABLE *table= it++)
     {
-      my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      goto skip_vers_inc;
-    }
-    /* Choose first non-occupied name suffix */
-    uint32 suffix= table.part_info->num_parts - 1;
-    DBUG_ASSERT(suffix > 0);
-    char part_name[MAX_PART_NAME_SIZE + 1];
-    if (make_partition_name(part_name, suffix))
-    {
+      /* NB: mysql_execute_command() can be recursive because of PS/SP.
+         Don't duplicate any processing including error messages. */
+      it.remove();
+      Field **f_ptr, *field;
+      DBUG_ASSERT(table->s->get_table_ref_type() == TABLE_REF_BASE_TABLE);
+      DBUG_ASSERT(table->versioned());
+      DBUG_ASSERT(table->part_info);
+      DBUG_ASSERT(table->part_info->vers_info);
+      Alter_info alter_info;
+      alter_info.partition_flags= ALTER_PARTITION_ADD;
+      HA_CREATE_INFO create_info;
+      create_info.init();
+      create_info.alter_info= &alter_info;
+      Alter_table_ctx alter_ctx(thd, table->pos_in_table_list, 1, &table->s->db,
+                                &table->s->table_name);
+
+      if (thd->mdl_context.upgrade_shared_lock(table->mdl_ticket, MDL_SHARED_NO_WRITE,
+                                              thd->variables.lock_wait_timeout))
+        goto skip_vers_inc; // TODO: test error
+      table->m_needs_reopen= true;
+
+      create_info.db_type= table->s->db_type();
+      create_info.options|= HA_VERSIONED_TABLE;
+      DBUG_ASSERT(create_info.db_type);
+
+      create_info.vers_info.set_start(table->s->vers_start_field()->field_name);
+      create_info.vers_info.set_end(table->s->vers_end_field()->field_name);
+
+      // NB: set_ok_status() requires DA_EMPTY
+      thd->get_stmt_da()->reset_diagnostics_area();
+
+      partition_info *part_info_saved= thd->work_part_info;
+      partition_info *part_info= new partition_info();
+      if (unlikely(!part_info))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        goto skip_vers_inc;
+      }
+      part_info->use_default_num_partitions= false;
+      part_info->use_default_num_subpartitions= false;
+      part_info->num_parts= 1;
+      part_info->num_subparts= table->part_info->num_subparts;
+      part_info->subpart_type= table->part_info->subpart_type;
+      if (unlikely(part_info->vers_init_info(thd)))
+      {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        goto skip_vers_inc;
+      }
+      /* Choose first non-occupied name suffix */
+      uint32 suffix= table->part_info->num_parts - 1;
+      DBUG_ASSERT(suffix > 0);
+      char part_name[MAX_PART_NAME_SIZE + 1];
+      if (make_partition_name(part_name, suffix))
+      {
 vers_make_name_err:
-      sql_print_warning("vers_add_hist_part name generation failed for suffix %d",
-                      suffix);
-      my_error(WARN_VERS_HIST_PART_ERROR, MYF(ME_WARNING),
-              table.s->db.str, table.s->table_name.str, 0);
-      goto skip_vers_inc;
-    }
-    List_iterator_fast<partition_element> it(table.part_info->partitions);
-    partition_element *el;
-    while ((el= it++))
-    {
-      if (0 == my_strcasecmp(&my_charset_latin1, el->partition_name, part_name))
-      {
-        if (make_partition_name(part_name, ++suffix))
-          goto vers_make_name_err;
-        it.rewind();
+        sql_print_warning("Auto-increment history partition: "
+                          "name generation failed for suffix %d",
+                          suffix);
+        my_error(WARN_VERS_HIST_PART_ERROR, MYF(ME_WARNING),
+                table->s->db.str, table->s->table_name.str, 0);
+        goto skip_vers_inc;
       }
-    }
-    if (part_info->set_up_defaults_for_partitioning(thd, table.file,
-                                                    NULL, suffix))
-    {
-      // TODO: warning?
-      thd->work_part_info= work_part_info;
-      goto skip_vers_inc; // TODO: test error
-    }
-    bool partition_changed= false;
-    bool fast_alter_partition= false;
-    if (prep_alter_part_table(thd, &table, &alter_info, &create_info,
-                              &partition_changed, &fast_alter_partition) ||
-       !fast_alter_partition)
-    {
-      // TODO: warning?
-      thd->work_part_info= work_part_info;
-      goto skip_vers_inc; // TODO: test error
-    }
-    if (mysql_prepare_alter_table(thd, &table, &create_info, &alter_info,
-                                  &alter_ctx))
-    {
-      // TODO: warning?
-      thd->work_part_info= work_part_info;
-      goto skip_vers_inc; // TODO: test error
-    }
-    // FIXME: fill alter_info->key_list
-    DBUG_ASSERT(partition_changed);
+      List_iterator_fast<partition_element> it(table->part_info->partitions);
+      partition_element *el;
+      while ((el= it++))
+      {
+        if (0 == my_strcasecmp(&my_charset_latin1, el->partition_name, part_name))
+        {
+          if (make_partition_name(part_name, ++suffix))
+            goto vers_make_name_err;
+          it.rewind();
+        }
+      }
+      thd->work_part_info= part_info;
+      if (part_info->set_up_defaults_for_partitioning(thd, table->file,
+                                                      NULL, suffix))
+      {
+        sql_print_warning("Auto-increment history partition: "
+                          "setting up defaults failed");
+        thd->work_part_info= part_info_saved;
+        goto skip_vers_inc; // TODO: test error
+      }
+      bool partition_changed= false;
+      bool fast_alter_partition= false;
+      if (prep_alter_part_table(thd, table, &alter_info, &create_info,
+                                &partition_changed, &fast_alter_partition))
+      {
+        sql_print_warning("Auto-increment history partition: "
+                          "alter partitition prepare failed");
+        thd->work_part_info= part_info_saved;
+        goto skip_vers_inc; // TODO: test error
+      }
+      if (!fast_alter_partition)
+      {
+        sql_print_warning("Auto-increment history partition: "
+                          "fast alter partitition is not possible");
+        my_error(WARN_VERS_HIST_PART_ERROR, MYF(ME_WARNING),
+                table->s->db.str, table->s->table_name.str, 0);
+        thd->work_part_info= part_info_saved;
+        goto skip_vers_inc; // TODO: test error
+      }
+      DBUG_ASSERT(partition_changed);
+      if (mysql_prepare_alter_table(thd, table, &create_info, &alter_info,
+                                    &alter_ctx))
+      {
+        sql_print_warning("Auto-increment history partition: "
+                          "alter prepare failed");
+        thd->work_part_info= part_info_saved;
+        goto skip_vers_inc; // TODO: test error
+      }
 
-    fast_alter_partition_table(thd, &table, &alter_info, &create_info,
-                               table.pos_in_table_list,
-                               &table.s->db, &table.s->table_name);
+      fast_alter_partition_table(thd, table, &alter_info, &create_info,
+                                table->pos_in_table_list,
+                                &table->s->db, &table->s->table_name);
+    }
   }
 skip_vers_inc:
 #endif /* WITH_PARTITION_STORAGE_ENGINE */

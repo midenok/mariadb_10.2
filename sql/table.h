@@ -838,19 +838,6 @@ struct TABLE_SHARE
     return field[vers.end_fieldno];
   }
 
-// FIXME: remove
-#if 0
-  Field *period_start_field()
-  {
-    return field[period.start_fieldno];
-  }
-
-  Field *period_end_field()
-  {
-    return field[period.end_fieldno];
-  }
-#endif
-
   /**
     Cache the checked structure of this table.
 

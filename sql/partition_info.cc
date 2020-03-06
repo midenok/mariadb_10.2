@@ -902,23 +902,6 @@ void partition_info::vers_set_hist_part(THD *thd)
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
     }
-
-
-#if 0
-    time_t &timeout= table->s->vers_hist_part_timeout;
-    if (!thd->slave_thread &&
-        vers_info->hist_part->id + VERS_MIN_EMPTY == vers_info->now_part->id)
-    {
-      if (!timeout || timeout < thd->query_start())
-        vers_add_hist_part(thd);
-      else if (table->s->vers_hist_part_error)
-      {
-        my_error(WARN_VERS_HIST_PART_ERROR, MYF(ME_WARNING),
-                table->s->db.str, table->s->table_name.str,
-                table->s->vers_hist_part_error);
-      }
-    }
-#endif
   }
   default:;
   }
