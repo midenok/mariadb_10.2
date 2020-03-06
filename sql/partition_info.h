@@ -422,7 +422,6 @@ public:
     return !limit;
   }
   void vers_set_hist_part(THD *thd);
-  void vers_add_hist_part(THD *thd);
   bool vers_fix_field_list(THD *thd);
   void vers_update_el_ids();
   partition_element *get_partition(uint part_id)
