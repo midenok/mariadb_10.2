@@ -28,7 +28,7 @@ update t1 set x= x + 1;
 show create table t1;
 
 set timestamp= unix_timestamp('2000-01-01 02:00:00');
-update t1 set x= x + 1;
+update t1 set x= x + 2;
 show create table t1;
 
 --echo # AUTO_INCREMENT from 3 to 6, manual names
@@ -44,15 +44,15 @@ insert into t1 values (1);
 show create table t1;
 
 set timestamp= unix_timestamp('2000-01-01 01:00:00');
-update t1 set x= x + 1;
+update t1 set x= x + 3;
 show create table t1;
 
 set timestamp= unix_timestamp('2000-01-01 02:00:00');
-update t1 set x= x + 1;
+update t1 set x= x + 4;
 show create table t1;
 
 set timestamp= unix_timestamp('2000-01-01 03:00:00');
-update t1 set x= x + 1;
+update t1 set x= x + 5;
 show create table t1;
 
 --echo # Test VIEW
@@ -66,7 +66,28 @@ show create table t1;
 drop view v1;
 drop tables t1;
 
---echo # Test complex table
+--echo # Multiple increments in single command
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
+create or replace table t1 (x int) with system versioning
+partition by system_time interval 1 hour auto_increment partitions 3;
+
+create or replace table t2 (y int) with system versioning
+partition by system_time interval 1 hour auto_increment partitions 4;
+
+insert into t1 values (1);
+insert into t1 values (2);
+
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
+update t1, t2 set x= x + 1, y= y + 1;
+show create table t1;
+show create table t2;
+
+set timestamp= unix_timestamp('2000-01-01 02:00:00');
+update t1, t2 set x= x + 1, y= y + 1;
+show create table t1;
+show create table t2;
+
+--echo # Complex table
 set timestamp= unix_timestamp('2000-01-01 00:00:00');
 create or replace table t1 (
   x int primary key auto_increment,
@@ -74,9 +95,7 @@ create or replace table t1 (
   b blob(4096) NULL,
   c varchar(1033) NOT NULL,
   u int unique,
-  i1 tinyint,
-  i2 smallint,
-  i3 bigint,
+  i1 tinyint, i2 smallint, i3 bigint,
   index three(i1, i2, i3),
   v1 timestamp(6) generated always as (t + interval 1 day),
   v2 timestamp(6) generated always as (t + interval 1 month) stored,
@@ -86,12 +105,18 @@ create or replace table t1 (
   ps date, pe date,
   period for app_time (ps, pe),
   constraint check_constr check (u > -1))
-with system versioning
-partition by system_time interval 1 hour auto_increment;
+with system versioning default charset=ucs2
+partition by system_time interval 1 hour auto_increment (
+    partition p2 history,
+    partition pn current);
+show create table t1;
+
+insert into t1 (x, c, u, i1, i2, i3, ps, pe)
+values (1, 'cc', 0, 1, 2, 3, '1999-01-01', '2000-01-01');
 show create table t1;
 
 set timestamp= unix_timestamp('2000-01-01 01:00:00');
-update t1 set x= x + 1;
+update t1 set x= x + 6;
 show create table t1;
 
 drop tables t1;
