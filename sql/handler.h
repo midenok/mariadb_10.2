@@ -1513,6 +1513,9 @@ struct handlerton
 			    THD *victim_thd, my_bool signal);
    int (*set_checkpoint)(handlerton *hton, const XID* xid);
    int (*get_checkpoint)(handlerton *hton, XID* xid);
+#ifdef WITH_WSREP
+  void (*wait_until_initialized)(handlerton *hton);
+#endif /* WITH_WSREP */
    /*
      Optional clauses in the CREATE/ALTER TABLE
    */
@@ -5178,7 +5181,10 @@ int ha_savepoint(THD *thd, SAVEPOINT *sv);
 int ha_release_savepoint(THD *thd, SAVEPOINT *sv);
 #ifdef WITH_WSREP
 int ha_abort_transaction(THD *bf_thd, THD *victim_thd, my_bool signal);
-#endif
+void wsrep_wait_until_innodb_initialized();
+ #else
+inline void ha_fake_trx_id(THD *thd) { }
+#endif /* WITH_WSREP */
 
 /* these are called by storage engines */
 void trans_register_ha(THD *thd, bool all, handlerton *ht,
@@ -5194,6 +5200,7 @@ void trans_register_ha(THD *thd, bool all, handlerton *ht,
 
 const char *get_canonical_filename(handler *file, const char *path,
                                    char *tmp_path);
+bool mysql_xa_recover(THD *thd);
 void commit_checkpoint_notify_ha(handlerton *hton, void *cookie);
 
 inline const LEX_CSTRING *table_case_name(HA_CREATE_INFO *info, const LEX_CSTRING *name)
