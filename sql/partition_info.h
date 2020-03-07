@@ -445,6 +445,7 @@ public:
 
 uint32 get_next_partition_id_range(struct st_partition_iter* part_iter);
 bool check_partition_dirs(partition_info *part_info);
+void vers_add_auto_parts(THD *thd);
 
 /* Initialize the iterator to return a single partition with given part_id */
 
@@ -500,11 +501,6 @@ bool partition_info::vers_fix_field_list(THD * thd)
 }
 
 
-/**
-  @brief Update partition_element's id
-
-  @returns true on error; false on success
-*/
 inline
 void partition_info::vers_update_el_ids()
 {
