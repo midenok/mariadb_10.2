@@ -84,7 +84,7 @@ create or replace table t2 (y int) with system versioning
 partition by system_time interval 1 hour auto_increment partitions 4;
 
 insert into t1 values (1);
-insert into t1 values (2);
+insert into t2 values (2);
 
 set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1, t2 set x= x + 1, y= y + 1;
@@ -160,6 +160,70 @@ show create table t1;
 
 set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 8;
+show create table t1;
+
+--echo # Concurrent DML
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
+create or replace table t1 (x int) with system versioning
+partition by system_time interval 1 hour auto_increment;
+
+insert into t1 values (1);
+show create table t1;
+
+--connect con8, localhost, root
+--connect con7, localhost, root
+--connect con6, localhost, root
+--connect con5, localhost, root
+--connect con4, localhost, root
+--connect con3, localhost, root
+--connect con2, localhost, root
+--connect con1, localhost, root
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
+send update t1 set x= x + 10;
+--connection con2
+set timestamp= unix_timestamp('2000-01-01 02:00:00');
+send update t1 set x= x + 20;
+--connection con3
+set timestamp= unix_timestamp('2000-01-01 03:00:00');
+send update t1 set x= x + 30;
+--connection con4
+set timestamp= unix_timestamp('2000-01-01 04:00:00');
+send update t1 set x= x + 40;
+--connection con5
+set timestamp= unix_timestamp('2000-01-01 05:00:00');
+send update t1 set x= x + 50;
+--connection con6
+set timestamp= unix_timestamp('2000-01-01 06:00:00');
+send update t1 set x= x + 60;
+--connection con7
+set timestamp= unix_timestamp('2000-01-01 07:00:00');
+send update t1 set x= x + 70;
+--connection con8
+set timestamp= unix_timestamp('2000-01-01 08:00:00');
+update t1 set x= x + 80;
+--connection con1
+reap;
+--disconnect con1
+--connection con2
+reap;
+--disconnect con2
+--connection con3
+reap;
+--disconnect con3
+--connection con4
+reap;
+--disconnect con4
+--connection con5
+reap;
+--disconnect con5
+--connection con6
+reap;
+--disconnect con6
+--connection con7
+reap;
+--disconnect con7
+--disconnect con8
+--connection default
 show create table t1;
 
 drop tables t1;

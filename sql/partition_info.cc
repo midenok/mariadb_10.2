@@ -893,13 +893,24 @@ void partition_info::vers_set_hist_part(THD *thd)
   case SQLCOM_UPDATE_MULTI:
   {
     TABLE *t;
-    List_iterator_fast<TABLE> it(thd->vers_tables_auto_part);
+    List_iterator_fast<TABLE> it(thd->vers_auto_part_tables);
     while ((t= it++))
     {
       if (table->s == t->s)
         break;
     }
-    if (!t && thd->vers_tables_auto_part.push_back(table))
+    if (t)
+      break;
+    /* Prevent spawning multiple instances of vers_add_auto_parts() */
+    bool altering;
+    mysql_mutex_lock(&table->s->LOCK_share);
+    altering= table->s->vers_auto_part;
+    if (!altering)
+      table->s->vers_auto_part= true;
+    mysql_mutex_unlock(&table->s->LOCK_share);
+    if (altering)
+      break;
+    if (!t && thd->vers_auto_part_tables.push_back(table))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
     }
@@ -915,7 +926,7 @@ void partition_info::vers_set_hist_part(THD *thd)
 */
 void vers_add_auto_parts(THD *thd)
 {
-  List_iterator<TABLE> it(thd->vers_tables_auto_part);
+  List_iterator<TABLE> it(thd->vers_auto_part_tables);
   while (TABLE *table= it++)
   {
     /* NB: mysql_execute_command() can be recursive because of PS/SP.
@@ -935,10 +946,14 @@ void vers_add_auto_parts(THD *thd)
     Alter_table_ctx alter_ctx(thd, table_list, 1, &table->s->db,
                               &table->s->table_name);
 
+    // NB: set_ok_status() requires DA_EMPTY
+    thd->get_stmt_da()->reset_diagnostics_area();
+
     if (thd->mdl_context.upgrade_shared_lock(table->mdl_ticket,
                                               MDL_SHARED_NO_WRITE,
                                               thd->variables.lock_wait_timeout))
       return;
+    table->s->vers_auto_part= false;
     table->m_needs_reopen= true;
 
     create_info.db_type= table->s->db_type();
@@ -947,9 +962,6 @@ void vers_add_auto_parts(THD *thd)
 
     create_info.vers_info.set_start(table->s->vers_start_field()->field_name);
     create_info.vers_info.set_end(table->s->vers_end_field()->field_name);
-
-    // NB: set_ok_status() requires DA_EMPTY
-    thd->get_stmt_da()->reset_diagnostics_area();
 
     partition_info *part_info_saved= thd->work_part_info;
     partition_info *part_info= new partition_info();

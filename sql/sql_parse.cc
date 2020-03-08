@@ -7456,7 +7456,7 @@ void THD::reset_for_next_command(bool do_clear_error)
   }
 #endif /* WITH_WSREP */
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-  vers_tables_auto_part.empty();
+  vers_auto_part_tables.empty();
 #endif /* WITH_PARTITION_STORAGE_ENGINE */
 
   query_start_sec_part_used= 0;
