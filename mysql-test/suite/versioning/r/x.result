@@ -159,7 +159,7 @@ partition by system_time interval 1 hour auto_increment partitions 3;
 create or replace table t2 (y int) with system versioning
 partition by system_time interval 1 hour auto_increment partitions 4;
 insert into t1 values (1);
-insert into t1 values (2);
+insert into t2 values (2);
 set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1, t2 set x= x + 1, y= y + 1;
 show create table t1;
@@ -367,4 +367,84 @@ t1	CREATE TABLE `t1` (
  PARTITION `p1` HISTORY ENGINE = MyISAM,
  PARTITION `p3` HISTORY ENGINE = MyISAM,
  PARTITION `pn` CURRENT ENGINE = MyISAM)
+# Concurrent DML
+set timestamp= unix_timestamp('2000-01-01 00:00:00');
+create or replace table t1 (x int) with system versioning
+partition by system_time interval 1 hour auto_increment;
+insert into t1 values (1);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `x` int(11) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 WITH SYSTEM VERSIONING
+ PARTITION BY SYSTEM_TIME INTERVAL 1 HOUR STARTS TIMESTAMP'2000-01-01 00:00:00' AUTO_INCREMENT
+PARTITIONS 3
+connect con8, localhost, root;
+connect con7, localhost, root;
+connect con6, localhost, root;
+connect con5, localhost, root;
+connect con4, localhost, root;
+connect con3, localhost, root;
+connect con2, localhost, root;
+connect con1, localhost, root;
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
+update t1 set x= x + 10;
+connection con2;
+set timestamp= unix_timestamp('2000-01-01 02:00:00');
+update t1 set x= x + 20;
+connection con3;
+set timestamp= unix_timestamp('2000-01-01 03:00:00');
+update t1 set x= x + 30;
+connection con4;
+set timestamp= unix_timestamp('2000-01-01 04:00:00');
+update t1 set x= x + 40;
+connection con5;
+set timestamp= unix_timestamp('2000-01-01 05:00:00');
+update t1 set x= x + 50;
+connection con6;
+set timestamp= unix_timestamp('2000-01-01 06:00:00');
+update t1 set x= x + 60;
+connection con7;
+set timestamp= unix_timestamp('2000-01-01 07:00:00');
+update t1 set x= x + 70;
+connection con8;
+set timestamp= unix_timestamp('2000-01-01 08:00:00');
+update t1 set x= x + 80;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
+connection con1;
+disconnect con1;
+connection con2;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
+disconnect con2;
+connection con3;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
+disconnect con3;
+connection con4;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
+disconnect con4;
+connection con5;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
+disconnect con5;
+connection con6;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
+disconnect con6;
+connection con7;
+Warnings:
+Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
+disconnect con7;
+disconnect con8;
+connection default;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `x` int(11) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 WITH SYSTEM VERSIONING
+ PARTITION BY SYSTEM_TIME INTERVAL 1 HOUR STARTS TIMESTAMP'2000-01-01 00:00:00' AUTO_INCREMENT
+PARTITIONS 5
 drop tables t1;

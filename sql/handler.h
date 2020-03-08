@@ -788,6 +788,8 @@ typedef ulonglong alter_table_operations;
 #define ALTER_PARTITION_TRUNCATE    (1ULL << 11)
 // Set for REORGANIZE PARTITION
 #define ALTER_PARTITION_TABLE_REORG           (1ULL << 12)
+// Set for vers_add_auto_parts() operation
+#define ALTER_PARTITION_AUTO_HIST   (1ULL << 13)
 
 /*
   This is master database for most of system tables. However there

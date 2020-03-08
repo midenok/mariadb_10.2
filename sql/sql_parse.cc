@@ -5943,14 +5943,15 @@ finish:
 #endif
   }
 
-#ifdef WITH_PARTITION_STORAGE_ENGINE
-  if (!thd->is_error())
-    vers_add_auto_parts(thd);
-#endif /* WITH_PARTITION_STORAGE_ENGINE */
-
   /* Free tables. Set stage 'closing tables' */
   close_thread_tables(thd);
 
+#ifdef WITH_PARTITION_STORAGE_ENGINE
+  /* NB: we cannot do this before close_thread_tables() because
+         upgrading MDL on locked table leads to a deadlock. */
+  if (!thd->is_error())
+    vers_add_auto_parts(thd);
+#endif /* WITH_PARTITION_STORAGE_ENGINE */
 
 #ifndef DBUG_OFF
   if (lex->sql_command != SQLCOM_SET_OPTION && ! thd->in_sub_stmt)

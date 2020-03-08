@@ -5316,7 +5316,9 @@ that are reorganised.
               now_part= el;
             }
           }
-          if (*fast_alter_table && tab_part_info->vers_info->interval.is_set())
+          if (*fast_alter_table &&
+              !(alter_info->partition_flags & ALTER_PARTITION_AUTO_HIST) &&
+              tab_part_info->vers_info->interval.is_set())
           {
             partition_element *hist_part= tab_part_info->vers_info->hist_part;
             if (hist_part->range_value <= thd->query_start())
@@ -7220,9 +7222,10 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
       goto err;
     }
   }
-  else if ((alter_info->partition_flags & ALTER_PARTITION_ADD) &&
+  else if ((alter_info->partition_flags & ALTER_PARTITION_AUTO_HIST) || (
+           (alter_info->partition_flags & ALTER_PARTITION_ADD) &&
            (part_info->part_type == RANGE_PARTITION ||
-            part_info->part_type == LIST_PARTITION))
+            part_info->part_type == LIST_PARTITION)))
   {
     /*
       ADD RANGE/LIST PARTITIONS

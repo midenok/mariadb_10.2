@@ -3262,7 +3262,7 @@ public:
   /**
     List of tables requiring new history partition.
   */
-  List<TABLE> vers_auto_part_tables;
+  List<TABLE_SHARE> vers_auto_part_tables;
 #endif
 
 #ifndef EMBEDDED_LIBRARY

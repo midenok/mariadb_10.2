@@ -892,14 +892,14 @@ void partition_info::vers_set_hist_part(THD *thd)
   case SQLCOM_DELETE_MULTI:
   case SQLCOM_UPDATE_MULTI:
   {
-    TABLE *t;
-    List_iterator_fast<TABLE> it(thd->vers_auto_part_tables);
-    while ((t= it++))
+    TABLE_SHARE *share;
+    List_iterator_fast<TABLE_SHARE> it(thd->vers_auto_part_tables);
+    while ((share= it++))
     {
-      if (table->s == t->s)
+      if (table->s == share)
         break;
     }
-    if (t)
+    if (share)
       break;
     /* Prevent spawning multiple instances of vers_add_auto_parts() */
     bool altering;
@@ -910,7 +910,7 @@ void partition_info::vers_set_hist_part(THD *thd)
     mysql_mutex_unlock(&table->s->LOCK_share);
     if (altering)
       break;
-    if (!t && thd->vers_auto_part_tables.push_back(table))
+    if (thd->vers_auto_part_tables.push_back(table->s))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
     }
@@ -926,33 +926,51 @@ void partition_info::vers_set_hist_part(THD *thd)
 */
 void vers_add_auto_parts(THD *thd)
 {
-  List_iterator<TABLE> it(thd->vers_auto_part_tables);
-  while (TABLE *table= it++)
+  List_iterator<TABLE_SHARE> it(thd->vers_auto_part_tables);
+  while (TABLE_SHARE *share= it++)
   {
     /* NB: mysql_execute_command() can be recursive because of PS/SP.
         Don't duplicate any processing including error messages. */
     it.remove();
+    Open_table_context ot_ctx(thd, 0);
+    TABLE_LIST tl;
+    tl.init_one_table(&share->db, &share->table_name, 0, TL_READ_NO_INSERT);
+    tl.i_s_requested_object= OPEN_TABLE_ONLY;
+
+    // NB: set_ok_status() requires DA_EMPTY
+    thd->get_stmt_da()->reset_diagnostics_area();
+
+    if (open_table(thd, &tl, &ot_ctx))
+    {
+      close_thread_tables(thd);
+      return;
+    }
+    TABLE *table= tl.table;
     Field **f_ptr, *field;
     DBUG_ASSERT(table->s->get_table_ref_type() == TABLE_REF_BASE_TABLE);
     DBUG_ASSERT(table->versioned());
     DBUG_ASSERT(table->part_info);
     DBUG_ASSERT(table->part_info->vers_info);
-    TABLE_LIST *table_list= table->pos_in_table_list;
     Alter_info alter_info;
-    alter_info.partition_flags= ALTER_PARTITION_ADD;
+    alter_info.partition_flags= ALTER_PARTITION_ADD|ALTER_PARTITION_AUTO_HIST;
     HA_CREATE_INFO create_info;
     create_info.init();
     create_info.alter_info= &alter_info;
-    Alter_table_ctx alter_ctx(thd, table_list, 1, &table->s->db,
+    Alter_table_ctx alter_ctx(thd, &tl, 1, &table->s->db,
                               &table->s->table_name);
 
-    // NB: set_ok_status() requires DA_EMPTY
-    thd->get_stmt_da()->reset_diagnostics_area();
-
     if (thd->mdl_context.upgrade_shared_lock(table->mdl_ticket,
-                                              MDL_SHARED_NO_WRITE,
-                                              thd->variables.lock_wait_timeout))
+                                             MDL_SHARED_NO_WRITE,
+                                             thd->variables.lock_wait_timeout))
       return;
+    if (!thd->lock)
+    {
+      if (lock_tables(thd, &tl, alter_ctx.tables_opened, 0))
+        return;
+    }
+    else
+      DBUG_ASSERT(thd->locked_tables_mode == LTM_LOCK_TABLES);
+
     table->s->vers_auto_part= false;
     table->m_needs_reopen= true;
 
@@ -1044,7 +1062,8 @@ vers_make_name_err:
     }
 
     fast_alter_partition_table(thd, table, &alter_info, &create_info,
-                               table_list, &table->s->db, &table->s->table_name);
+                               &tl, &table->s->db, &table->s->table_name);
+    close_thread_tables(thd);
   }
 }
 
