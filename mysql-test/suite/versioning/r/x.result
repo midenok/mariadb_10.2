@@ -390,53 +390,39 @@ connect con1, localhost, root;
 set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 10;
 connection con2;
-set timestamp= unix_timestamp('2000-01-01 02:00:00');
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 20;
 connection con3;
-set timestamp= unix_timestamp('2000-01-01 03:00:00');
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 30;
 connection con4;
-set timestamp= unix_timestamp('2000-01-01 04:00:00');
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 40;
 connection con5;
-set timestamp= unix_timestamp('2000-01-01 05:00:00');
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 50;
 connection con6;
-set timestamp= unix_timestamp('2000-01-01 06:00:00');
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 60;
 connection con7;
-set timestamp= unix_timestamp('2000-01-01 07:00:00');
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 70;
 connection con8;
-set timestamp= unix_timestamp('2000-01-01 08:00:00');
+set timestamp= unix_timestamp('2000-01-01 01:00:00');
 update t1 set x= x + 80;
-Warnings:
-Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
 connection con1;
 disconnect con1;
 connection con2;
-Warnings:
-Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p1`) is out of INTERVAL, need more HISTORY partitions
 disconnect con2;
 connection con3;
-Warnings:
-Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
 disconnect con3;
 connection con4;
-Warnings:
-Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
 disconnect con4;
 connection con5;
-Warnings:
-Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
 disconnect con5;
 connection con6;
-Warnings:
-Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
 disconnect con6;
 connection con7;
-Warnings:
-Warning	4114	Versioned table `test`.`t1`: last HISTORY partition (`p2`) is out of INTERVAL, need more HISTORY partitions
 disconnect con7;
 disconnect con8;
 connection default;
@@ -446,5 +432,5 @@ t1	CREATE TABLE `t1` (
   `x` int(11) DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 WITH SYSTEM VERSIONING
  PARTITION BY SYSTEM_TIME INTERVAL 1 HOUR STARTS TIMESTAMP'2000-01-01 00:00:00' AUTO_INCREMENT
-PARTITIONS 5
+PARTITIONS 4
 drop tables t1;

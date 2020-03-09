@@ -926,53 +926,58 @@ void partition_info::vers_set_hist_part(THD *thd)
 */
 void vers_add_auto_parts(THD *thd)
 {
-  List_iterator<TABLE_SHARE> it(thd->vers_auto_part_tables);
-  while (TABLE_SHARE *share= it++)
+  HA_CREATE_INFO create_info;
+  Alter_info alter_info;
+  Field **f_ptr, *field;
+  TABLE_LIST *table_list= NULL;
+  partition_info *save_part_info= thd->work_part_info;
+  Query_tables_list save_query_tables;
+  Reprepare_observer *save_reprepare_observer= thd->m_reprepare_observer;
+  thd->m_reprepare_observer= NULL;
+  thd->lex->reset_n_backup_query_tables_list(&save_query_tables);
+  TABLE_LIST *tl;
+
+  DBUG_ASSERT(!thd->vers_auto_part_tables.is_empty());
+
+  for (TABLE_SHARE &share: thd->vers_auto_part_tables)
   {
-    /* NB: mysql_execute_command() can be recursive because of PS/SP.
-        Don't duplicate any processing including error messages. */
-    it.remove();
-    Open_table_context ot_ctx(thd, 0);
-    TABLE_LIST tl;
-    tl.init_one_table(&share->db, &share->table_name, 0, TL_READ_NO_INSERT);
-    tl.i_s_requested_object= OPEN_TABLE_ONLY;
+    tl= (TABLE_LIST *) thd->alloc(sizeof(TABLE_LIST));
+    tl->init_one_table(&share.db, &share.table_name, NULL, TL_READ_NO_INSERT);
+    tl->open_type= OT_BASE_ONLY;
+    tl->i_s_requested_object= OPEN_TABLE_ONLY;
+    tl->next_global= table_list;
+    table_list= tl;
+  }
 
-    // NB: set_ok_status() requires DA_EMPTY
-    thd->get_stmt_da()->reset_diagnostics_area();
+  /* NB: mysql_execute_command() can be recursive because of PS/SP.
+      Don't duplicate any processing including error messages. */
+  thd->vers_auto_part_tables.empty();
 
-    if (open_table(thd, &tl, &ot_ctx))
-    {
-      close_thread_tables(thd);
-      return;
-    }
-    TABLE *table= tl.table;
-    Field **f_ptr, *field;
+  DBUG_ASSERT(!thd->is_error());
+  thd->get_stmt_da()->reset_diagnostics_area();
+  DDL_options_st ddl_opts_none;
+  ddl_opts_none.init();
+  if (open_and_lock_tables(thd, ddl_opts_none, table_list, false, 0))
+    goto open_err;
+
+  for (tl= table_list; tl; tl= tl->next_global)
+  {
+    TABLE *table= tl->table;
+    DBUG_ASSERT(table);
     DBUG_ASSERT(table->s->get_table_ref_type() == TABLE_REF_BASE_TABLE);
     DBUG_ASSERT(table->versioned());
     DBUG_ASSERT(table->part_info);
     DBUG_ASSERT(table->part_info->vers_info);
-    Alter_info alter_info;
+    alter_info.reset();
     alter_info.partition_flags= ALTER_PARTITION_ADD|ALTER_PARTITION_AUTO_HIST;
-    HA_CREATE_INFO create_info;
     create_info.init();
     create_info.alter_info= &alter_info;
-    Alter_table_ctx alter_ctx(thd, &tl, 1, &table->s->db,
-                              &table->s->table_name);
+    Alter_table_ctx alter_ctx(thd, tl, 1, &table->s->db, &table->s->table_name);
 
     if (thd->mdl_context.upgrade_shared_lock(table->mdl_ticket,
                                              MDL_SHARED_NO_WRITE,
                                              thd->variables.lock_wait_timeout))
-      return;
-    if (!thd->lock)
-    {
-      if (lock_tables(thd, &tl, alter_ctx.tables_opened, 0))
-        return;
-    }
-    else
-      DBUG_ASSERT(thd->locked_tables_mode == LTM_LOCK_TABLES);
-
-    table->s->vers_auto_part= false;
-    table->m_needs_reopen= true;
+      goto exit;
 
     create_info.db_type= table->s->db_type();
     create_info.options|= HA_VERSIONED_TABLE;
@@ -981,12 +986,11 @@ void vers_add_auto_parts(THD *thd)
     create_info.vers_info.set_start(table->s->vers_start_field()->field_name);
     create_info.vers_info.set_end(table->s->vers_end_field()->field_name);
 
-    partition_info *part_info_saved= thd->work_part_info;
     partition_info *part_info= new partition_info();
     if (unlikely(!part_info))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return;
+      goto exit;
     }
     part_info->use_default_num_partitions= false;
     part_info->use_default_num_subpartitions= false;
@@ -996,7 +1000,7 @@ void vers_add_auto_parts(THD *thd)
     if (unlikely(part_info->vers_init_info(thd)))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
-      return;
+      goto exit;
     }
     /* Choose first non-occupied name suffix */
     uint32 suffix= table->part_info->num_parts - 1;
@@ -1010,7 +1014,7 @@ vers_make_name_err:
                         suffix);
       my_error(WARN_VERS_HIST_PART_ERROR, MYF(ME_WARNING),
               table->s->db.str, table->s->table_name.str, 0);
-      return;
+      goto exit;
     }
     List_iterator_fast<partition_element> it(table->part_info->partitions);
     partition_element *el;
@@ -1023,14 +1027,17 @@ vers_make_name_err:
         it.rewind();
       }
     }
+
+    // NB: set_ok_status() requires DA_EMPTY
+    thd->get_stmt_da()->reset_diagnostics_area();
+
     thd->work_part_info= part_info;
     if (part_info->set_up_defaults_for_partitioning(thd, table->file,
                                                     NULL, suffix))
     {
       sql_print_warning("Auto-increment history partition: "
                         "setting up defaults failed");
-      thd->work_part_info= part_info_saved;
-      return;
+      goto exit;
     }
     bool partition_changed= false;
     bool fast_alter_partition= false;
@@ -1039,17 +1046,15 @@ vers_make_name_err:
     {
       sql_print_warning("Auto-increment history partition: "
                         "alter partitition prepare failed");
-      thd->work_part_info= part_info_saved;
-      return;
+      goto exit;
     }
     if (!fast_alter_partition)
     {
       sql_print_warning("Auto-increment history partition: "
                         "fast alter partitition is not possible");
       my_error(WARN_VERS_HIST_PART_ERROR, MYF(ME_WARNING),
-              table->s->db.str, table->s->table_name.str, 0);
-      thd->work_part_info= part_info_saved;
-      return;
+               table->s->db.str, table->s->table_name.str, 0);
+      goto exit;
     }
     DBUG_ASSERT(partition_changed);
     if (mysql_prepare_alter_table(thd, table, &create_info, &alter_info,
@@ -1057,14 +1062,28 @@ vers_make_name_err:
     {
       sql_print_warning("Auto-increment history partition: "
                         "alter prepare failed");
-      thd->work_part_info= part_info_saved;
-      return;
+      goto exit;
     }
 
-    fast_alter_partition_table(thd, table, &alter_info, &create_info,
-                               &tl, &table->s->db, &table->s->table_name);
-    close_thread_tables(thd);
+    if (fast_alter_partition_table(thd, table, &alter_info, &create_info,
+                                   tl, &table->s->db, &table->s->table_name))
+    {
+      sql_print_warning("Auto-increment history partition: "
+                        "alter partition table failed");
+      goto exit;
+    }
   }
+
+exit:
+  // If we failed with error allow non-processed tables to be processed next time
+  if (tl)
+    while ((tl= tl->next_global))
+      tl->table->s->vers_auto_part= false;
+  close_thread_tables(thd);
+open_err:
+  thd->work_part_info= save_part_info;
+  thd->m_reprepare_observer= save_reprepare_observer;
+  thd->lex->restore_backup_query_tables_list(&save_query_tables);
 }
 
 

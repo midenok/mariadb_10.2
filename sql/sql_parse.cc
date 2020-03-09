@@ -5947,9 +5947,9 @@ finish:
   close_thread_tables(thd);
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
-  /* NB: we cannot do this before close_thread_tables() because
+  /* NB: We cannot do this before close_thread_tables() because
          upgrading MDL on locked table leads to a deadlock. */
-  if (!thd->is_error())
+  if (!thd->is_error() && !thd->vers_auto_part_tables.is_empty())
     vers_add_auto_parts(thd);
 #endif /* WITH_PARTITION_STORAGE_ENGINE */
 
