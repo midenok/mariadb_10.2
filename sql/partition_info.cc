@@ -40,6 +40,7 @@
 #ifdef WITH_PARTITION_STORAGE_ENGINE
 #include "ha_partition.h"
 #include "sql_table.h"
+#include "transaction.h"
 
 
 partition_info *partition_info::get_clone(THD *thd)
@@ -873,7 +874,7 @@ void partition_info::vers_set_hist_part(THD *thd)
     }
   }
 
-  if (!vers_info->auto_inc || thd->slave_thread ||
+  if (!vers_info->auto_inc ||
       vers_info->hist_part->id + VERS_MIN_EMPTY < vers_info->now_part->id)
     return;
 
@@ -935,6 +936,7 @@ void vers_add_auto_parts(THD *thd)
   Reprepare_observer *save_reprepare_observer= thd->m_reprepare_observer;
   thd->m_reprepare_observer= NULL;
   thd->lex->reset_n_backup_query_tables_list(&save_query_tables);
+  thd->in_sub_stmt|= SUB_STMT_AUTO_HIST;
   TABLE_LIST *tl;
 
   DBUG_ASSERT(!thd->vers_auto_part_tables.is_empty());
@@ -1074,6 +1076,13 @@ vers_make_name_err:
     }
   }
 
+  if (!thd->transaction.stmt.is_empty())
+  {
+    thd->get_stmt_da()->set_overwrite_status(true);
+    trans_commit_stmt(thd);
+    thd->get_stmt_da()->set_overwrite_status(false);
+  }
+
 exit:
   // If we failed with error allow non-processed tables to be processed next time
   if (tl)
@@ -1084,6 +1093,7 @@ open_err:
   thd->work_part_info= save_part_info;
   thd->m_reprepare_observer= save_reprepare_observer;
   thd->lex->restore_backup_query_tables_list(&save_query_tables);
+  thd->in_sub_stmt&= ~SUB_STMT_AUTO_HIST;
 }
 
 
