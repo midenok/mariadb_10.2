@@ -1,7 +1,4 @@
 call mtr.add_suppression("need more HISTORY partitions");
-call mtr.add_suppression("Duplicate partition name");
-call mtr.add_suppression("Wrong partitioning type");
-call mtr.add_suppression("Table 'test.t1' doesn't exist");
 set system_versioning_alter_history=keep;
 # Check conventional partitioning on temporal tables
 create or replace table t1 (
