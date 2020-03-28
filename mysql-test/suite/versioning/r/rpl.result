@@ -171,6 +171,7 @@ set timestamp= unix_timestamp('2000-01-01 00:00:00');
 create or replace table t1 (x int) with system versioning
 partition by system_time interval 1 hour auto_increment;
 insert t1 values ();
+update t1 set x= x;
 set timestamp= unix_timestamp('2000-01-01 01:00:00');
 delete from t1;
 show create table t1;
