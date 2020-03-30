@@ -18,8 +18,8 @@ jobs:
         containerImage: ubuntu-1604
       ubuntu-1804:
         containerImage: ubuntu-1804
-      debian-8:
-        containerImage: debian-8
+      ubuntu-2004:
+        containerImage: ubuntu-2004
       debian-9:
         containerImage: debian-9
       debian-10:

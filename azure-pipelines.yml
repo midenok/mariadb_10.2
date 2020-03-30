@@ -41,6 +41,11 @@ resources:
       endpoint: acr-mariadbe-connection
       options: --shm-size 12G
 
+    - container: ubuntu-2004
+      image: mariadbe.azurecr.io/build-es:ubuntu-2004
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
     - container: debian-8
       image: mariadbe.azurecr.io/build-es:debian-8
       endpoint: acr-mariadbe-connection
