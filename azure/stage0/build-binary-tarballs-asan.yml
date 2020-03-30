@@ -15,7 +15,7 @@ jobs:
   strategy:
     matrix:
       ubuntu-1904:
-        containerImage: ubuntu-1904
+        containerImage: ubuntu-2004
   container: $[variables['containerImage']]
 
   steps:
