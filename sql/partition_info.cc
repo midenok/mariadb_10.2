@@ -1072,11 +1072,8 @@ vers_make_name_err:
 
     if (fast_alter_partition_table(thd, table, &alter_info, &create_info,
                                    tl, &table->s->db, &table->s->table_name))
-    {
       sql_print_warning("Auto-increment history partition: "
                         "alter partition table failed");
-      goto exit;
-    }
   }
 
   if (!thd->transaction.stmt.is_empty())
