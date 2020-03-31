@@ -22,10 +22,8 @@ jobs:
 
   - script: |
       cmake . -DCMAKE_BUILD_TYPE=${{ parameters.BuildType }} \
-        -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl/ \
-        -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib \
-        -DBUILD_CONFIG=enterprise
-    displayName: 'cmake configure MacOS'
+        -DWITH_SSL=/usr/local/opt/openssl@1.1 -DBUILD_CONFIG=enterprise
+    displayName: 'cmake configure'
     failOnStderr: false
 
   #- script: sed -i '' s/SIZEOF_CHARP/"sizeof(char *)"/g libmariadb/libmariadb/ma_dtoa.c
