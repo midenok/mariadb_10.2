@@ -34,8 +34,7 @@ jobs:
   - bash: |
       set -x
       cd ${BUILDDIR}/build
-      cmake .. \
-        -DBUILD_CONFIG=enterprise \
+      CC=gcc-10 CXX=g++-10 cmake .. -DBUILD_CONFIG=enterprise \
         -DCMAKE_BUILD_TYPE=${{ parameters.BuildType }} \
         -DMYSQL_MAINTAINER_MODE=OFF ${{ parameters.CMakeArgs }}
     displayName: 'CMake configure ${{ parameters.BuildType }} ${{ parameters.CMakeArgs }}'
