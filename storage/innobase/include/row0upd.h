@@ -622,9 +622,26 @@ public:
         void vers_make_delete(const trx_t *trx)
         {
 		update->n_fields = 0;
-		is_delete = VERSIONED_DELETE;
                 vers_update_fields(trx, table->vers_end);
-        }
+		const dfield_t* dfield_start = dtuple_get_nth_field(
+			row, table->vers_start);
+		const dfield_t* dfield_end = dtuple_get_nth_field(
+			row, table->vers_end);
+		if (0 == cmp_data_data(dfield_get_type(dfield_start)->mtype,
+				dfield_get_type(dfield_start)->prtype,
+				static_cast<const byte*>(
+					dfield_get_data(dfield_start)),
+				dfield_get_len(dfield_start),
+				static_cast<const byte*>(
+					dfield_get_data(dfield_end)),
+				dfield_get_len(dfield_end))) {
+
+			is_delete = PLAIN_DELETE;
+		}
+		else {
+			is_delete = VERSIONED_DELETE;
+		}
+	}
 };
 
 #define	UPD_NODE_MAGIC_N	1579975
