@@ -956,5 +956,6 @@ extern ulong opt_binlog_dbug_fsync_sleep;
 
 extern uint volatile global_disable_checkpoint;
 extern my_bool opt_help;
+extern my_bool opt_shutdown_wait_for_slaves;
 
 #endif /* MYSQLD_INCLUDED */
