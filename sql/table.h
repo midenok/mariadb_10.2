@@ -802,6 +802,7 @@ struct TABLE_SHARE
   plugin_ref default_part_plugin;
   /* vers_add_auto_parts() is in progress, avoid duplicate calls */
   bool vers_auto_part;
+  uint vers_create_count;
 #endif
 
   /**

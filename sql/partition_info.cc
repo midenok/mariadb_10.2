@@ -816,6 +816,7 @@ bool partition_info::has_unique_name(partition_element *element)
 */
 void partition_info::vers_set_hist_part(THD *thd)
 {
+  uint create_count= 1;
   if (vers_info->limit)
   {
     DBUG_ASSERT(!vers_info->interval.is_set());
@@ -865,9 +866,16 @@ void partition_info::vers_set_hist_part(THD *thd)
         }
       }
       if (error)
+      {
+        my_time_t diff= thd->query_start() - vers_info->hist_part->range_value;
+        size_t delta= vers_info->interval.seconds();
+        create_count= diff / delta;
+        if (diff % delta)
+          create_count++;
         my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
                  table->s->db.str, table->s->table_name.str,
                  vers_info->hist_part->partition_name, "INTERVAL");
+      }
     }
   }
 
@@ -908,6 +916,7 @@ void partition_info::vers_set_hist_part(THD *thd)
     mysql_mutex_unlock(&table->s->LOCK_share);
     if (altering)
       break;
+    table->s->vers_create_count= create_count;
     if (thd->vers_auto_part_tables.push_back(table->s))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
@@ -1001,7 +1010,7 @@ void vers_add_auto_parts(THD *thd)
     }
     part_info->use_default_num_partitions= false;
     part_info->use_default_num_subpartitions= false;
-    part_info->num_parts= 1;
+    part_info->num_parts= table->s->vers_create_count;
     part_info->num_subparts= table->part_info->num_subparts;
     part_info->subpart_type= table->part_info->subpart_type;
     if (unlikely(part_info->vers_init_info(thd)))
