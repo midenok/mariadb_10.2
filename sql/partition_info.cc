@@ -820,8 +820,9 @@ bool partition_info::has_unique_name(partition_element *element)
     vers_info->interval   Limit by fixed time interval
     vers_info->hist_part  (out) Working history partition
 */
-void partition_info::vers_set_hist_part(THD *thd)
+bool partition_info::vers_set_hist_part(THD *thd)
 {
+  bool error= false;
   if (vers_info->limit)
   {
     DBUG_ASSERT(!vers_info->interval.is_set());
@@ -846,6 +847,7 @@ void partition_info::vers_set_hist_part(THD *thd)
         my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
                 table->s->db.str, table->s->table_name.str,
                 vers_info->hist_part->partition_name, "LIMIT");
+        error= true;
       }
       else
         vers_info->hist_part= next;
@@ -871,15 +873,18 @@ void partition_info::vers_set_hist_part(THD *thd)
         }
       }
       if (error)
+      {
         my_error(WARN_VERS_PART_FULL, MYF(ME_WARNING|ME_ERROR_LOG),
                  table->s->db.str, table->s->table_name.str,
                  vers_info->hist_part->partition_name, "INTERVAL");
+        error= true;
+      }
     }
   }
 
   if (!vers_info->auto_inc ||
       vers_info->hist_part->id + VERS_MIN_EMPTY < vers_info->now_part->id)
-    return;
+    return error;
 
   switch (thd->lex->sql_command)
   {
@@ -917,10 +922,12 @@ void partition_info::vers_set_hist_part(THD *thd)
     if (thd->vers_auto_part_tables.push_back(table->s))
     {
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
+      error= true;
     }
   }
   default:;
   }
+  return error;
 }
 
 
@@ -963,7 +970,6 @@ void vers_add_auto_parts(THD *thd)
      Don't duplicate any processing including error messages. */
   thd->vers_auto_part_tables.empty();
 
-  DBUG_ASSERT(!thd->is_error());
   /* NB: we have to preserve m_affected_rows, m_row_count_func, m_last_insert_id, etc */
   thd->set_stmt_da(&new_stmt_da);
   new_stmt_da.set_overwrite_status(true);

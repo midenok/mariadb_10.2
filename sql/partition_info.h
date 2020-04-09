@@ -423,7 +423,7 @@ public:
                          interval_type int_type, Item *starts,
                          bool auto_inc, const char *table_name);
   bool vers_set_limit(ulonglong limit, bool auto_inc, const char *table_name);
-  void vers_set_hist_part(THD *thd);
+  bool vers_set_hist_part(THD *thd);
   bool vers_fix_field_list(THD *thd);
   void vers_update_el_ids();
   partition_element *get_partition(uint part_id)

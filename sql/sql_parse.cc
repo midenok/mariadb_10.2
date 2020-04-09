@@ -3328,6 +3328,7 @@ mysql_execute_command(THD *thd)
     already.
   */
   DBUG_ASSERT(! thd->transaction_rollback_request || thd->in_sub_stmt);
+retry:
   /*
     In many cases first table of main SELECT_LEX have special meaning =>
     check that it is first table in global list and relink it first in 
@@ -5958,8 +5959,16 @@ finish:
 #ifdef WITH_PARTITION_STORAGE_ENGINE
   /* NB: We cannot do this before close_thread_tables() because
          upgrading MDL on locked table leads to a deadlock. */
-  if (!thd->is_error() && !thd->vers_auto_part_tables.is_empty())
+  if (!thd->vers_auto_part_tables.is_empty())
+  {
     vers_add_auto_parts(thd);
+    all_tables->table= NULL;
+    all_tables->mdl_request.ticket= NULL;
+    delete_explain_query(thd->lex);
+    thd->mdl_context.release_transactional_locks();
+    thd->clear_error();
+    goto retry;
+  }
 #endif /* WITH_PARTITION_STORAGE_ENGINE */
 
 #ifndef DBUG_OFF

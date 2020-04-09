@@ -3981,7 +3981,11 @@ int ha_partition::external_lock(THD *thd, int lock_type)
          only for versioned DML. */
       thd->lex->sql_command != SQLCOM_SELECT &&
       thd->lex->sql_command != SQLCOM_INSERT_SELECT)
+    {
       m_part_info->vers_set_hist_part(thd);
+      error= HA_ERR_GENERIC;
+      goto err_handler;
+    }
   }
   DBUG_RETURN(0);
 
@@ -4133,11 +4137,15 @@ int ha_partition::start_stmt(THD *thd, thr_lock_type lock_type)
   case TL_WRITE_ONLY:
     if (m_part_info->part_expr)
       m_part_info->part_expr->walk(&Item::register_field_in_read_map, 1, 0);
-    if (m_part_info->part_type == VERSIONING_PARTITION &&
-      // TODO: MDEV-20345 (see above)
-      thd->lex->sql_command != SQLCOM_SELECT &&
-      thd->lex->sql_command != SQLCOM_INSERT_SELECT)
+    if (!error &&
+        m_part_info->part_type == VERSIONING_PARTITION &&
+        // TODO: MDEV-20345 (see above)
+        thd->lex->sql_command != SQLCOM_SELECT &&
+        thd->lex->sql_command != SQLCOM_INSERT_SELECT)
+    {
       m_part_info->vers_set_hist_part(thd);
+      error= HA_ERR_GENERIC;
+    }
   default:;
   }
   DBUG_RETURN(error);
