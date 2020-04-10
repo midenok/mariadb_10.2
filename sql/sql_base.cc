@@ -2009,6 +2009,19 @@ retry_share:
     tc_add_table(thd, table);
   }
 
+  DBUG_EXECUTE_IF("add_partition", {
+    if (strcmp(table_list->alias.str, "ptab") == 0 &&
+        table_list->lock_type >= TL_WRITE_ALLOW_WRITE &&
+        table_list->mdl_request.type == MDL_SHARED_WRITE &&
+        table->part_info->num_parts == 3) {
+      ot_ctx->request_backoff_action(Open_table_context::OT_ADD_HISTORY_PARTITION,
+                                     table_list);
+      MYSQL_UNBIND_TABLE(table->file);
+      tc_release_table(table);
+      DBUG_RETURN(TRUE);
+    }
+  });
+
   if (!(flags & MYSQL_OPEN_HAS_MDL_LOCK) &&
       table->s->table_category < TABLE_CATEGORY_INFORMATION)
   {
@@ -3040,7 +3053,8 @@ request_backoff_action(enum_open_table_action action_arg,
   */
   if (table)
   {
-    DBUG_ASSERT(action_arg == OT_DISCOVER || action_arg == OT_REPAIR);
+    DBUG_ASSERT(action_arg == OT_DISCOVER || action_arg == OT_REPAIR ||
+                action_arg == OT_ADD_HISTORY_PARTITION);
     m_failed_table= (TABLE_LIST*) m_thd->alloc(sizeof(TABLE_LIST));
     if (m_failed_table == NULL)
       return TRUE;
@@ -3107,6 +3121,7 @@ Open_table_context::recover_from_failed_open()
       break;
     case OT_DISCOVER:
     case OT_REPAIR:
+    case OT_ADD_HISTORY_PARTITION:
       if ((result= lock_table_names(m_thd, m_thd->lex->create_info,
                                     m_failed_table, NULL,
                                     get_timeout(), 0)))
@@ -3141,6 +3156,67 @@ Open_table_context::recover_from_failed_open()
         case OT_REPAIR:
           result= auto_repair_table(m_thd, m_failed_table);
           break;
+        case OT_ADD_HISTORY_PARTITION:
+        {
+          TABLE *table= open_ltable(m_thd, m_failed_table, TL_WRITE,
+                    MYSQL_OPEN_HAS_MDL_LOCK | MYSQL_OPEN_IGNORE_LOGGING_FORMAT);
+          if ((result= table == NULL))
+            break;
+
+          Alter_info alter_info;
+          HA_CREATE_INFO create_info;
+          TABLE_LIST *tl= m_failed_table;
+          THD *thd= m_thd;
+
+          alter_info.partition_flags= ALTER_PARTITION_ADD;
+          create_info.init();
+          create_info.alter_info= &alter_info;
+          Alter_table_ctx alter_ctx(thd, tl, 1, &table->s->db, &table->s->table_name);
+          create_info.db_type= table->s->db_type();
+
+          partition_info *part_info= new partition_info();
+          part_info->use_default_partitions = false;
+          part_info->use_default_num_partitions= false;
+          part_info->use_default_num_subpartitions= false;
+          part_info->num_parts= 1;
+          part_info->num_subparts= table->part_info->num_subparts;
+          part_info->subpart_type= table->part_info->subpart_type;
+          part_info->part_type= RANGE_PARTITION;
+          thd->work_part_info= part_info;
+
+          partition_element *part_elem= new partition_element();
+          part_elem->engine_type= part_info->default_engine_type;
+          part_elem->partition_name= "p3";
+          part_elem->id= 3;
+
+          part_info->partitions.push_back(part_elem);
+          part_info->curr_part_elem= part_elem;
+          part_info->init_column_part(thd);
+          part_info->add_max_value(thd);
+          part_info->num_columns= 1;
+
+
+          bool partition_changed= false;
+          bool fast_alter_partition= false;
+          thd->lex->no_write_to_binlog= false;
+          result= prep_alter_part_table(thd, table, &alter_info, &create_info,
+                                    &partition_changed, &fast_alter_partition);
+          DBUG_ASSERT(!result);
+          DBUG_ASSERT(fast_alter_partition);
+          DBUG_ASSERT(partition_changed);
+
+          result= mysql_prepare_alter_table(thd, table, &create_info,
+                                            &alter_info, &alter_ctx);
+          DBUG_ASSERT(!result);
+          result= fast_alter_partition_table(thd, table, &alter_info,
+                     &create_info, tl, &table->s->db, &table->s->table_name);
+          DBUG_ASSERT(!result);
+
+          close_tables_for_reopen(thd, &tl, start_of_statement_svp());
+
+          m_thd->clear_error(1);
+          break;
+        }
         case OT_BACKOFF_AND_RETRY:
         case OT_REOPEN_TABLES:
         case OT_NO_ACTION:
@@ -4998,7 +5074,8 @@ TABLE *open_ltable(THD *thd, TABLE_LIST *table_list, thr_lock_type lock_type,
   table_list->required_type= TABLE_TYPE_NORMAL;
 
   /* This function can't properly handle requests for such metadata locks. */
-  DBUG_ASSERT(table_list->mdl_request.type < MDL_SHARED_UPGRADABLE);
+  DBUG_ASSERT(lock_flags & MYSQL_OPEN_HAS_MDL_LOCK  ||
+              table_list->mdl_request.type < MDL_SHARED_UPGRADABLE);
 
   while ((error= open_table(thd, table_list, &ot_ctx)) &&
          ot_ctx.can_recover_from_failed_open())

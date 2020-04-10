@@ -531,7 +531,8 @@ public:
     OT_BACKOFF_AND_RETRY,
     OT_REOPEN_TABLES,
     OT_DISCOVER,
-    OT_REPAIR
+    OT_REPAIR,
+    OT_ADD_HISTORY_PARTITION
   };
   Open_table_context(THD *thd, uint flags);
 
