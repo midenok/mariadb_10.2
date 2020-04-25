@@ -5219,6 +5219,7 @@ int ha_create_table(THD *thd, const char *path,
       if (error)
         goto fk_err;
     }
+    // FIXME: deactivate all DDL_LOG_REPLACE_ACTION (this must be atomic!)
     for (FK_ddl_backup &bak: fk_shares)
       bak.sa.share->fk_drop_backup_frm(fk_shares);
   }

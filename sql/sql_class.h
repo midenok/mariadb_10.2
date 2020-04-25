@@ -847,24 +847,38 @@ struct ddl_log_info
 };
 
 
-// NB: FK_ddl_backup responds for share release unlike FK_alter_backup
-class FK_ddl_backup
+class FK_backup
+{
+public:
+  FK_list foreign_keys;
+  FK_list referenced_keys;
+  bool fk_write_shadow_frm(ddl_log_info& log_info);
+  virtual TABLE_SHARE *get_share() const= 0;
+};
+
+
+// NB: FK_ddl_backup responds for share release unlike FK_table_backup
+class FK_ddl_backup : public FK_backup
 {
 public:
   Share_acquire sa;
-  FK_list foreign_keys;
-  FK_list referenced_keys;
 
-  FK_ddl_backup() {}
   FK_ddl_backup(Share_acquire&& _sa);
   FK_ddl_backup(const FK_ddl_backup&)= delete;
   FK_ddl_backup(FK_ddl_backup&& src) :
-    sa(std::move(src.sa)),
-    foreign_keys(src.foreign_keys),
-    referenced_keys(src.referenced_keys)
+    FK_backup(std::move(src)),
+    sa(std::move(src.sa))
   {}
 
   void rollback(ddl_log_info& log_info);
+  bool backup_frm(ddl_log_info &log_info, Table_name table);
+  TABLE_SHARE *get_share() const
+  {
+    return sa.share;
+  }
+
+protected:
+  FK_ddl_backup() {}
 };
 
 

@@ -549,19 +549,22 @@ error:
   return false;
 }
 
-bool TABLE_SHARE::fk_write_shadow_frm(ddl_log_info &log_info)
+bool FK_backup::fk_write_shadow_frm(ddl_log_info &log_info)
 {
   char shadow_path[FN_REFLEN + 1];
+  TABLE_SHARE *s= get_share();
+  DBUG_ASSERT(s);
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              db, table_name, tmp_fk_prefix);
+                              s->db, s->table_name, tmp_fk_prefix);
   if (log_info.write_log_replace_delete_frm(0, NULL, shadow_path, false))
     return true;
-  bool err= fk_write_shadow_frm_impl(shadow_path);
+  bool err= s->fk_write_shadow_frm_impl(shadow_path);
   if (ERROR_INJECT("fail_fk_write_shadow", "crash_fk_write_shadow"))
     return true;
   return err;
 }
 
+// bool FK_ddl_backup::backup_frm(ddl_log_info &log_info, Table_name table)
 bool fk_backup_frm(ddl_log_info &log_info, Table_name table)
 {
   MY_STAT stat_info;
@@ -614,6 +617,7 @@ bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name old_name,
 bool TABLE_SHARE::fk_install_shadow_frm(ddl_log_info &log_info)
 {
   return ::fk_install_shadow_frm(log_info, {db, table_name}, {db, table_name});
+  // FIXME: deactivate DDL_LOG_DELETE_ACTION for shadow
 }
 
 void fk_drop_shadow_frm(ddl_log_info &log_info, Table_name table)

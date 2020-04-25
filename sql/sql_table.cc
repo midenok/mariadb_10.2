@@ -12098,7 +12098,7 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
       }
     } // for (const FK_info &fk: foreign_keys)
 
-    if (ref_share->fk_write_shadow_frm(shares))
+    if (ref.fk_write_shadow_frm(shares))
       return true;
   } // for (ref_tables)
 
@@ -12109,7 +12109,6 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
 // Used in ALTER TABLE
 bool Alter_table_ctx::fk_handle_alter(THD *thd)
 {
-  set<TABLE_SHARE *> shares_to_write; // write FRMs to disk
   if (ERROR_INJECT("fail_fk_alter_1", "crash_fk_alter_1"))
     return true;
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, db.str,
@@ -12175,7 +12174,6 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
     FK_ref_backup *ref_bak= fk_add_backup(fk_share);
     if (!ref_bak)
       return true;
-    bool modified= false;
     for (FK_info &rk: fk_share->foreign_keys)
     {
       if (0 != ren_col.table.cmp({fk_share->db, fk_share->table_name}))
@@ -12189,14 +12187,9 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
           my_error(ER_OUT_OF_RESOURCES, MYF(0));
           return true;
         }
-        modified= true;
+        ref_bak->install_shadow= true;
       }
     }
-    if (!modified)
-      continue;
-    if (!shares_to_write.insert(fk_share))
-      return true;
-    ref_bak->install_shadow= true;
   }
 
   /* Add new referenced_keys to referenced tables. FRM write is required. */
@@ -12283,9 +12276,6 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
       my_error(ER_OUT_OF_RESOURCES, MYF(0));
       return true;
     }
-
-    if (!shares_to_write.insert(ref_share))
-      return true;
   } // for (const FK_add_new &new_fk: fk_added_new)
 
   /* Remove dropped referenced_keys in referenced tables. FRM write is required. */
@@ -12310,11 +12300,8 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
       ref_it.remove();
       break;
     }
-    if (!rk)
-      continue;
-    if (!shares_to_write.insert(ref_share))
-      return true;
-    ref_bak->install_shadow= true;
+    if (rk)
+      ref_bak->install_shadow= true;
   }
 
   /* Handle table rename. FRM write is required. */
@@ -12354,8 +12341,6 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
         }
       }
     }
-    if (!shares_to_write.insert(ref_share))
-      return true;
     ref_bak->install_shadow= true;
   } // for (const Table_name &ref: fk_renamed_table)
 
@@ -12395,15 +12380,14 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
         }
       }
     }
-    if (!shares_to_write.insert(fk_share))
-      return true;
     ref_bak->install_shadow= true;
   } // for (const Table_name &ref: rk_renamed_table)
 
   /* Update EXTRA2_FOREIGN_KEY_INFO section in FRM files. */
-  for (TABLE_SHARE *s: shares_to_write)
+  for (auto &key_val: fk_ref_backup)
   {
-    if (s->fk_write_shadow_frm(fk_ddl_info))
+    FK_ref_backup *ref_bak= const_cast<FK_ref_backup *>(&key_val.second);
+    if (ref_bak->install_shadow && ref_bak->fk_write_shadow_frm(fk_ddl_info))
       return true;
   }
 
@@ -12576,7 +12560,7 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, FK_create_vector &shares,
         ref_it.remove();
       }
     }
-    if (ref.sa.share->fk_write_shadow_frm(shares))
+    if (ref.fk_write_shadow_frm(shares))
       return true;
   }
 
@@ -12645,8 +12629,9 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
       goto mem_error;
   }
 
-  if (share->fk_write_shadow_frm(fk_rename_backup))
-    return true;
+  // FIXME:
+//   if (share->fk_write_shadow_frm(fk_rename_backup))
+//     return true;
 
   // NB: share is closed before rename, we can't store it into fk_rename_backup
   fk_rename_backup.push_back({{old_table->db, old_table->table_name},
@@ -12713,7 +12698,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
           rk.foreign_table.strdup(&ref_share->mem_root, *new_table_name))
         goto mem_error;
     }
-    if (ref_share->fk_write_shadow_frm(fk_rename_backup))
+    if (ref.fk_write_shadow_frm(fk_rename_backup))
       return true;
   }
 
