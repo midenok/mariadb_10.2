@@ -50,7 +50,7 @@ struct TABLE_LIST;
 class ACL_internal_schema_access;
 class ACL_internal_table_access;
 class Field;
-class FK_create_vector;
+class FK_ddl_vector;
 class Table_name;
 class Table_name_set;
 class Table_statistics;
@@ -648,7 +648,7 @@ struct TABLE_SHARE
   KEY  *key_info;			/* data of keys in database */
   FK_list foreign_keys;
   FK_list referenced_keys;
-  bool fk_handle_create(THD *thd, FK_create_vector &shares);
+  bool fk_handle_create(THD *thd, FK_ddl_vector &shares);
   void fk_revert_create(THD *thd, Table_name_set &ref_tables);
 #ifndef DBUG_OFF
   bool dbug_check_foreign_keys(THD *thd);
@@ -1727,6 +1727,13 @@ public:
   Lex_cstring ref_db() const
   {
     return referenced_db.str ? referenced_db : foreign_db;
+  }
+  bool self_ref() const
+  {
+    if (referenced_db.length && 0 != cmp_table(referenced_db, foreign_db))
+      return false;
+    // TODO: keep NULL in referenced_table for self-refs
+    return 0 == cmp_table(referenced_table, foreign_table);
   }
   bool assign(Foreign_key &fk, Table_name table);
   FK_info * clone(MEM_ROOT *mem_root) const;

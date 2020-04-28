@@ -882,22 +882,7 @@ protected:
 };
 
 
-class FK_rename_backup : public FK_ddl_backup
-{
-public:
-  FK_rename_backup(Share_acquire&& _sa);
-  FK_rename_backup(Table_name _old_name, Table_name _new_name) :
-    old_name(_old_name), new_name(_new_name) {}
-  Table_name old_name;
-  Table_name new_name;
-  void rollback(ddl_log_info &);
-};
-
-
-class FK_create_vector: public vector<FK_ddl_backup>,
-                        public ddl_log_info {};
-class FK_rename_vector: public vector<FK_rename_backup>,
-                        public ddl_log_info {};
+class FK_ddl_vector: public vector<FK_ddl_backup>, public ddl_log_info {};
 
 
 #include "sql_lex.h"				/* Must be here */

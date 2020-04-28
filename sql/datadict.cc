@@ -593,8 +593,7 @@ bool TABLE_SHARE::fk_backup_frm(ddl_log_info &log_info)
   return ::fk_backup_frm(log_info, {db, table_name});
 }
 
-bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name old_name,
-                           Table_name new_name)
+bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name table)
 {
   MY_STAT stat_info;
   char shadow_path[FN_REFLEN + 1];
@@ -602,9 +601,9 @@ bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name old_name,
   char shadow_frm_name[FN_REFLEN + 1];
   char frm_name[FN_REFLEN + 1];
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              old_name.db, old_name.name, tmp_fk_prefix);
-  build_table_filename(path, sizeof(path), new_name.db.str,
-                       new_name.name.str, "", 0);
+                              table.db, table.name, tmp_fk_prefix);
+  build_table_filename(path, sizeof(path), table.db.str,
+                       table.name.str, "", 0);
   strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
   strxnmov(frm_name, sizeof(frm_name), path, reg_ext, NullS);
   if (!mysql_file_stat(key_file_frm, shadow_frm_name, &stat_info, MYF(MY_WME)))
@@ -616,7 +615,7 @@ bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name old_name,
 
 bool TABLE_SHARE::fk_install_shadow_frm(ddl_log_info &log_info)
 {
-  return ::fk_install_shadow_frm(log_info, {db, table_name}, {db, table_name});
+  return ::fk_install_shadow_frm(log_info, {db, table_name});
   // FIXME: deactivate DDL_LOG_DELETE_ACTION for shadow
 }
 

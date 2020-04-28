@@ -85,7 +85,7 @@ static bool fix_constraints_names(THD *thd, List<Virtual_column_info>
                                   *check_constraint_list,
                                   const HA_CREATE_INFO *create_info);
 static
-bool fk_handle_drop(THD* thd, TABLE_LIST* table, FK_create_vector& shares,
+bool fk_handle_drop(THD* thd, TABLE_LIST* table, FK_ddl_vector& shares,
                     bool drop_db);
 
 /**
@@ -2472,7 +2472,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     {
       char *end;
       int frm_delete_error= 0;
-      FK_create_vector shares;
+      FK_ddl_vector shares;
       if (fk_handle_drop(thd, table, shares, drop_db))
       {
         error= 1;
@@ -9676,7 +9676,7 @@ simple_rename_or_index_change(THD *thd, TABLE_LIST *table_list,
   if (likely(!error) && alter_ctx->is_table_renamed())
   {
     THD_STAGE_INFO(thd, stage_rename);
-    FK_rename_vector fk_rename_backup;
+    FK_ddl_vector fk_rename_backup;
     handlerton *old_db_type= table->s->db_type();
     /*
       Then do a 'simple' rename of the table. First we need to close all
@@ -9719,25 +9719,25 @@ simple_rename_or_index_change(THD *thd, TABLE_LIST *table_list,
                                          &alter_ctx->table_name,
                                          &alter_ctx->new_db,
                                          &alter_ctx->new_name);
-      for (FK_rename_backup &bak: fk_rename_backup)
+      for (FK_ddl_backup &bak: fk_rename_backup)
       {
         // NB: this can be foreign/ref table as well as renamed table
-        error= fk_backup_frm(fk_rename_backup, bak.new_name);
+        error= bak.sa.share->fk_backup_frm(fk_rename_backup);
         if (error)
           goto err;
       }
-      for (FK_rename_backup &bak: fk_rename_backup)
+      for (FK_ddl_backup &bak: fk_rename_backup)
       {
-        error= fk_install_shadow_frm(fk_rename_backup, bak.old_name, bak.new_name);
+        error= bak.sa.share->fk_install_shadow_frm(fk_rename_backup);
         if (error)
           goto err;
       }
-      for (FK_rename_backup &bak: fk_rename_backup)
-        fk_drop_backup_frm(fk_rename_backup, bak.new_name);
+      for (FK_ddl_backup &bak: fk_rename_backup)
+        bak.sa.share->fk_drop_backup_frm(fk_rename_backup);
     }
     else
     {
-      for (FK_rename_backup &bak: fk_rename_backup)
+      for (FK_ddl_backup &bak: fk_rename_backup)
         bak.rollback(fk_rename_backup);
     }
   }
@@ -12018,7 +12018,7 @@ wsrep_error_label:
 
 
 // Used in CREATE TABLE
-bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
+bool TABLE_SHARE::fk_handle_create(THD *thd, FK_ddl_vector &shares)
 {
   if (foreign_keys.is_empty())
     return false;
@@ -12466,7 +12466,7 @@ bool Alter_table_ctx::fk_install_frms()
 /* Used in DROP TABLE: remove table from referenced_keys of referenced tables,
    prohibit if foreign_keys is not empty. */
 static
-bool fk_handle_drop(THD *thd, TABLE_LIST *table, FK_create_vector &shares,
+bool fk_handle_drop(THD *thd, TABLE_LIST *table, FK_ddl_vector &shares,
                     bool drop_db)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, table->db.str,
@@ -12575,7 +12575,7 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, FK_create_vector &shares,
 */
 bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db,
                       const LEX_CSTRING *new_table_name,
-                      FK_rename_vector &fk_rename_backup)
+                      FK_ddl_vector &fk_rename_backup)
 {
   DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, old_table->db.str,
                                              old_table->table_name.str,
@@ -12629,14 +12629,6 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
       goto mem_error;
   }
 
-  // FIXME:
-//   if (share->fk_write_shadow_frm(fk_rename_backup))
-//     return true;
-
-  // NB: share is closed before rename, we can't store it into fk_rename_backup
-  fk_rename_backup.push_back({{old_table->db, old_table->table_name},
-                              {*new_db, *new_table_name}});
-
   if (tables.empty())
     return false;
 
@@ -12657,7 +12649,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
   if (thd->mdl_context.acquire_locks(&mdl_list, thd->variables.lock_wait_timeout))
     return true;
 
-  fk_rename_backup.reserve(1 + tables.size());
+  fk_rename_backup.reserve(tables.size());
 
   for (const Table_name &ref: tables)
   {
@@ -12737,16 +12729,6 @@ FK_ddl_backup::rollback(ddl_log_info& log_info)
   sa.share->foreign_keys= foreign_keys;
   sa.share->referenced_keys= referenced_keys;
   sa.share->fk_drop_shadow_frm(log_info);
-}
-
-
-void
-FK_rename_backup::rollback(ddl_log_info &log_info)
-{
-  if (sa.share)
-    FK_ddl_backup::rollback(log_info);
-  else
-    fk_drop_shadow_frm(log_info, old_name);
 }
 
 

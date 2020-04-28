@@ -134,7 +134,6 @@ struct Extra2_info
 
 class Table_name;
 bool fk_backup_frm(ddl_log_info &log_info, Table_name table);
-bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name old_name, Table_name new_name);
 void fk_drop_shadow_frm(ddl_log_info &log_info, Table_name table);
 void fk_drop_backup_frm(ddl_log_info &log_info, Table_name table);
 

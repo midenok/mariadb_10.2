@@ -26,7 +26,7 @@ class Alter_info;
 class Alter_table_ctx;
 class Column_definition;
 class Create_field;
-class FK_rename_vector;
+class FK_ddl_vector;
 struct TABLE_LIST;
 class THD;
 struct TABLE;
@@ -210,7 +210,7 @@ bool execute_ddl_log_entry(THD *thd, uint first_entry);
 
 bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db,
                       const LEX_CSTRING *new_table_name,
-                      FK_rename_vector &fk_rename_backup);
+                      FK_ddl_vector &fk_rename_backup);
 
 template<typename T> class List;
 void promote_first_timestamp_column(List<Create_field> *column_definitions);
