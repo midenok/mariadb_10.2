@@ -853,6 +853,10 @@ public:
   FK_list foreign_keys;
   FK_list referenced_keys;
   bool fk_write_shadow_frm(ddl_log_info& log_info);
+  bool fk_backup_frm(ddl_log_info& log_info);
+  bool fk_install_shadow_frm(ddl_log_info& log_info);
+  void fk_drop_shadow_frm(ddl_log_info& log_info);
+  void fk_drop_backup_frm(ddl_log_info& log_info);
   virtual TABLE_SHARE *get_share() const= 0;
 };
 

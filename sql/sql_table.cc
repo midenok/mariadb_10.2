@@ -2573,7 +2573,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
       {
         for (FK_ddl_backup &bak: shares)
         {
-          error|= bak.sa.share->fk_install_shadow_frm(shares);
+          error|= bak.fk_install_shadow_frm(shares);
         }
       }
       else
@@ -9722,18 +9722,18 @@ simple_rename_or_index_change(THD *thd, TABLE_LIST *table_list,
       for (FK_ddl_backup &bak: fk_rename_backup)
       {
         // NB: this can be foreign/ref table as well as renamed table
-        error= bak.sa.share->fk_backup_frm(fk_rename_backup);
+        error= bak.fk_backup_frm(fk_rename_backup);
         if (error)
           goto err;
       }
       for (FK_ddl_backup &bak: fk_rename_backup)
       {
-        error= bak.sa.share->fk_install_shadow_frm(fk_rename_backup);
+        error= bak.fk_install_shadow_frm(fk_rename_backup);
         if (error)
           goto err;
       }
       for (FK_ddl_backup &bak: fk_rename_backup)
-        bak.sa.share->fk_drop_backup_frm(fk_rename_backup);
+        bak.fk_drop_backup_frm(fk_rename_backup);
     }
     else
     {
@@ -12416,7 +12416,7 @@ void Alter_table_ctx::fk_rollback()
   {
     FK_ref_backup *ref_bak= const_cast<FK_ref_backup *>(&key_val.second);
     if (ref_bak->install_shadow)
-      ref_bak->share->fk_drop_shadow_frm(fk_ddl_info);
+      ref_bak->fk_drop_shadow_frm(fk_ddl_info);
     ref_bak->rollback();
   }
 }
@@ -12443,13 +12443,13 @@ bool Alter_table_ctx::fk_install_frms()
   {
     FK_ref_backup *ref_bak= const_cast<FK_ref_backup *>(&key_val.second);
     DBUG_ASSERT(ref_bak->share);
-    if (ref_bak->install_shadow && ref_bak->share->fk_backup_frm(fk_ddl_info))
+    if (ref_bak->install_shadow && ref_bak->fk_backup_frm(fk_ddl_info))
       return true;
   }
   for (auto &key_val: fk_ref_backup)
   {
     FK_ref_backup *ref_bak= const_cast<FK_ref_backup *>(&key_val.second);
-    if (ref_bak->install_shadow && ref_bak->share->fk_install_shadow_frm(fk_ddl_info))
+    if (ref_bak->install_shadow && ref_bak->fk_install_shadow_frm(fk_ddl_info))
       // FIXME: replay log if failed
       return true;
   }
@@ -12457,7 +12457,7 @@ bool Alter_table_ctx::fk_install_frms()
   {
     FK_ref_backup *ref_bak= const_cast<FK_ref_backup *>(&key_val.second);
     if (ref_bak->install_shadow)
-      ref_bak->share->fk_drop_backup_frm(fk_ddl_info);
+      ref_bak->fk_drop_backup_frm(fk_ddl_info);
   }
   return false;
 }
@@ -12728,7 +12728,7 @@ FK_ddl_backup::rollback(ddl_log_info& log_info)
   DBUG_ASSERT(sa.share);
   sa.share->foreign_keys= foreign_keys;
   sa.share->referenced_keys= referenced_keys;
-  sa.share->fk_drop_shadow_frm(log_info);
+  fk_drop_shadow_frm(log_info);
 }
 
 

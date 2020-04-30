@@ -549,6 +549,7 @@ error:
   return false;
 }
 
+
 bool FK_backup::fk_write_shadow_frm(ddl_log_info &log_info)
 {
   char shadow_path[FN_REFLEN + 1];
@@ -564,16 +565,18 @@ bool FK_backup::fk_write_shadow_frm(ddl_log_info &log_info)
   return err;
 }
 
+
 // bool FK_ddl_backup::backup_frm(ddl_log_info &log_info, Table_name table)
-bool fk_backup_frm(ddl_log_info &log_info, Table_name table)
+bool FK_backup::fk_backup_frm(ddl_log_info &log_info)
 {
   MY_STAT stat_info;
   DBUG_ASSERT(0 != strcmp(reg_ext, bak_ext));
   char path[FN_REFLEN + 1];
   char bak_name[FN_REFLEN + 1];
   char frm_name[FN_REFLEN + 1];
-  build_table_filename(path, sizeof(path), table.db.str,
-                       table.name.str, "", 0);
+  TABLE_SHARE *s= get_share();
+  build_table_filename(path, sizeof(path), s->db.str,
+                       s->table_name.str, "", 0);
   strxnmov(frm_name, sizeof(frm_name), path, reg_ext, NullS);
   strxnmov(bak_name, sizeof(bak_name), path, bak_ext, NullS);
   if (mysql_file_stat(key_file_frm, bak_name, &stat_info, MYF(0)))
@@ -588,22 +591,19 @@ bool fk_backup_frm(ddl_log_info &log_info, Table_name table)
   return false;
 }
 
-bool TABLE_SHARE::fk_backup_frm(ddl_log_info &log_info)
-{
-  return ::fk_backup_frm(log_info, {db, table_name});
-}
 
-bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name table)
+bool FK_backup::fk_install_shadow_frm(ddl_log_info &log_info)
 {
   MY_STAT stat_info;
   char shadow_path[FN_REFLEN + 1];
   char path[FN_REFLEN + 1];
   char shadow_frm_name[FN_REFLEN + 1];
   char frm_name[FN_REFLEN + 1];
+  TABLE_SHARE *s= get_share();
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              table.db, table.name, tmp_fk_prefix);
-  build_table_filename(path, sizeof(path), table.db.str,
-                       table.name.str, "", 0);
+                              s->db, s->table_name, tmp_fk_prefix);
+  build_table_filename(path, sizeof(path), s->db.str,
+                       s->table_name.str, "", 0);
   strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
   strxnmov(frm_name, sizeof(frm_name), path, reg_ext, NullS);
   if (!mysql_file_stat(key_file_frm, shadow_frm_name, &stat_info, MYF(MY_WME)))
@@ -611,40 +611,30 @@ bool fk_install_shadow_frm(ddl_log_info &log_info, Table_name table)
   if (mysql_file_rename(key_file_frm, shadow_frm_name, frm_name, MYF(MY_WME)))
     return true;
   return false;
-}
-
-bool TABLE_SHARE::fk_install_shadow_frm(ddl_log_info &log_info)
-{
-  return ::fk_install_shadow_frm(log_info, {db, table_name});
   // FIXME: deactivate DDL_LOG_DELETE_ACTION for shadow
 }
 
-void fk_drop_shadow_frm(ddl_log_info &log_info, Table_name table)
+
+void FK_backup::fk_drop_shadow_frm(ddl_log_info &log_info)
 {
   char shadow_path[FN_REFLEN+1];
   char shadow_frm_name[FN_REFLEN+1];
+  TABLE_SHARE *s= get_share();
   build_table_shadow_filename(shadow_path, sizeof(shadow_path) - 1,
-                              table.db, table.name, tmp_fk_prefix);
+                              s->db, s->table_name, tmp_fk_prefix);
   strxnmov(shadow_frm_name, sizeof(shadow_frm_name), shadow_path, reg_ext, NullS);
   mysql_file_delete(key_file_frm, shadow_frm_name, MYF(0));
 }
 
-void TABLE_SHARE::fk_drop_shadow_frm(ddl_log_info &log_info)
-{
-  ::fk_drop_shadow_frm(log_info, {db, table_name});
-}
 
-void fk_drop_backup_frm(ddl_log_info &log_info, Table_name table)
+
+void FK_backup::fk_drop_backup_frm(ddl_log_info &log_info)
 {
   char path[FN_REFLEN + 1];
   char bak_name[FN_REFLEN + 1];
-  build_table_filename(path, sizeof(path), table.db.str,
-                       table.name.str, "", 0);
+  TABLE_SHARE *s= get_share();
+  build_table_filename(path, sizeof(path), s->db.str,
+                       s->table_name.str, "", 0);
   strxnmov(bak_name, sizeof(bak_name), path, bak_ext, NullS);
   mysql_file_delete(key_file_frm, bak_name, MYF(0));
-}
-
-void TABLE_SHARE::fk_drop_backup_frm(ddl_log_info &log_info)
-{
-  ::fk_drop_backup_frm(log_info, {db, table_name});
 }
