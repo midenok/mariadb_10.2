@@ -190,6 +190,12 @@ bool mysql_rename_tables(THD *thd, TABLE_LIST *table_list, bool silent)
         break;
     }
     for (FK_ddl_backup &bak: fk_rename_backup)
+    {
+      error= deactivate_ddl_log_entry(bak.restore_backup_entry->entry_pos);
+      if (error)
+        break;
+    }
+    for (FK_ddl_backup &bak: fk_rename_backup)
       bak.fk_drop_backup_frm(fk_rename_backup);
   }
 

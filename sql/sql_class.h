@@ -839,9 +839,10 @@ typedef struct st_ddl_log_memory_entry
 
 struct ddl_log_info
 {
-  ddl_log_info() : first_entry(NULL), exec_entry(NULL) {}
-  DDL_LOG_MEMORY_ENTRY *first_entry;
+  ddl_log_info() : first_entry(NULL), exec_entry(NULL), log_entry(NULL) {}
+  DDL_LOG_MEMORY_ENTRY *first_entry; // FIXME: is it needed?
   DDL_LOG_MEMORY_ENTRY *exec_entry;
+  DDL_LOG_MEMORY_ENTRY *log_entry;
   bool write_log_replace_delete_frm(uint next_entry, const char *from_path,
                                     const char *to_path, bool replace_flag);
 };
@@ -850,6 +851,14 @@ struct ddl_log_info
 class FK_backup
 {
 public:
+  DDL_LOG_MEMORY_ENTRY *delete_shadow_entry;
+  DDL_LOG_MEMORY_ENTRY *restore_backup_entry;
+
+public:
+  FK_backup() :
+    delete_shadow_entry(NULL),
+    restore_backup_entry(NULL)
+  {}
   FK_list foreign_keys;
   FK_list referenced_keys;
   bool fk_write_shadow_frm(ddl_log_info& log_info);
@@ -886,7 +895,11 @@ protected:
 };
 
 
-class FK_ddl_vector: public vector<FK_ddl_backup>, public ddl_log_info {};
+class FK_ddl_vector: public vector<FK_ddl_backup>, public ddl_log_info
+{
+public:
+  void install_shadow_frms();
+};
 
 
 #include "sql_lex.h"				/* Must be here */

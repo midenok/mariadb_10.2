@@ -132,11 +132,6 @@ struct Extra2_info
   uchar * write(uchar* frm_image, size_t frm_size);
 };
 
-class Table_name;
-bool fk_backup_frm(ddl_log_info &log_info, Table_name table);
-void fk_drop_shadow_frm(ddl_log_info &log_info, Table_name table);
-void fk_drop_backup_frm(ddl_log_info &log_info, Table_name table);
-
 /*
   Take extra care when using dd_frm_type() - it only checks the .frm file,
   and it won't work for any engine that supports discovery.

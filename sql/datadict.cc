@@ -516,9 +516,6 @@ bool ddl_log_info::write_log_replace_delete_frm(uint next_entry,
                                                 bool replace_flag)
 {
   DDL_LOG_ENTRY ddl_log_entry;
-  DDL_LOG_MEMORY_ENTRY *log_entry;
-  DDL_LOG_MEMORY_ENTRY *first_log_entry; // FIXME: ???
-  DDL_LOG_MEMORY_ENTRY *exec_log_entry= NULL;
 
   if (replace_flag)
     ddl_log_entry.action_type= DDL_LOG_REPLACE_ACTION;
@@ -541,7 +538,7 @@ error:
   }
   if (ERROR_INJECT("fail_log_replace_delete_2", "crash_log_replace_delete_2"))
     goto error;
-  if (write_execute_ddl_log_entry(log_entry->entry_pos, FALSE, &exec_log_entry))
+  if (write_execute_ddl_log_entry(log_entry->entry_pos, FALSE, &exec_entry))
     goto error;
   if (ERROR_INJECT("fail_log_replace_delete_3", "crash_log_replace_delete_3"))
     goto error;
@@ -559,6 +556,7 @@ bool FK_backup::fk_write_shadow_frm(ddl_log_info &log_info)
                               s->db, s->table_name, tmp_fk_prefix);
   if (log_info.write_log_replace_delete_frm(0, NULL, shadow_path, false))
     return true;
+  delete_shadow_entry= log_info.log_entry;
   bool err= s->fk_write_shadow_frm_impl(shadow_path);
   if (ERROR_INJECT("fail_fk_write_shadow", "crash_fk_write_shadow"))
     return true;
@@ -566,7 +564,6 @@ bool FK_backup::fk_write_shadow_frm(ddl_log_info &log_info)
 }
 
 
-// bool FK_ddl_backup::backup_frm(ddl_log_info &log_info, Table_name table)
 bool FK_backup::fk_backup_frm(ddl_log_info &log_info)
 {
   MY_STAT stat_info;
@@ -586,7 +583,10 @@ bool FK_backup::fk_backup_frm(ddl_log_info &log_info)
   }
   if (log_info.write_log_replace_delete_frm(0, bak_name, frm_name, true))
     return true;
+  restore_backup_entry= log_info.log_entry;
   if (mysql_file_rename(key_file_frm, frm_name, bak_name, MYF(MY_WME)))
+    return true;
+  if (ERROR_INJECT("fail_fk_backup_frm", "crash_fk_backup_frm"))
     return true;
   return false;
 }
@@ -610,8 +610,10 @@ bool FK_backup::fk_install_shadow_frm(ddl_log_info &log_info)
     return true;
   if (mysql_file_rename(key_file_frm, shadow_frm_name, frm_name, MYF(MY_WME)))
     return true;
+  if (deactivate_ddl_log_entry(delete_shadow_entry->entry_pos))
+    return true;
+  delete_shadow_entry= NULL;
   return false;
-  // FIXME: deactivate DDL_LOG_DELETE_ACTION for shadow
 }
 
 
@@ -637,4 +639,34 @@ void FK_backup::fk_drop_backup_frm(ddl_log_info &log_info)
                        s->table_name.str, "", 0);
   strxnmov(bak_name, sizeof(bak_name), path, bak_ext, NullS);
   mysql_file_delete(key_file_frm, bak_name, MYF(0));
+}
+
+
+void FK_ddl_vector::install_shadow_frms()
+{
+  if (!size())
+    return;
+  for (FK_ddl_backup &bak: *this)
+  {
+    if (bak.fk_backup_frm(*this))
+      goto error;
+  }
+  for (FK_ddl_backup &bak: *this)
+  {
+    if (bak.fk_install_shadow_frm(*this))
+      goto error;
+  }
+
+  for (FK_ddl_backup &bak: *this)
+    deactivate_ddl_log_entry(bak.restore_backup_entry->entry_pos);
+
+  for (FK_ddl_backup &bak: *this)
+    bak.fk_drop_backup_frm(*this);
+
+  return;
+
+error:
+  // FIXME: push warning
+  for (FK_ddl_backup &bak: *this)
+    bak.rollback(*this);
 }

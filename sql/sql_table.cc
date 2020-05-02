@@ -2571,10 +2571,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
       }
       if (likely(!error))
       {
-        for (FK_ddl_backup &bak: shares)
-        {
-          error|= bak.fk_install_shadow_frm(shares);
-        }
+        shares.install_shadow_frms();
       }
       else
       {
@@ -9733,6 +9730,12 @@ simple_rename_or_index_change(THD *thd, TABLE_LIST *table_list,
           goto err;
       }
       for (FK_ddl_backup &bak: fk_rename_backup)
+      {
+        error= deactivate_ddl_log_entry(bak.restore_backup_entry->entry_pos);
+        if (error)
+          goto err;
+      }
+      for (FK_ddl_backup &bak: fk_rename_backup)
         bak.fk_drop_backup_frm(fk_rename_backup);
     }
     else
@@ -12456,6 +12459,12 @@ bool Alter_table_ctx::fk_install_frms()
   for (auto &key_val: fk_ref_backup)
   {
     FK_ref_backup *ref_bak= const_cast<FK_ref_backup *>(&key_val.second);
+    if (ref_bak->install_shadow && deactivate_ddl_log_entry(ref_bak->restore_backup_entry->entry_pos))
+      return true;
+  }
+  for (auto &key_val: fk_ref_backup)
+  {
+    FK_ref_backup *ref_bak= const_cast<FK_ref_backup *>(&key_val.second);
     if (ref_bak->install_shadow)
       ref_bak->fk_drop_backup_frm(fk_ddl_info);
   }
@@ -12725,10 +12734,15 @@ FK_ddl_backup::FK_ddl_backup(Share_acquire&& _sa) :
 void
 FK_ddl_backup::rollback(ddl_log_info& log_info)
 {
+  // FIXME: add test case
+//   DBUG_ASSERT(0);
   DBUG_ASSERT(sa.share);
   sa.share->foreign_keys= foreign_keys;
   sa.share->referenced_keys= referenced_keys;
-  fk_drop_shadow_frm(log_info);
+  if (delete_shadow_entry)
+  {
+    delete_shadow_entry= NULL;
+  }
 }
 
 
