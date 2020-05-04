@@ -78,14 +78,10 @@ stages:
   jobs:
 
   - template: azure/stage0/build-source-tarball.yml
-
   - template: azure/stage0/build-binary-tarballs.yml
     parameters:
       BuildType: RelWithDebInfo
       Artifact: Release
-
-  - template: azure/stage0/build-rpm-packages.yml
-  - template: azure/stage0/build-deb-packages.yml
 
   - template: azure/stage0/build-windows-packages.yml
     parameters:
@@ -148,107 +144,6 @@ stages:
         TestName: 'Galera --big-test - Release'
         tarname: 'galera-big-test.tar.gz'
         Artifact: Release
-
-  - job: TestRPMs_Quick
-    timeoutInMinutes: 280
-    workspace:
-      clean: all
-    strategy:
-      maxParallel: 1
-      matrix:
-        rhel-6:
-          poolName: 'rhel-6'
-        rhel-7:
-          poolName: 'rhel-7'
-        rhel-8:
-          poolName: 'rhel-8'
-        sles-12:
-          poolName: 'sles-12'
-        sles-15:
-          poolName: 'sles-15'
-    pool:
-      name: $(poolName)
-
-    steps:
-
-    - checkout: none
-    - template: azure/prepare-vm-for-installation.yml
-    - template: azure/install-galera.yml
-
-    - task: DownloadBuildArtifacts@0
-      timeoutInMinutes: 10
-      inputs:
-        buildType: 'current'
-        specificBuildWithTriggering: true
-        downloadType: 'single'
-        artifactName: '$(poolName)-RPMS'
-        downloadPath: '$(System.ArtifactsDirectory)/current'
-
-    - bash: |
-        set -x
-        ls -la '$(System.ArtifactsDirectory)'
-        sudo yum -y --nogpgcheck install '$(System.ArtifactsDirectory)'/current/'$(poolName)'-RPMS/*.rpm
-      displayName: "Install built RPM packages on Centos/RHEL"
-      condition: and(succeeded(), in(variables['poolName'], 'rhel-6', 'rhel-7', 'rhel-8'))
-
-    - bash: |
-        set -x
-        ls -la '$(System.ArtifactsDirectory)'
-        sudo zypper --no-gpg-checks -n install '$(System.ArtifactsDirectory)'/current/'$(poolName)'-RPMS/*.rpm
-      displayName: "Install built RPM packages on SLES"
-      condition: and(succeeded(), in(variables['poolName'], 'sles-12', 'sles-15'))
-
-
-    - template: azure/tests/select-insert-test.yml
-    - template: azure/tests/run-acceptance-tests.yml
-    - template: azure/prepare-vm-for-installation.yml
-
-  - job: TestDEBs_Quick
-    timeoutInMinutes: 280
-    workspace:
-      clean: all
-    strategy:
-      maxParallel: 1
-      matrix:
-        ubuntu-1804:
-          poolName: 'ubuntu-1804'
-        debian-10:
-          poolName: 'debian-10'
-    pool:
-      name: $(poolName)
-
-    steps:
-
-    - checkout: none
-    - template: azure/prepare-vm-for-installation.yml
-    - template: azure/install-galera.yml
-
-    - task: DownloadBuildArtifacts@0
-      inputs:
-        buildType: 'current'
-        specificBuildWithTriggering: true
-        downloadType: 'single'
-        artifactName: '$(poolName)-DEBS'
-        downloadPath: '$(System.ArtifactsDirectory)/current'
-
-    - bash: |
-        set -x
-        ls -la '$(System.ArtifactsDirectory)'
-
-        sudo sh -c "echo 'deb [trusted=yes] file://$(System.ArtifactsDirectory)/current/$(poolName)-DEBS binary/' > ${DEB_LOCAL_LIST}"
-        sudo apt update
-        export DEBIAN_FRONTEND=noninteractive
-        sudo apt-get --allow-unauthenticated -y -f install \
-          mariadb-server mariadb-test mariadb-backup mariadb-plugin-connect \
-          mariadb-plugin-cracklib-password-check mariadb-plugin-gssapi-client \
-          mariadb-plugin-gssapi-server mariadb-plugin-mroonga mariadb-plugin-oqgraph \
-          mariadb-plugin-rocksdb mariadb-plugin-spider
-        dpkg -l | grep -iE "galera|maria"
-      displayName: "Install built DEB packages"
-
-    - template: azure/tests/select-insert-test.yml
-    - template: azure/tests/run-acceptance-tests.yml
-    - template: azure/prepare-vm-for-installation.yml
 
   - job: TestMSI_Quick
     timeoutInMinutes: 10
