@@ -1849,6 +1849,10 @@ public:
   {
     return referenced_db.str ? referenced_db : foreign_db;
   }
+  Lex_cstring* ref_db_ptr()
+  {
+    return referenced_db.str ? &referenced_db : &foreign_db;
+  }
   bool assign(Foreign_key &fk, Table_name table);
   FK_info * clone(MEM_ROOT *mem_root) const;
   Table_name for_table(MEM_ROOT *mem_root) const;
@@ -2145,7 +2149,7 @@ struct TABLE_LIST
 
   enum prelocking_types
   {
-    PRELOCK_NONE, PRELOCK_ROUTINE, PRELOCK_FK
+    PRELOCK_NONE, PRELOCK_ROUTINE, PRELOCK_FK, PRELOCK_RK
   };
 
   /**
