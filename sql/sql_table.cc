@@ -10909,7 +10909,8 @@ do_continue:;
 
     if (use_inplace)
     {
-      table->s->frm_image= &frm;
+      TABLE_SHARE *s= table->s;
+      s->frm_image= &frm;
       enum_check_fields save_count_cuted_fields= thd->count_cuted_fields;
       /*
         Set the truncated column values of thd as warning
@@ -10921,11 +10922,10 @@ do_continue:;
                                          &target_mdl_request, &alter_ctx);
       thd->count_cuted_fields= save_count_cuted_fields;
       my_free(const_cast<uchar*>(frm.str));
+      s->frm_image= NULL;
 
       if (res)
       {
-        if (table->s)
-          table->s->frm_image= NULL;
         cleanup_table_after_inplace_alter(&altered_table);
         DBUG_RETURN(true);
       }
