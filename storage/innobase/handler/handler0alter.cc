@@ -9454,6 +9454,67 @@ innobase_update_foreign_cache(
 	DBUG_RETURN(err);
 }
 
+/** Add or drop foreign key constraints to the data dictionary tables,
+but do not touch the data dictionary cache.
+@param ha_alter_info Data used during in-place alter
+@param ctx In-place ALTER TABLE context
+@param trx Data dictionary transaction
+@param table_name Table name in MySQL
+@retval true Failure
+@retval false Success
+*/
+static MY_ATTRIBUTE((nonnull, warn_unused_result))
+bool
+innobase_update_foreign_try(
+/*========================*/
+	ha_innobase_inplace_ctx*ctx,
+	trx_t*			trx,
+	const char*		table_name)
+{
+	ulint	foreign_id;
+	ulint	i;
+
+	DBUG_ENTER("innobase_update_foreign_try");
+
+	foreign_id = dict_table_get_highest_foreign_id(ctx->new_table);
+
+	foreign_id++;
+
+	for (i = 0; i < ctx->num_to_add_fk; i++) {
+		dict_foreign_t*		fk = ctx->add_fk[i];
+
+		ut_ad(fk->foreign_table == ctx->new_table
+		      || fk->foreign_table == ctx->old_table);
+
+		dberr_t error = dict_create_add_foreign_id(
+			&foreign_id, ctx->old_table->name.m_name, fk);
+
+		if (error != DB_SUCCESS) {
+			my_error(ER_TOO_LONG_IDENT, MYF(0),
+				 fk->id);
+			DBUG_RETURN(true);
+		}
+
+		if (!fk->foreign_index) {
+			fk->foreign_index = dict_foreign_find_index(
+				ctx->new_table, ctx->col_names,
+				fk->foreign_col_names,
+				fk->n_fields, fk->referenced_index, TRUE,
+				fk->type
+				& (DICT_FOREIGN_ON_DELETE_SET_NULL
+					| DICT_FOREIGN_ON_UPDATE_SET_NULL),
+				NULL, NULL, NULL);
+			if (!fk->foreign_index) {
+				my_error(ER_FK_INCORRECT_OPTION,
+					 MYF(0), table_name, fk->id);
+				DBUG_RETURN(true);
+			}
+		}
+	}
+
+	DBUG_RETURN(false);
+}
+
 /** Changes SYS_COLUMNS.PRTYPE for one column.
 @param[in,out]	trx	transaction
 @param[in]	table_name	table name
@@ -9640,6 +9701,10 @@ commit_try_rebuild(
 			my_error(ER_INDEX_CORRUPT, MYF(0), index->name());
 			DBUG_RETURN(true);
 		}
+	}
+
+	if (innobase_update_foreign_try(ctx, trx, table_name)) {
+		DBUG_RETURN(true);
 	}
 
 	dberr_t	error;
@@ -9896,6 +9961,10 @@ commit_try_norebuild(
 				 MYF(0), index->name());
 			DBUG_RETURN(true);
 		}
+	}
+
+	if (innobase_update_foreign_try(ctx, trx, table_name)) {
+		DBUG_RETURN(true);
 	}
 
 	if ((ha_alter_info->handler_flags & ALTER_COLUMN_UNVERSIONED)
