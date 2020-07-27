@@ -3965,10 +3965,14 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
         if (key->foreign)
         {
           FK_info *fk_info= new (thd->mem_root) FK_info();
-          fk_info->assign(*(Foreign_key *) key, {db, table_name});
+          Foreign_key &fkey= static_cast<Foreign_key &>(*key);
+          fk_info->assign(fkey, {db, table_name});
           if (!fk_info->foreign_id.str)
+          {
             fk_info->foreign_id= make_unique_key_name(thd, table_name,
                                                       key_names, true);
+            fkey.constraint_name= fk_info->foreign_id;
+          }
           if (foreign_keys.push_back(fk_info))
             DBUG_RETURN(TRUE);
           if (!key_names.insert(fk_info->foreign_id))
@@ -4350,10 +4354,13 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	}
         else if (key->foreign)
         {
-          Foreign_key *fkey= static_cast<Foreign_key *>(key);
-          key_name= fkey->constraint_name.str ? fkey->constraint_name : key->name;
+          Foreign_key &fkey= static_cast<Foreign_key &>(*key);
+          key_name= fkey.constraint_name.str ? fkey.constraint_name : key->name;
           if (!key_name.str)
+          {
             key_name= make_unique_key_name(thd, table_name, key_names, true);
+            fkey.constraint_name= key_name;
+          }
         }
         else if (!(key_name= key->name).str)
 	  key_name= make_unique_key_name(thd, sql_field->field_name,
@@ -10804,6 +10811,14 @@ do_continue:;
     DBUG_RETURN(true);
   }
 
+  /*
+     Check for duplicate foreign id.
+     NB: we cannot do this in mysql_prepare_alter_table() because we must generate
+     default ids first (mysql_prepare_create_table()).
+  */
+  if (alter_ctx.fk_added.size() && alter_ctx.fk_check_foreign_id(thd))
+    goto err_new_table_cleanup;
+
   if (alter_info->algorithm(thd) != Alter_info::ALTER_TABLE_ALGORITHM_COPY)
   {
     Alter_inplace_info ha_alter_info(create_info, alter_info, &alter_ctx,
@@ -12474,6 +12489,18 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
           cmp_table(fk.referenced_table, ref_share->table_name))
         continue;
 
+      // Check for duplicated id
+      for (const FK_info &rk: ref_share->referenced_keys)
+      {
+        DBUG_ASSERT(rk.foreign_id.str);
+        if (0 == rk.foreign_id.cmp(fk.foreign_id))
+        {
+          my_error(ER_DUP_CONSTRAINT_NAME, MYF(0), "FOREIGN KEY",
+                   fk.foreign_id.str);
+          return true;
+        }
+      }
+
       FK_info *dst= fk.clone(&ref_share->mem_root);
       if (!dst ||
           ref_share->referenced_keys.push_back(dst, &ref_share->mem_root))
@@ -12905,6 +12932,32 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
       return true;
   }
 
+  return false;
+}
+
+
+bool Alter_table_ctx::fk_check_foreign_id(THD *thd)
+{
+  for (const FK_add_new &new_fk: fk_added)
+  {
+    auto i= fk_shares.find(new_fk.ref);
+    if (i == fk_shares.end())
+    {
+      DBUG_ASSERT(!thd->variables.check_foreign());
+      continue;
+    }
+    TABLE_SHARE *s= i->second.share;
+    for (const FK_info &rk: s->referenced_keys)
+    {
+      DBUG_ASSERT(rk.foreign_id.str);
+      if (0 == rk.foreign_id.cmp(new_fk.fk->constraint_name))
+      {
+        my_error(ER_DUP_CONSTRAINT_NAME, MYF(0), "FOREIGN KEY",
+                 rk.foreign_id.str);
+        return true;
+      }
+    }
+  }
   return false;
 }
 

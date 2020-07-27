@@ -12563,8 +12563,19 @@ create_table_info_t::create_foreign_keys()
 
 	table->foreign_set.insert(local_fk_set.begin(),
 					local_fk_set.end());
-	std::for_each(local_fk_set.begin(), local_fk_set.end(),
-			dict_foreign_add_to_referenced_table());
+
+	for (dict_foreign_t *foreign: local_fk_set) {
+		if (!foreign->referenced_table) {
+			continue;
+		}
+		auto ret = foreign->referenced_table->referenced_set.insert(foreign);
+		// Duplicate constraint id in referenced table
+		if (!ret.second) {
+			ut_ad(0);
+			return DB_CANNOT_ADD_CONSTRAINT;
+		}
+	}
+
 	local_fk_set.clear();
 
 	dict_mem_table_fill_foreign_vcol_set(table);
