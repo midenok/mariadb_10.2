@@ -8299,6 +8299,7 @@ static bool mysql_inplace_alter_table(THD *thd,
                                              ha_alter_info,
                                              false);
  cleanup:
+  alter_ctx->fk_release_locks(thd);
   if (reopen_tables)
   {
     /* Close the only table instance which is still around. */
@@ -8311,7 +8312,6 @@ static bool mysql_inplace_alter_table(THD *thd,
       thd->locked_tables_list.unlink_all_closed_tables(thd, NULL, 0);
     /* QQ; do something about metadata locks ? */
   }
-  alter_ctx->fk_release_locks(thd);
   DBUG_RETURN(true);
 }
 
