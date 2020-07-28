@@ -783,3 +783,97 @@ create or replace table t1 (a varchar(4096) unique) engine=innodb;
 create or replace table t2 (pk int primary key, a varchar(4096) unique, foreign key(a) references t1(a) on update cascade) engine=innodb;
 ERROR HY000: Can't create table `test`.`t2` (errno: 150 "Foreign key constraint is incorrectly formed")
 drop table t1;
+#
+# Bug #20762798 FK DDL: CRASH IN DICT_FOREIGN_REMOVE_FROM_CACHE
+#
+create table t1(a int, b int, key(a),key(b))engine=innodb;
+create table t2(a int, b int, key(a),key(b))engine=innodb;
+alter table t2 add constraint b foreign key (b) references t1(a);
+alter table t1 add constraint b1 foreign key (b) references t2(a);
+alter table t2 add constraint b1 foreign key (b) references t1(a);
+alter table t2 drop foreign key b;
+alter table t1 drop foreign key b1;
+drop table t2;
+drop table t1;
+set global innodb_file_per_table = 1;
+drop table if exists b;
+drop database if exists bug_fk;
+create database bug_fk;
+use bug_fk;
+CREATE TABLE b (
+b int unsigned NOT NULL,
+d1 datetime NOT NULL,
+PRIMARY KEY (b,d1)
+) ENGINE=InnoDB;
+CREATE TABLE c (
+b int unsigned NOT NULL,
+d1 datetime NOT NULL,
+d2 datetime NOT NULL,
+PRIMARY KEY (b,d1),
+CONSTRAINT b_fk FOREIGN KEY (b) REFERENCES b (b)
+) ENGINE=InnoDB;
+insert into b values (1, '1980-01-01 00:00:00');
+insert into c values (1, '1980-01-01 00:00:00', '1980-01-01 00:00:00');
+delete from b;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`bug_fk`.`c`, CONSTRAINT `b_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`))
+update c set b= 2;
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`bug_fk`.`c`, CONSTRAINT `b_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`))
+show warnings;
+Level	Code	Message
+Error	1452	Cannot add or update a child row: a foreign key constraint fails (`bug_fk`.`c`, CONSTRAINT `b_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`))
+set foreign_key_checks = 0;
+DROP TABLE IF EXISTS b;
+show create table c;
+Table	Create Table
+c	CREATE TABLE `c` (
+  `b` int(10) unsigned NOT NULL,
+  `d1` datetime NOT NULL,
+  `d2` datetime NOT NULL,
+  PRIMARY KEY (`b`,`d1`),
+  CONSTRAINT `b_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+CREATE TABLE b (
+b bigint unsigned NOT NULL,
+d1 date NOT NULL,
+PRIMARY KEY (b,d1)
+) ENGINE=InnoDB;
+show warnings;
+Level	Code	Message
+DROP TABLE IF EXISTS d;
+Warnings:
+Note	1051	Unknown table 'bug_fk.d'
+CREATE TABLE d (
+b bigint unsigned NOT NULL,
+d1 date NOT NULL,
+PRIMARY KEY (b,d1),
+CONSTRAINT bd_fk FOREIGN KEY (b) REFERENCES b (b)
+) ENGINE=InnoDB;
+show warnings;
+Level	Code	Message
+set foreign_key_checks = 1;
+show create table c;
+Table	Create Table
+c	CREATE TABLE `c` (
+  `b` int(10) unsigned NOT NULL,
+  `d1` datetime NOT NULL,
+  `d2` datetime NOT NULL,
+  PRIMARY KEY (`b`,`d1`),
+  CONSTRAINT `b_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+show create table d;
+Table	Create Table
+d	CREATE TABLE `d` (
+  `b` bigint(20) unsigned NOT NULL,
+  `d1` date NOT NULL,
+  PRIMARY KEY (`b`,`d1`),
+  CONSTRAINT `bd_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+update c set b= 2;
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`bug_fk`.`c`, CONSTRAINT `b_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`))
+insert into c values (2, '1980-01-01 00:00:00', '1980-01-01 00:00:00');
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`bug_fk`.`c`, CONSTRAINT `b_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`))
+insert into b values (2, '1980-01-01 00:00:00');
+insert into c values (2, '1980-01-01 00:00:00', '1980-01-01 00:00:00');
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`bug_fk`.`c`, CONSTRAINT `b_fk` FOREIGN KEY (`b`) REFERENCES `b` (`b`))
+insert into d values (2, '1980-01-01 00:00:00');
+drop database bug_fk;

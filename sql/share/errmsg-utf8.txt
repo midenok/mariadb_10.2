@@ -6925,8 +6925,8 @@ ER_FK_NO_INDEX_CHILD
 ER_FK_NO_INDEX_PARENT
         eng "Failed to add the foreign key constaint. Missing index for constraint '%s' in the referenced table '%s'"
 
-ER_FK_FAIL_ADD_SYSTEM
-        eng "Failed to add the foreign key constraint '%s' to system tables"
+ER_UNUSED_26
+        eng "You should never see it"
 
 ER_FK_CANNOT_OPEN_PARENT
         eng "Failed to open the referenced table '%s'"
