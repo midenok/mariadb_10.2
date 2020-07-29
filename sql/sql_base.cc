@@ -4722,7 +4722,7 @@ handle_table(THD *thd, Query_tables_list *prelocking_ctx,
         thd->restore_active_arena(arena, &backup);
     }
 
-    if (table->s->foreign_keys.elements)
+    if (table->s->foreign_keys.elements && table->s->table_category != TABLE_CATEGORY_SYSTEM)
     {
       List_iterator<FK_info> fk_list_it(table->s->foreign_keys);
       FK_info *fk;
