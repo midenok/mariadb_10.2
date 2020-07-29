@@ -13205,7 +13205,7 @@ ha_innobase::create(
 
 /*****************************************************************//**
 Discards or imports an InnoDB tablespace.
-@return 0 == success, -1 == error */
+@return 0 == success, HA_ERR_... == error */
 
 int
 ha_innobase::discard_or_import_tablespace(
@@ -13312,15 +13312,26 @@ ha_innobase::discard_or_import_tablespace(
 	dict_sys.remove(m_prebuilt->table);
 	m_prebuilt->table = dict_table_open_on_id(id, TRUE,
 						  DICT_TABLE_OP_NORMAL);
-	mutex_exit(&dict_sys.mutex);
 	if (!m_prebuilt->table) {
 		err = DB_TABLE_NOT_FOUND;
 	} else {
-		if (const Field* ai = table->found_next_number_field) {
-			initialize_auto_increment(m_prebuilt->table, ai);
+		err = dict_load_foreigns(m_prebuilt->table, NULL, NULL, false, DICT_ERR_IGNORE_FK_NOKEY);
+		if (err != DB_SUCCESS) {
+			dict_table_close(m_prebuilt->table, true, false);
+			m_prebuilt->table = NULL;
 		}
-		dict_stats_init(m_prebuilt->table);
 	}
+	mutex_exit(&dict_sys.mutex);
+
+	if (err != DB_SUCCESS) {
+		DBUG_RETURN(convert_error_code_to_mysql(
+				    err, m_prebuilt->table->flags, NULL));
+	}
+
+	if (const Field* ai = table->found_next_number_field) {
+		initialize_auto_increment(m_prebuilt->table, ai);
+	}
+	dict_stats_init(m_prebuilt->table);
 
 	if (dict_stats_is_persistent_enabled(m_prebuilt->table)) {
 		dberr_t		ret;
