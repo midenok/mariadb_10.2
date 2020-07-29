@@ -331,6 +331,13 @@ ERROR HY000: Cannot drop index 'fk': needed in a foreign key constraint
 alter table t2 drop foreign key fk;
 drop tables t1, t2;
 # Check self-references
+create or replace table t1 (f1 integer primary key references t1(f1));
+ERROR 42000: Incorrect foreign key definition for 'f1'
+create or replace table t1 (f1 integer primary key, foreign key (f1) references t1(f1));
+ERROR 42000: Incorrect foreign key definition for 'f1'
+create or replace table t1 (f1 integer primary key);
+alter table t1 add constraint c1 foreign key (f1) references t1(f1);
+ERROR 42000: Incorrect foreign key definition for 'c1'
 create or replace table t1 (id int primary key, id2 int references t1 (id));
 flush tables t1;
 show create table t1;
