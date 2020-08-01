@@ -1767,6 +1767,8 @@ typedef enum {
 	DICT_FRM_INCONSISTENT_KEYS = 3	/*!< Key count mismatch */
 } dict_frm_t;
 
+extern "C" MYSQL_PLUGIN_IMPORT CHARSET_INFO *system_charset_info;
+
 /** Data structure for a database table.  Most fields will be
 initialized to 0, NULL or FALSE in dict_mem_table_create(). */
 struct dict_table_t {
@@ -1945,6 +1947,19 @@ struct dict_table_t {
 	bool parse_name(char (&db_name)[NAME_LEN + 1],
 			char (&tbl_name)[NAME_LEN + 1],
 			size_t *db_name_len, size_t *tbl_name_len) const;
+
+
+	static bool
+	build_name(
+		const char*    database_name,	  /*!< in: table db name */
+		ulint	       database_name_len, /*!< in: db name length */
+		const char*    table_name,	  /*!< in: table name */
+		ulint	       table_name_len,	  /*!< in: table name length */
+		char *&dict_name,
+		ulint &dict_name_len,
+		mem_heap_t*    alloc = NULL,
+		CHARSET_INFO*  cs_db = system_charset_info,
+		CHARSET_INFO*  cs_table = system_charset_info); /*!< in: table name charset */
 
 private:
 	/** Initialize instant->field_map.

@@ -21625,7 +21625,8 @@ dict_load_foreigns(
 	Share_acquire sa;
 	TABLE_LIST tl;
 	dict_foreign_t*	foreign;
-	char buf[FN_REFLEN + 1];
+	char buf[MAX_FULL_NAME_LEN + 1];
+	char *bufptr=  buf;
 	size_t len;
 	dberr_t err;
 	const char*	      column_names[MAX_NUM_FK_COLUMNS];
@@ -21694,10 +21695,12 @@ dict_load_foreigns(
 		foreign->foreign_table_name = mem_heap_strdup(foreign->heap, table->name.m_name);
 		if (!foreign->foreign_table_name)
 			return DB_OUT_OF_MEMORY;
-		len= build_normalized_name(buf, sizeof(buf), LEX_STRING_WITH_LEN(fk.referenced_db), LEX_STRING_WITH_LEN(fk.referenced_table), 0, false);
-		if (!len) {
+
+		if (dict_table_t::build_name(LEX_STRING_WITH_LEN(fk.referenced_db),
+					LEX_STRING_WITH_LEN(fk.referenced_table), bufptr, len)) {
 			return DB_CANNOT_ADD_CONSTRAINT;
 		}
+
 		foreign->referenced_table_name = mem_heap_strdupl(foreign->heap, buf, len);
 		if (!foreign->referenced_table_name)
 			return DB_OUT_OF_MEMORY;
@@ -21772,7 +21775,10 @@ dict_load_foreigns(
 
 		for (const Table_name &t: tables_missing)
 		{
-			len= build_normalized_name(buf, sizeof(buf), LEX_STRING_WITH_LEN(t.db), LEX_STRING_WITH_LEN(t.name), 0, false);
+			if (dict_table_t::build_name(LEX_STRING_WITH_LEN(t.db),
+						LEX_STRING_WITH_LEN(t.name), bufptr, len)) {
+				return DB_CANNOT_ADD_CONSTRAINT;
+			}
 			dict_table_t *for_table = dict_table_check_if_in_cache_low(buf);
 			if (!for_table)
 			{
