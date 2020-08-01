@@ -8224,11 +8224,12 @@ static bool mysql_inplace_alter_table(THD *thd,
                                         &table->s->tabledef_version))
     {
       my_error(HA_ERR_INCOMPATIBLE_DEFINITION, MYF(0));
-      DBUG_RETURN(true);
+      goto cleanup;
     }
   }
 
   alter_ctx->fk_table_backup.commit();
+  table->s->frm_image= NULL;
 
   close_all_tables_for_name(thd, table->s,
                             alter_ctx->is_table_renamed() ?
@@ -8300,6 +8301,7 @@ static bool mysql_inplace_alter_table(THD *thd,
                                              false);
  cleanup:
   alter_ctx->fk_release_locks(thd);
+  table->s->frm_image= NULL;
   if (reopen_tables)
   {
     /* Close the only table instance which is still around. */
@@ -10915,8 +10917,7 @@ do_continue:;
 
     if (use_inplace)
     {
-      TABLE_SHARE *s= table->s;
-      s->frm_image= &frm;
+      table->s->frm_image= &frm;
       enum_check_fields save_count_cuted_fields= thd->count_cuted_fields;
       /*
         Set the truncated column values of thd as warning
@@ -10928,7 +10929,6 @@ do_continue:;
                                          &target_mdl_request, &alter_ctx);
       thd->count_cuted_fields= save_count_cuted_fields;
       my_free(const_cast<uchar*>(frm.str));
-      s->frm_image= NULL;
 
       if (res)
       {
