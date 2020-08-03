@@ -8572,7 +8572,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       if ((alter_info->flags & ALTER_RENAME_COLUMN) &&
           0 != cmp_ident(def->change, def->field_name))
       {
-        alter_ctx->fk_prepare_rename(table, def, fk_tables_to_lock);
+        alter_ctx->fk_prepare_rename(thd, table, def, fk_tables_to_lock);
       }
       /*
         Add column being updated to the list of new columns.
@@ -8645,7 +8645,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           def->change= alter->name;
           def->field_name= alter->new_name;
           column_rename_param.fields.push_back(def);
-          alter_ctx->fk_prepare_rename(table, def, fk_tables_to_lock);
+          alter_ctx->fk_prepare_rename(thd, table, def, fk_tables_to_lock);
           if (field->flags & VERS_SYS_START_FLAG)
             create_info->vers_info.as_row.start= alter->new_name;
           else if (field->flags & VERS_SYS_END_FLAG)
@@ -8875,7 +8875,9 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
           }
         }
       }
-      Table_name t(fk.ref_db(), fk.referenced_table);
+      Table_name t(fk.ref_table(thd->mem_root));
+      if (lower_case_table_names)
+        t.lowercase(thd->mem_root);
       if (0 != cmp_table(t.db, table->s->db) ||
           0 != cmp_table(t.name, table->s->table_name))
       {
@@ -8918,7 +8920,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       }
       else
       {
-        Table_name fk_table(fk.ref_db(), fk.referenced_table);
+        Table_name fk_table(fk.ref_table(thd->mem_root));
         const FK_table_to_lock *x= fk_tables_to_lock.insert(fk_table);
         if (!x)
           goto err;
@@ -8936,7 +8938,7 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
       if (0 == cmp_table(rk.foreign_db, table->s->db) &&
           0 == cmp_table(rk.foreign_table, table->s->table_name))
         continue;
-      Table_name rk_table(rk.foreign_db, rk.foreign_table);
+      Table_name rk_table(rk.for_table(thd->mem_root));
       const FK_table_to_lock *x= fk_tables_to_lock.insert(rk_table);
       if (!x)
         goto err;
@@ -9196,6 +9198,8 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         {
           Table_name t(fk->ref_db.str ? fk->ref_db : table->s->db,
                        fk->ref_table);
+          if (lower_case_table_names)
+            t.lowercase(thd->mem_root);
           if (0 != cmp_table(t.db, table->s->db) ||
               0 != cmp_table(t.name, table->s->table_name))
           {
@@ -12410,7 +12414,7 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
   {
     if (!cmp_table(fk.ref_db(), db) && !cmp_table(fk.referenced_table, table_name))
       continue; // subject table name is already prelocked by caller DDL
-    if (!tables.insert(fk.ref_db(), fk.referenced_table))
+    if (!tables.insert(fk.ref_table(thd->mem_root)))
       return true;
   }
   if (tables.empty())
@@ -12487,8 +12491,8 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
 }
 
 
-// Used in ALTER TABLE
-bool Alter_table_ctx::fk_prepare_rename(TABLE *table, Create_field *def, set<FK_table_to_lock> &fk_tables_to_lock)
+bool Alter_table_ctx::fk_prepare_rename(THD *thd, TABLE *table, Create_field *def,
+                                        set<FK_table_to_lock> &fk_tables_to_lock)
 {
   Table_name altered_table(table->s->db, table->s->table_name);
   for (const FK_info &fk: table->s->foreign_keys)
@@ -12496,7 +12500,7 @@ bool Alter_table_ctx::fk_prepare_rename(TABLE *table, Create_field *def, set<FK_
     if (0 == cmp_table(fk.ref_db(), table->s->db) &&
         0 == cmp_table(fk.referenced_table, table->s->table_name))
       continue;
-    Table_name referenced_table(fk.ref_db(), fk.referenced_table);
+    Table_name referenced_table(fk.ref_table(thd->mem_root));
     for (Lex_cstring &fld: fk.foreign_fields)
     {
       if (0 == cmp_ident(fld, def->change))
@@ -12542,7 +12546,7 @@ bool Alter_table_ctx::fk_prepare_rename(TABLE *table, Create_field *def, set<FK_
     if (0 == cmp_table(rk.foreign_db, table->s->db) &&
         0 == cmp_table(rk.foreign_table, table->s->table_name))
       continue;
-    Table_name foreign_table(rk.foreign_db, rk.foreign_table);
+    Table_name foreign_table(rk.for_table(thd->mem_root));
     for (Lex_cstring &fld: rk.referenced_fields)
     {
       if (0 == cmp_ident(fld, def->change))
@@ -12982,7 +12986,7 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, vector<FK_ddl_backup> &shares,
     if (0 == cmp_table(fk.ref_db(), table->db) &&
         (drop_db || 0 == cmp_table(fk.referenced_table, table->table_name)))
       continue;
-    if (!tables.insert(fk.ref_db(), fk.referenced_table))
+    if (!tables.insert(fk.ref_table(thd->mem_root)))
       return true;
   }
   if (tables.empty())
@@ -13097,7 +13101,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
         goto mem_error;
       continue;
     }
-    if (!tables.insert(fk.ref_db(), fk.referenced_table))
+    if (!tables.insert(fk.ref_table(thd->mem_root)))
       goto mem_error;
   }
   for (FK_info &rk: share->referenced_keys)
@@ -13115,7 +13119,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
         goto mem_error;
       continue;
     }
-    if (!tables.insert(rk.foreign_db, rk.foreign_table))
+    if (!tables.insert(rk.for_table(thd->mem_root)))
       goto mem_error;
   }
 

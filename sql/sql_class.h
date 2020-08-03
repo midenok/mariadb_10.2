@@ -420,6 +420,24 @@ public:
       return 1;
     return cmp_table(name, rhs.name);
   }
+  bool lowercase(MEM_ROOT *mem_root)
+  {
+    if (db.length)
+    {
+      db.str= (const char *) memdup_root(mem_root, db.str, db.length + 1);
+      if (unlikely(!db.str))
+        return true;
+      my_casedn_str(system_charset_info, (char *)db.str);
+    }
+    if (name.length)
+    {
+      name.str= (const char *) memdup_root(mem_root, name.str, name.length + 1);
+      if (unlikely(!name.str))
+        return true;
+      my_casedn_str(system_charset_info, (char *)name.str);
+    }
+    return false;
+  }
 };
 
 /*
@@ -442,11 +460,6 @@ public:
   {
     return set<Table_name, Table_name_lt>::
       insert(std::forward<T>(value));
-  }
-  bool insert(const Lex_cstring &db, const Lex_cstring &table)
-  {
-    return set<Table_name, Table_name_lt>::
-      insert({db, table});
   }
 };
 typedef set<Lex_cstring, Lex_ident_lt> Lex_ident_set;

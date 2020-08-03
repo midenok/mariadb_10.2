@@ -1824,6 +1824,7 @@ enum enum_schema_table_state
 enum enum_fk_option { FK_OPTION_UNDEF= 0, FK_OPTION_RESTRICT, FK_OPTION_CASCADE,
                FK_OPTION_SET_NULL, FK_OPTION_NO_ACTION, FK_OPTION_SET_DEFAULT};
 class Foreign_key;
+class Table_name;
 
 class FK_info : public Sql_alloc
 {
@@ -1850,6 +1851,8 @@ public:
   }
   bool assign(Foreign_key &fk, Table_name table);
   FK_info * clone(MEM_ROOT *mem_root) const;
+  Table_name for_table(MEM_ROOT *mem_root) const;
+  Table_name ref_table(MEM_ROOT *mem_root) const;
   void print(String &out);
 };
 

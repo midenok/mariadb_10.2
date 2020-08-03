@@ -431,7 +431,7 @@ public:
   MDL_request_list fk_mdl_reqs;
   map<Table_name, Share_acquire, Table_name_lt> fk_shares;
 
-  bool fk_prepare_rename(TABLE *table, Create_field *def,
+  bool fk_prepare_rename(THD *thd, TABLE *table, Create_field *def,
                          set<FK_table_to_lock> &fk_tables_to_lock);
   bool fk_handle_alter(THD *thd);
   void fk_release_locks(THD *thd);
