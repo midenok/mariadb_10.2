@@ -132,6 +132,15 @@ create table t1 (id int primary key);
 create table t2 (id int references t1(id)) select id from t1;
 flush tables;
 drop table t2, t1;
+create database D;
+create table D.T1(id int primary key);
+create table t2(id int primary key, f1 int references D.T1(id));
+select * from D.T1;
+id
+drop table t2;
+flush tables;
+drop table D.T1;
+drop database D;
 # Check duplicate id
 create or replace table t1 (id int primary key) engine innodb;
 create or replace table t2 (id2 int,

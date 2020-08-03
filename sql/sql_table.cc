@@ -12519,7 +12519,7 @@ bool TABLE_SHARE::fk_handle_create(THD *thd, FK_create_vector &shares)
   @return                         Error status
 */
 
-bool Alter_table_ctx::fk_prepare_rename(TABLE *table, Create_field *def,
+bool Alter_table_ctx::fk_prepare_rename(THD *thd, TABLE *table, Create_field *def,
                                         mbd::set<FK_table_to_lock> &fk_tables_to_lock)
 {
   Table_name altered_table(table->s->db, table->s->table_name);
