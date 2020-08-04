@@ -21668,7 +21668,8 @@ dict_load_foreigns(
 		// NB: see innobase_get_foreign_key_info() for index checks
 		ut_ad(fk.foreign_fields.elements == fk.referenced_fields.elements);
 		ut_ad(fk.foreign_fields.elements <= MAX_NUM_FK_COLUMNS);
-		foreign->n_fields = fk.foreign_fields.elements;
+		DBUG_ASSERT(fk.foreign_fields.elements <= 0x3ff);
+		foreign->n_fields = fk.foreign_fields.elements & 0x3ff;
 
 		List_iterator_fast<Lex_cstring> ref_it(fk.referenced_fields);
 		uint i= 0;

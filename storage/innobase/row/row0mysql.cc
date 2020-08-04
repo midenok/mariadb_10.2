@@ -3875,7 +3875,6 @@ row_drop_database_for_mysql(
 	char*		table_name;
 	dberr_t		err	= DB_SUCCESS;
 	ulint		namelen	= strlen(name);
-	bool		is_partition = false;
 
 	ut_ad(found != NULL);
 
@@ -3887,7 +3886,6 @@ row_drop_database_for_mysql(
 	/* Assert DB name or partition name. */
 	if (name[namelen - 1] == '#') {
 		ut_ad(name[namelen - 2] != '/');
-		is_partition = true;
 		trx->op_info = "dropping partitions";
 	} else {
 		ut_a(name[namelen - 1] == '/');
