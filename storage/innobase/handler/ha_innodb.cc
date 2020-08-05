@@ -21743,7 +21743,7 @@ dict_load_foreigns(
 	if (share->referenced_keys.elements > table->referenced_set.size())
 	{
 		/* We don't have some foreign table because it was created earlier that this table. */
-		set<Table_name> tables_missing;
+		mbd::set<Table_name> tables_missing;
 		for (FK_info &rk: share->referenced_keys)
 		{
 			if (0 == cmp_table(rk.foreign_db, share->db) &&
