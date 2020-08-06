@@ -1830,7 +1830,12 @@ class FK_info : public Sql_alloc
 {
 public:
   Lex_cstring foreign_id;
-  // TODO: use Table_name
+
+  /*
+    TODO: use Table_name. NB: the below names are in original case.
+    The share MUST be acquried in case according to lower_case_table_names.
+    Use for_table(), ref_table() for that (TODO: limit interface).
+  */
   Lex_cstring foreign_db;
   Lex_cstring foreign_table;
   Lex_cstring referenced_db;

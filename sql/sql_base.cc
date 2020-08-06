@@ -4710,8 +4710,9 @@ handle_table(THD *thd, Query_tables_list *prelocking_ctx,
         *need_prelocking= TRUE;
 
         TABLE_LIST *tl= (TABLE_LIST *) thd->alloc(sizeof(TABLE_LIST));
-        tl->init_one_table_for_prelocking(&fk->foreign_db,
-                                          &fk->foreign_table,
+        Table_name for_table= fk->for_table(thd->mem_root);
+        tl->init_one_table_for_prelocking(&for_table.db,
+                                          &for_table.name,
                                           NULL, lock_type,
                                           TABLE_LIST::PRELOCK_FK,
                                           table_list->belong_to_view, op,
@@ -4745,8 +4746,9 @@ handle_table(THD *thd, Query_tables_list *prelocking_ctx,
 
 
         TABLE_LIST *tl= (TABLE_LIST *) thd->alloc(sizeof(TABLE_LIST));
-        tl->init_one_table_for_prelocking(fk->ref_db_ptr(),
-                                          &fk->referenced_table,
+        Table_name ref_table= fk->ref_table(thd->mem_root);
+        tl->init_one_table_for_prelocking(&ref_table.db,
+                                          &ref_table.name,
                                           NULL, lock_type,
                                           TABLE_LIST::PRELOCK_RK,
                                           table_list->belong_to_view, op,
