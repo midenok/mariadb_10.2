@@ -8438,7 +8438,8 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
     period_start_name= table->s->period_start_field()->field_name;
     period_end_name= table->s->period_end_field()->field_name;
   }
-  alter_ctx->fk_table_backup.init(table->s);
+  if (!table->s->tmp_table)
+    alter_ctx->fk_table_backup.init(table->s);
   DBUG_ENTER("mysql_prepare_alter_table");
 
   /*
