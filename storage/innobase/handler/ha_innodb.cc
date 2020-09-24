@@ -19395,11 +19395,11 @@ static MYSQL_SYSVAR_BOOL(encrypt_temporary_tables, innodb_encrypt_temporary_tabl
   NULL, NULL, false);
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-static MYSQL_SYSVAR_BOOL(innodb_shadow_foreign_storage,
+static MYSQL_SYSVAR_BOOL(shadow_foreign_storage,
   innodb_shadow_foreign_storage,
   PLUGIN_VAR_OPCMDARG,
   "Update SYS_FOREIGN, SYS_FOREIGN_COLS when table foreign keys are updated",
-  NULL, NULL, FALSE);
+  NULL, NULL, false);
 #endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
 static struct st_mysql_sys_var* innobase_system_variables[]= {
@@ -19582,7 +19582,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(background_thread),
   MYSQL_SYSVAR(encrypt_temporary_tables),
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-  MYSQL_SYSVAR(innodb_shadow_foreign_storage),
+  MYSQL_SYSVAR(shadow_foreign_storage),
 #endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
   NULL
