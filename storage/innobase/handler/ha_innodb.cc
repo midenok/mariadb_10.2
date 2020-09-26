@@ -21086,6 +21086,23 @@ fk_get_legacy_col(
 }
 
 static
+unsigned long
+fk_get_legacy_row_finish(
+/*=================*/
+	void*	row,			/*!< in: sel_node_t* */
+	void*	user_arg)		/*!< in: fts cache */
+{
+	sel_node_t*	node = static_cast<sel_node_t*>(row);
+	que_node_t*	exp = node->select_list;
+	while (exp) {
+		dfield_t*	dfield = que_node_get_val(exp);
+		ulint		len = dfield_get_len(dfield);
+		exp = que_node_get_next(exp);
+	}
+	return 0;
+}
+
+static
 dberr_t
 fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 {
@@ -21098,6 +21115,7 @@ fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 	}
 	pars_info_bind_function(info, "fk_get_legacy_row", fk_get_legacy_row, &has_legacy_rows);
 	pars_info_bind_function(info, "fk_get_legacy_col", fk_get_legacy_col, NULL);
+	pars_info_bind_function(info, "fk_get_legacy_row_finish", fk_get_legacy_row_finish, NULL);
 	pars_info_add_str_literal(info, "for_name", table->name.m_name);
 	static const char	sql[] =
 		"PROCEDURE FK_PROC () IS\n"
@@ -21106,6 +21124,7 @@ fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 		"got_for_name CHAR;\n"
 		"DECLARE FUNCTION fk_get_legacy_row;\n"
 		"DECLARE FUNCTION fk_get_legacy_col;\n"
+		"DECLARE FUNCTION fk_get_legacy_row_finish;\n"
 
 		"DECLARE CURSOR c IS"
 		" SELECT ID, FOR_NAME FROM SYS_FOREIGN"
@@ -21115,6 +21134,9 @@ fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 		" SELECT ID, FOR_COL_NAME, REF_COL_NAME, POS FROM SYS_FOREIGN_COLS"
  		" WHERE ID = fk_id;"
 
+		"DECLARE CURSOR c3 IS"
+		" SELECT ID FROM SYS_FOREIGN;"
+
 		"BEGIN\n"
 		"OPEN c;\n"
 		"fk_loop := 1;\n"
@@ -21123,15 +21145,17 @@ fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 		"  IF (SQL % NOTFOUND) THEN\n"
 		"    fk_loop := 0;\n"
 		"  END IF;\n"
-// 		"  fk_id := 'test/fk_t4';\n"
 		"  OPEN c2;\n"
 		"  WHILE 1 = 1 LOOP\n"
 		"    FETCH c2 INTO fk_get_legacy_col();\n"
 		"    IF (SQL % NOTFOUND) THEN\n"
+		"      CLOSE c2;\n"
+		"      OPEN c3;\n"
+		"      FETCH c3 INTO fk_get_legacy_row_finish();\n"
+		"      CLOSE c3;\n"
 		"      EXIT;\n"
 		"    END IF;\n"
 		"  END LOOP;\n"
-		"  CLOSE c2;\n"
 		"END LOOP;\n"
 		"CLOSE c;\n"
 		"END;\n";
