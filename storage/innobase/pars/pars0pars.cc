@@ -1618,30 +1618,30 @@ pars_fetch_statement(
 	sym_node_t*	cursor_decl;
 	fetch_node_t*	node;
 
-	/* Logical XOR. */
-	ut_a(!into_list != !user_func);
+	ut_ad(into_list || user_func);
 
 	node = static_cast<fetch_node_t*>(
 		mem_heap_alloc(
 			pars_sym_tab_global->heap, sizeof(fetch_node_t)));
 
 	node->common.type = QUE_NODE_FETCH;
+	node->into_list = NULL;
+	node->func = NULL;
 
 	pars_resolve_exp_variables_and_types(NULL, cursor);
 
 	if (into_list) {
 		pars_resolve_exp_list_variables_and_types(NULL, into_list);
 		node->into_list = into_list;
-		node->func = NULL;
-	} else {
+	}
+
+	if (user_func) {
 		pars_resolve_exp_variables_and_types(NULL, user_func);
 
 		node->func = pars_info_lookup_user_func(
 			pars_sym_tab_global->info, user_func->name);
 
 		ut_a(node->func);
-
-		node->into_list = NULL;
 	}
 
 	cursor_decl = cursor->alias;

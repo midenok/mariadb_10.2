@@ -472,10 +472,10 @@ fetch_statement:
 				{ $$ = pars_fetch_statement(
 					static_cast<sym_node_t*>($2),
 					static_cast<sym_node_t*>($4), NULL); }
-	| PARS_FETCH_TOKEN PARS_ID_TOKEN PARS_INTO_TOKEN user_function_call
+	| PARS_FETCH_TOKEN PARS_ID_TOKEN PARS_INTO_TOKEN user_function_call variable_list
 				{ $$ = pars_fetch_statement(
 					static_cast<sym_node_t*>($2),
-					NULL,
+					static_cast<sym_node_t*>($5),
 					static_cast<sym_node_t*>($4)); }
 ;
 

@@ -21069,6 +21069,23 @@ fk_get_legacy_row(
 }
 
 static
+unsigned long
+fk_get_legacy_col(
+/*=================*/
+	void*	row,			/*!< in: sel_node_t* */
+	void*	user_arg)		/*!< in: fts cache */
+{
+	sel_node_t*	node = static_cast<sel_node_t*>(row);
+	que_node_t*	exp = node->select_list;
+	while (exp) {
+		dfield_t*	dfield = que_node_get_val(exp);
+		ulint		len = dfield_get_len(dfield);
+		exp = que_node_get_next(exp);
+	}
+	return 0;
+}
+
+static
 dberr_t
 fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 {
@@ -21080,23 +21097,41 @@ fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 		return DB_OUT_OF_MEMORY;
 	}
 	pars_info_bind_function(info, "fk_get_legacy_row", fk_get_legacy_row, &has_legacy_rows);
-	pars_info_add_str_literal(info, "fk_get_legacy_row", table->name.m_name);
+	pars_info_bind_function(info, "fk_get_legacy_col", fk_get_legacy_col, NULL);
+	pars_info_add_str_literal(info, "for_name", table->name.m_name);
 	static const char	sql[] =
 		"PROCEDURE FK_PROC () IS\n"
-		"found INT;\n"
+		"fk_loop INT;\n"
+		"fk_id CHAR;\n"
+		"got_for_name CHAR;\n"
 		"DECLARE FUNCTION fk_get_legacy_row;\n"
+		"DECLARE FUNCTION fk_get_legacy_col;\n"
 
 		"DECLARE CURSOR c IS"
 		" SELECT ID, FOR_NAME FROM SYS_FOREIGN"
  		" WHERE FOR_NAME = :for_name;"
 
+		"DECLARE CURSOR c2 IS"
+		" SELECT ID, FOR_COL_NAME, REF_COL_NAME, POS FROM SYS_FOREIGN_COLS"
+ 		" WHERE ID = fk_id;"
+
 		"BEGIN\n"
 		"OPEN c;\n"
-		"WHILE 1 = 1 LOOP\n"
-		"  FETCH c INTO fk_get_legacy_row();\n"
+		"fk_loop := 1;\n"
+		"WHILE fk_loop = 1 LOOP\n"
+		"  FETCH c INTO fk_get_legacy_row() fk_id, got_for_name;\n"
 		"  IF (SQL % NOTFOUND) THEN\n"
-		"    EXIT;\n"
+		"    fk_loop := 0;\n"
 		"  END IF;\n"
+// 		"  fk_id := 'test/fk_t4';\n"
+		"  OPEN c2;\n"
+		"  WHILE 1 = 1 LOOP\n"
+		"    FETCH c2 INTO fk_get_legacy_col();\n"
+		"    IF (SQL % NOTFOUND) THEN\n"
+		"      EXIT;\n"
+		"    END IF;\n"
+		"  END LOOP;\n"
+		"  CLOSE c2;\n"
 		"END LOOP;\n"
 		"CLOSE c;\n"
 		"END;\n";
