@@ -2066,7 +2066,15 @@ pars_info_create(void)
 
 	heap = mem_heap_create(512);
 
+	if (!heap) {
+		return NULL;
+	}
+
 	info = static_cast<pars_info_t*>(mem_heap_alloc(heap, sizeof(*info)));
+
+	if (!info) {
+		return NULL;
+	}
 
 	info->heap = heap;
 	info->funcs = NULL;

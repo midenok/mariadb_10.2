@@ -1865,8 +1865,10 @@ dict_create_add_foreign_to_dictionary(
 	error = dict_foreign_eval_sql(info,
 				      "PROCEDURE P () IS\n"
 				      "BEGIN\n"
-				      "INSERT INTO SYS_FOREIGN VALUES"
-				      "(:id, :for_name, :ref_name, :n_cols);\n"
+					"DELETE FROM SYS_FOREIGN WHERE ID=:id;\n"
+					"DELETE FROM SYS_FOREIGN_COLS WHERE ID=:id;\n"
+					"INSERT INTO SYS_FOREIGN VALUES"
+					"(:id, :for_name, :ref_name, :n_cols);\n"
 				      "END;\n"
 				      , name, foreign->id, trx);
 

@@ -3975,6 +3975,7 @@ loop:
 	DBUG_RETURN(err);
 }
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
 /****************************************************************//**
 Delete a single constraint.
 @return error code or DB_SUCCESS */
@@ -4030,6 +4031,7 @@ row_delete_constraint(
 
 	return(err);
 }
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
 /*********************************************************************//**
 Renames a table for MySQL.

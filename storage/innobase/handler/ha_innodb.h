@@ -102,6 +102,13 @@ public:
 
 	int open(const char *name, int mode, uint test_if_locked) override;
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+	bool auto_repair(int error) const override
+	{
+		return (error == HA_ERR_FK_UPGRADE);
+	}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+
 	handler* clone(const char *name, MEM_ROOT *mem_root) override;
 
 	int close(void) override;

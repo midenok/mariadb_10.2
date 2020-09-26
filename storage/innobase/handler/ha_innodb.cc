@@ -1797,7 +1797,11 @@ convert_error_code_to_mysql(
 		return(HA_ERR_FTS_TOO_MANY_WORDS_IN_PHRASE);
 	case DB_COMPUTE_VALUE_FAILED:
 		return(HA_ERR_GENERIC); // impossible
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+	case DB_LEGACY_FK:
+		return(HA_ERR_FK_UPGRADE);
 	}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 }
 
 /*************************************************************//**
@@ -21044,6 +21048,68 @@ void ins_node_t::vers_update_end(row_prebuilt_t *prebuilt, bool history_row)
   }
 }
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+static
+unsigned long
+fk_get_legacy_row(
+/*=================*/
+	void*	row,			/*!< in: sel_node_t* */
+	void*	user_arg)		/*!< in: fts cache */
+{
+	sel_node_t*	node = static_cast<sel_node_t*>(row);
+	que_node_t*	exp = node->select_list;
+	while (exp) {
+		dfield_t*	dfield = que_node_get_val(exp);
+		ulint		len = dfield_get_len(dfield);
+		exp = que_node_get_next(exp);
+	}
+	bool &has_legacy_rows = *(bool *) user_arg;
+	has_legacy_rows = true;
+	return 0;
+}
+
+static
+dberr_t
+fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
+{
+	pars_info_t* info;
+	bool has_legacy_rows = false;
+
+	info = pars_info_create();
+	if (!info) {
+		return DB_OUT_OF_MEMORY;
+	}
+	pars_info_bind_function(info, "fk_get_legacy_row", fk_get_legacy_row, &has_legacy_rows);
+	pars_info_add_str_literal(info, "fk_get_legacy_row", table->name.m_name);
+	static const char	sql[] =
+		"PROCEDURE FK_PROC () IS\n"
+		"found INT;\n"
+		"DECLARE FUNCTION fk_get_legacy_row;\n"
+
+		"DECLARE CURSOR c IS"
+		" SELECT ID, FOR_NAME FROM SYS_FOREIGN"
+ 		" WHERE FOR_NAME = :for_name;"
+
+		"BEGIN\n"
+		"OPEN c;\n"
+		"WHILE 1 = 1 LOOP\n"
+		"  FETCH c INTO fk_get_legacy_row();\n"
+		"  IF (SQL % NOTFOUND) THEN\n"
+		"    EXIT;\n"
+		"  END IF;\n"
+		"END LOOP;\n"
+		"CLOSE c;\n"
+		"END;\n";
+
+	dberr_t err = que_eval_sql(info, sql, false, trx);
+	if (err == DB_SUCCESS && has_legacy_rows) {
+		err = DB_LEGACY_FK;
+	}
+
+	return err;
+}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+
 dberr_t
 dict_load_foreigns(
 	dict_table_t*		table,
@@ -21089,6 +21155,16 @@ dict_load_foreigns(
 		}
 		share= sa.share;
 	}
+
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+	trx_t * trx;
+	if (current_thd && (trx = thd_to_trx(current_thd))) {
+		err = fk_check_legacy_storage(table, trx);
+		if (err != DB_SUCCESS) {
+			return err;
+		}
+	}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
 	for (FK_info &fk: share->foreign_keys)
 	{
