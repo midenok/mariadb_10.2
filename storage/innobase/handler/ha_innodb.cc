@@ -21049,89 +21049,243 @@ void ins_node_t::vers_update_end(row_prebuilt_t *prebuilt, bool history_row)
 }
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+struct fk_legacy_data
+{
+	trx_t *trx;
+	TABLE_SHARE *s;
+	FK_info *fk;
+	dberr_t err;
+	fk_legacy_data(trx_t *_t, TABLE_SHARE *_s) : trx(_t), s(_s), fk(NULL), err(DB_SUCCESS)
+	{};
+};
+
 static
 unsigned long
-fk_get_legacy_row(
+fk_upgrade_create_fk(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
 	void*	user_arg)		/*!< in: fts cache */
 {
+	fk_legacy_data &d = *(fk_legacy_data *) user_arg;
+	d.err = DB_CANNOT_ADD_CONSTRAINT;
 	sel_node_t*	node = static_cast<sel_node_t*>(row);
 	que_node_t*	exp = node->select_list;
-	while (exp) {
-		dfield_t*	dfield = que_node_get_val(exp);
-		ulint		len = dfield_get_len(dfield);
-		exp = que_node_get_next(exp);
+
+	// Get foreign key ID
+	dfield_t*	fld = que_node_get_val(exp);
+	char src_id[MAX_FULL_NAME_LEN + 1];
+	char dst_id[MAX_TABLE_NAME_LEN + 1];
+	ut_a(fld->len <= MAX_FULL_NAME_LEN);
+	memcpy(src_id, fld->data, fld->len);
+	src_id[fld->len] = 0;
+	LEX_CSTRING id;
+	id.str = (const char*) memchr(src_id, '/', fld->len);
+
+	if (id.str == NULL) {
+		id = { (char *) src_id, fld->len };
+	} else {
+		id.str++;
+		size_t prefix_len = id.str - src_id;
+		if (prefix_len >= fld->len) {
+			ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
+					"Upgrade table %s with foreign key %s constraint"
+					" failed. Wrong foreign key ID!",
+					d.s->table_name.str, src_id);
+			return 0;
+		}
+		id.length = fld->len - prefix_len;
 	}
-	bool &has_legacy_rows = *(bool *) user_arg;
-	has_legacy_rows = true;
-	return 0;
+
+	/* Print the database name and table name separately. */
+	id.length = filename_to_tablename(id.str, dst_id, sizeof(dst_id));
+	ut_a(id.length);
+	id.str = dst_id;
+
+	for (FK_info &fk: d.s->foreign_keys) {
+		if (0 == cmp_ident(fk.foreign_id, id)) {
+			ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
+					"Upgrade table %s with foreign key %s constraint"
+					" failed. Duplicate foreign key ID!",
+					d.s->table_name.str, src_id);
+			return 0;
+		}
+	}
+
+	// Get referenced table name
+	exp = que_node_get_next(exp);
+	fld = que_node_get_val(exp);
+	ut_a(fld);
+	char src_ref[MAX_FULL_NAME_LEN + 1];
+	char dst_db[MAX_TABLE_NAME_LEN + 1];
+	char dst_table[MAX_TABLE_NAME_LEN + 1];
+	ut_a(fld->len <= MAX_FULL_NAME_LEN);
+	memcpy(src_ref, fld->data, fld->len);
+	src_ref[fld->len] = 0;
+	LEX_CSTRING db, table;
+	table.str = (const char*) memchr(src_ref, '/', fld->len);
+
+	if (table.str == NULL) {
+		table = { (char *) src_ref, fld->len };
+		db = { NULL, 0 };
+	} else {
+		table.str++;
+		size_t prefix_len = table.str - src_ref;
+		if (prefix_len >= fld->len) {
+			ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
+					"Upgrade table %s with foreign key %s constraint"
+					" failed. Wrong referenced table name!",
+					d.s->table_name.str, src_id);
+			return 0;
+		}
+		table.length = fld->len - prefix_len;
+		db = { src_ref, prefix_len - 1 };
+		src_ref[db.length] = 0;
+	}
+
+	table.length = filename_to_tablename(table.str, dst_table, sizeof(dst_table));
+	ut_a(table.length);
+	table.str = dst_table;
+
+	if (db.length) {
+		db.length = filename_to_tablename(db.str, dst_db, sizeof(dst_db));
+		ut_a(db.length);
+		db.str = dst_db;
+	}
+
+	ut_a(!que_node_get_next(exp));
+	// FIXME: update referenced tables
+	d.fk= new (&d.s->mem_root) FK_info();
+	if (!d.fk) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
+	}
+	d.fk->foreign_id.strdup(&d.s->mem_root, id);
+	if (!d.fk->foreign_id.str) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
+	}
+	d.fk->foreign_db = d.s->db;
+	d.fk->foreign_table = d.s->table_name;
+	if (0 != cmp_table(d.s->db, db)) {
+		d.fk->referenced_db.strdup(&d.s->mem_root, db);
+		if (!d.fk->referenced_db.str) {
+			d.err = DB_OUT_OF_MEMORY;
+			return 0;
+		}
+	}
+	d.fk->referenced_table.strdup(&d.s->mem_root, table);
+	if (!d.fk->referenced_table.str) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
+	}
+	d.err = DB_LEGACY_FK;
+	return 1;
 }
 
 static
 unsigned long
-fk_get_legacy_col(
+fk_upgrade_add_col(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
 	void*	user_arg)		/*!< in: fts cache */
 {
+	fk_legacy_data &d = *(fk_legacy_data *) user_arg;
 	sel_node_t*	node = static_cast<sel_node_t*>(row);
 	que_node_t*	exp = node->select_list;
-	while (exp) {
-		dfield_t*	dfield = que_node_get_val(exp);
-		ulint		len = dfield_get_len(dfield);
-		exp = que_node_get_next(exp);
+
+	// Get FOR_COL_NAME
+	dfield_t*	fld = que_node_get_val(exp);
+	ut_a(fld);
+	Lex_cstring *dst_f= new (&d.s->mem_root) Lex_cstring();
+	if (!dst_f) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
 	}
-	return 0;
+	dst_f->strdup(&d.s->mem_root, { (char *) fld->data, fld->len });
+	if (!dst_f->str) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
+	}
+
+	if (d.fk->foreign_fields.push_back(dst_f, &d.s->mem_root)) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
+	}
+
+	// Get REF_COL_NAME
+	exp = que_node_get_next(exp);
+	fld = que_node_get_val(exp);
+	ut_a(exp);
+	ut_a(fld);
+	dst_f= new (&d.s->mem_root) Lex_cstring();
+	if (!dst_f) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
+	}
+	dst_f->strdup(&d.s->mem_root, { (char *) fld->data, fld->len });
+	if (!dst_f->str) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
+	}
+
+	if (d.fk->referenced_fields.push_back(dst_f, &d.s->mem_root)) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
+	}
+
+	// Get POS
+	exp = que_node_get_next(exp);
+	fld = que_node_get_val(exp);
+
+	ut_a(!que_node_get_next(exp));
+	return 1;
 }
 
 static
 unsigned long
-fk_get_legacy_row_finish(
+fk_upgrade_push_fk(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
 	void*	user_arg)		/*!< in: fts cache */
 {
-	sel_node_t*	node = static_cast<sel_node_t*>(row);
-	que_node_t*	exp = node->select_list;
-	while (exp) {
-		dfield_t*	dfield = que_node_get_val(exp);
-		ulint		len = dfield_get_len(dfield);
-		exp = que_node_get_next(exp);
+	fk_legacy_data &d = *(fk_legacy_data *) user_arg;
+	if (d.s->foreign_keys.push_back(d.fk, &d.s->mem_root)) {
+		d.err = DB_OUT_OF_MEMORY;
+		return 0;
 	}
-	return 0;
+	return 1;
 }
 
 static
 dberr_t
-fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
+fk_check_legacy_storage(dict_table_t* table, trx_t* trx, TABLE_SHARE *share)
 {
 	pars_info_t* info;
-	bool has_legacy_rows = false;
+	fk_legacy_data d(trx, share);
 
 	info = pars_info_create();
 	if (!info) {
 		return DB_OUT_OF_MEMORY;
 	}
-	pars_info_bind_function(info, "fk_get_legacy_row", fk_get_legacy_row, &has_legacy_rows);
-	pars_info_bind_function(info, "fk_get_legacy_col", fk_get_legacy_col, NULL);
-	pars_info_bind_function(info, "fk_get_legacy_row_finish", fk_get_legacy_row_finish, NULL);
+	pars_info_bind_function(info, "fk_upgrade_create_fk", fk_upgrade_create_fk, &d);
+	pars_info_bind_function(info, "fk_upgrade_add_col", fk_upgrade_add_col, &d);
+	pars_info_bind_function(info, "fk_upgrade_push_fk", fk_upgrade_push_fk, &d);
 	pars_info_add_str_literal(info, "for_name", table->name.m_name);
 	static const char	sql[] =
 		"PROCEDURE FK_PROC () IS\n"
 		"fk_loop INT;\n"
 		"fk_id CHAR;\n"
-		"got_for_name CHAR;\n"
-		"DECLARE FUNCTION fk_get_legacy_row;\n"
-		"DECLARE FUNCTION fk_get_legacy_col;\n"
-		"DECLARE FUNCTION fk_get_legacy_row_finish;\n"
+		"unused CHAR;\n"
+		"DECLARE FUNCTION fk_upgrade_create_fk;\n"
+		"DECLARE FUNCTION fk_upgrade_add_col;\n"
+		"DECLARE FUNCTION fk_upgrade_push_fk;\n"
 
 		"DECLARE CURSOR c IS"
-		" SELECT ID, FOR_NAME FROM SYS_FOREIGN"
+		" SELECT ID, REF_NAME FROM SYS_FOREIGN"
  		" WHERE FOR_NAME = :for_name;"
 
 		"DECLARE CURSOR c2 IS"
-		" SELECT ID, FOR_COL_NAME, REF_COL_NAME, POS FROM SYS_FOREIGN_COLS"
+		" SELECT FOR_COL_NAME, REF_COL_NAME, POS FROM SYS_FOREIGN_COLS"
  		" WHERE ID = fk_id;"
 
 		"DECLARE CURSOR c3 IS"
@@ -21141,17 +21295,17 @@ fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 		"OPEN c;\n"
 		"fk_loop := 1;\n"
 		"WHILE fk_loop = 1 LOOP\n"
-		"  FETCH c INTO fk_get_legacy_row() fk_id, got_for_name;\n"
+		"  FETCH c INTO fk_upgrade_create_fk() fk_id, unused;\n"
 		"  IF (SQL % NOTFOUND) THEN\n"
 		"    fk_loop := 0;\n"
 		"  END IF;\n"
 		"  OPEN c2;\n"
 		"  WHILE 1 = 1 LOOP\n"
-		"    FETCH c2 INTO fk_get_legacy_col();\n"
+		"    FETCH c2 INTO fk_upgrade_add_col();\n"
 		"    IF (SQL % NOTFOUND) THEN\n"
 		"      CLOSE c2;\n"
 		"      OPEN c3;\n"
-		"      FETCH c3 INTO fk_get_legacy_row_finish();\n"
+		"      FETCH c3 INTO fk_upgrade_push_fk();\n"
 		"      CLOSE c3;\n"
 		"      EXIT;\n"
 		"    END IF;\n"
@@ -21161,8 +21315,8 @@ fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 		"END;\n";
 
 	dberr_t err = que_eval_sql(info, sql, false, trx);
-	if (err == DB_SUCCESS && has_legacy_rows) {
-		err = DB_LEGACY_FK;
+	if (err == DB_SUCCESS) {
+		return d.err;
 	}
 
 	return err;
@@ -21218,7 +21372,7 @@ dict_load_foreigns(
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
 	trx_t * trx;
 	if (current_thd && (trx = thd_to_trx(current_thd))) {
-		err = fk_check_legacy_storage(table, trx);
+		err = fk_check_legacy_storage(table, trx, share);
 		if (err != DB_SUCCESS) {
 			return err;
 		}
