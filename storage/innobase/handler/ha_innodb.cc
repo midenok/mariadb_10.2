@@ -21086,11 +21086,13 @@ void ins_node_t::vers_update_end(row_prebuilt_t *prebuilt, bool history_row)
 struct fk_legacy_data
 {
 	trx_t *trx;
+	dict_table_t *table;
 	TABLE_SHARE *s;
+	char ref_name[MAX_FULL_NAME_LEN + 1];
 	FK_info *fk;
 	dberr_t err;
 	FK_list foreign_keys;
-	fk_legacy_data(trx_t *_t, TABLE_SHARE *_s) : trx(_t), s(_s), fk(NULL), err(DB_SUCCESS)
+	fk_legacy_data(trx_t *_t, dict_table_t *_tab, TABLE_SHARE *_s) : trx(_t), table(_tab), s(_s), fk(NULL), err(DB_SUCCESS)
 	{};
 };
 
@@ -21131,7 +21133,6 @@ fk_upgrade_create_fk(
 		id.length = fld->len - prefix_len;
 	}
 
-	/* Print the database name and table name separately. */
 	id.length = filename_to_tablename(id.str, dst_id, sizeof(dst_id));
 	ut_a(id.length);
 	id.str = dst_id;
@@ -21150,21 +21151,20 @@ fk_upgrade_create_fk(
 	exp = que_node_get_next(exp);
 	fld = que_node_get_val(exp);
 	ut_a(fld);
-	char src_ref[MAX_FULL_NAME_LEN + 1];
 	char dst_db[MAX_TABLE_NAME_LEN + 1];
 	char dst_table[MAX_TABLE_NAME_LEN + 1];
 	ut_a(fld->len <= MAX_FULL_NAME_LEN);
-	memcpy(src_ref, fld->data, fld->len);
-	src_ref[fld->len] = 0;
+	memcpy(d.ref_name, fld->data, fld->len);
+	d.ref_name[fld->len] = 0;
 	LEX_CSTRING db, table;
-	table.str = (const char*) memchr(src_ref, '/', fld->len);
+	table.str = (const char*) memchr(d.ref_name, '/', fld->len);
 
 	if (table.str == NULL) {
-		table = { (char *) src_ref, fld->len };
+		table = { (char *) d.ref_name, fld->len };
 		db = { NULL, 0 };
 	} else {
 		table.str++;
-		size_t prefix_len = table.str - src_ref;
+		size_t prefix_len = table.str - d.ref_name;
 		if (prefix_len >= fld->len) {
 			ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
 					"Upgrade table %s with foreign key %s constraint"
@@ -21173,8 +21173,8 @@ fk_upgrade_create_fk(
 			return 0;
 		}
 		table.length = fld->len - prefix_len;
-		db = { src_ref, prefix_len - 1 };
-		src_ref[db.length] = 0;
+		db = { d.ref_name, prefix_len - 1 };
+		d.ref_name[db.length] = 0;
 	}
 
 	table.length = filename_to_tablename(table.str, dst_table, sizeof(dst_table));
@@ -21286,14 +21286,61 @@ fk_upgrade_push_fk(
 	if (d.err != DB_LEGACY_FK) {
 		return 0;
 	}
-	if (d.s->foreign_keys.push_back(d.fk, &d.s->mem_root)) {
-		d.err = DB_OUT_OF_MEMORY;
+	// Check indexes on ref and on foreign
+	FK_info &fk = *d.fk;
+	ut_ad(fk.foreign_fields.elements < MAX_NUM_FK_COLUMNS);
+	ut_ad(fk.foreign_fields.elements == fk.referenced_fields.elements);
+	uint i= 0;
+	const char* column_names[MAX_NUM_FK_COLUMNS];
+	const char* ref_column_names[MAX_NUM_FK_COLUMNS];
+	dict_index_t* index;
+	List_iterator_fast<Lex_cstring> it(fk.referenced_fields);
+	for (Lex_cstring &col: fk.foreign_fields) {
+		column_names[i] = col.str;
+		Lex_cstring *rcol = it++;
+		ref_column_names[i++] = rcol->str;
+	}
+	mutex_enter(&dict_sys.mutex);
+	index = dict_foreign_find_index(
+		d.table, NULL, column_names, fk.foreign_fields.elements,
+		NULL, true, false);
+	if (!index) {
+		mutex_exit(&dict_sys.mutex);
+		ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
+				"Upgrade table %s with foreign key %s constraint"
+				" failed. Index on foreign table not found!",
+				d.s->table_name.str, fk.foreign_id.str);
+		d.err = DB_CANNOT_ADD_CONSTRAINT;
+		return 0;
+	}
+	dict_table_t* ref_table = dict_load_table(d.ref_name, DICT_ERR_IGNORE_FK_NOKEY);
+	if (!ref_table) {
+		mutex_exit(&dict_sys.mutex);
+		ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
+				"Upgrade table %s with foreign key %s constraint"
+				" failed. Could not load referenced table!",
+				d.s->table_name.str, fk.foreign_id.str);
+		d.err = DB_CANNOT_ADD_CONSTRAINT;
+		return 0;
+	}
+	index = dict_foreign_find_index(
+		ref_table, NULL, ref_column_names, fk.foreign_fields.elements,
+		NULL, true, false);
+	dict_table_close(ref_table, true, false);
+	mutex_exit(&dict_sys.mutex);
+	if (!index) {
+		ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
+				"Upgrade table %s with foreign key %s constraint"
+				" failed. Index on referenced table not found!",
+				d.s->table_name.str, fk.foreign_id.str);
+		d.err = DB_CANNOT_ADD_CONSTRAINT;
 		return 0;
 	}
 	if (d.foreign_keys.push_back(d.fk, &d.s->mem_root)) {
 		d.err = DB_OUT_OF_MEMORY;
 		return 0;
 	}
+	d.fk = NULL;
 	return 1;
 }
 
@@ -21302,7 +21349,7 @@ dberr_t
 fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE *share)
 {
 	pars_info_t* info;
-	fk_legacy_data d(trx, share);
+	fk_legacy_data d(trx, table, share);
 
 	info = pars_info_create();
 	if (!info) {
@@ -21366,24 +21413,40 @@ fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE
 
 	// Got legacy foreign keys, update referenced shares
 	FK_create_vector ref_shares;
+	// FIXME: check column names on ref and on foreign?
+	// FIXME: backup main share
+	// FIXME: when table drops drop legacy keys
+	// FIXME: when table is renamed it is opened, no need to rename (legacy) foreign keys, but need to rename (legacy) referenced keys
 	if (d.s->fk_handle_create(thd, ref_shares, &d.foreign_keys)) {
-		goto err;
+		err = DB_ERROR;
+		goto rollback;
+	}
+
+	// Push to main share
+	for (FK_info &fk: d.foreign_keys) {
+		if (d.s->foreign_keys.push_back(&fk, &d.s->mem_root)) {
+			err = DB_OUT_OF_MEMORY;
+			goto rollback;
+		}
 	}
 
 	// Update foreign FRM
 	if (d.s->fk_write_shadow_frm()) {
-		goto err;
+		err = DB_ERROR;
+		goto rollback;
 	}
 
 	if (d.s->fk_install_shadow_frm()) {
-		goto err;
+		err = DB_ERROR;
+		goto rollback;
 	}
 
 	// Update referenced FRMs
 	for (FK_ddl_backup &bak: ref_shares) {
 		if (bak.sa.share->fk_install_shadow_frm()) {
 			// TODO: MDEV-21053 atomicity
-			goto err;
+			err = DB_ERROR;
+			goto rollback;
 		}
 	}
 
@@ -21424,11 +21487,11 @@ fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE
 
 	return DB_LEGACY_FK;
 
-err:
+rollback:
 	for (FK_ddl_backup &bak: ref_shares) {
 		bak.rollback();
 	}
-	return DB_ERROR;
+	return err;
 }
 
 static
