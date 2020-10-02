@@ -3571,40 +3571,6 @@ defer:
 
 	pars_info_add_str_literal(info, "name", name);
 
-#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-	if (innodb_shadow_foreign_storage
-	    && sqlcom != SQLCOM_TRUNCATE
-	    && strchr(name, '/')
-	    && dict_table_get_low("SYS_FOREIGN")
-	    && dict_table_get_low("SYS_FOREIGN_COLS")) {
-		err = que_eval_sql(
-			info,
-			"PROCEDURE DROP_FOREIGN_PROC () IS\n"
-			"fid CHAR;\n"
-
-			"DECLARE CURSOR fk IS\n"
-			"SELECT ID FROM SYS_FOREIGN\n"
-			"WHERE FOR_NAME = :name\n"
-			"AND TO_BINARY(FOR_NAME) = TO_BINARY(:name)\n"
-			"FOR UPDATE;\n"
-
-			"BEGIN\n"
-			"OPEN fk;\n"
-			"WHILE 1 = 1 LOOP\n"
-			"  FETCH fk INTO fid;\n"
-			"  IF (SQL % NOTFOUND) THEN RETURN; END IF;\n"
-			"  DELETE FROM SYS_FOREIGN_COLS WHERE ID=fid;\n"
-			"  DELETE FROM SYS_FOREIGN WHERE ID=fid;\n"
-			"END LOOP;\n"
-			"CLOSE fk;\n"
-			"END;\n", FALSE, trx);
-		if (err != DB_SUCCESS) {
-			goto error;
-		}
-		info = pars_info_create();
-		pars_info_add_str_literal(info, "name", name);
-	}
-#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 	{
 		if (dict_table_get_low("SYS_VIRTUAL")) {
 			err = que_eval_sql(
@@ -3678,9 +3644,6 @@ defer:
 		}
 	}
 
-#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-error:
-#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 	switch (err) {
 		fil_space_t* space;
 		char* filepath;

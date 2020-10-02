@@ -5521,7 +5521,7 @@ ha_innobase::open(const char* name, int, uint open_flags)
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
 	trx_t *trx = thd_to_trx(thd);
-	if (trx && !innodb_shadow_foreign_storage) {
+	if (trx) {
 		dberr_t err;
 		if (open_flags & HA_OPEN_FOR_REPAIR) {
 			err = fk_upgrade_legacy_storage(ib_table, trx, thd, table->s);
@@ -19418,14 +19418,6 @@ static MYSQL_SYSVAR_BOOL(encrypt_temporary_tables, innodb_encrypt_temporary_tabl
   "Enrypt the temporary table data.",
   NULL, NULL, false);
 
-#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-static MYSQL_SYSVAR_BOOL(shadow_foreign_storage,
-  innodb_shadow_foreign_storage,
-  PLUGIN_VAR_OPCMDARG,
-  "Update SYS_FOREIGN, SYS_FOREIGN_COLS when table foreign keys are updated",
-  NULL, NULL, false);
-#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
-
 static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(autoextend_increment),
   MYSQL_SYSVAR(buffer_pool_size),
@@ -19605,9 +19597,6 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(buf_dump_status_frequency),
   MYSQL_SYSVAR(background_thread),
   MYSQL_SYSVAR(encrypt_temporary_tables),
-#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-  MYSQL_SYSVAR(shadow_foreign_storage),
-#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
   NULL
 };
