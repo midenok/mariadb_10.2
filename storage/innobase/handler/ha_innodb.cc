@@ -12182,25 +12182,11 @@ create_table_info_t::create_foreign_keys()
 		}
 	}
 
-#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-	dberr_t error = DB_SUCCESS;
-	if (innodb_shadow_foreign_storage) {
-		m_trx->op_info = "adding foreign keys";
-		trx_start_if_not_started_xa(m_trx, true);
-		trx_set_dict_operation(m_trx, TRX_DICT_OP_TABLE);
-		error = dict_create_add_foreigns_to_dictionary(local_fk_set,
-							       table, m_trx);
-	}
-#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 	local_fk_set.clear();
 
 	dict_mem_table_fill_foreign_vcol_set(table);
 
-#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-	return (error);
-#else
 	return (DB_SUCCESS);
-#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 }
 
 /** Create the internal innodb table.

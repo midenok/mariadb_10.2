@@ -3975,64 +3975,6 @@ loop:
 	DBUG_RETURN(err);
 }
 
-#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-/****************************************************************//**
-Delete a single constraint.
-@return error code or DB_SUCCESS */
-static MY_ATTRIBUTE((nonnull, warn_unused_result))
-dberr_t
-row_delete_constraint_low(
-/*======================*/
-	const char*	id,		/*!< in: constraint id */
-	trx_t*		trx)		/*!< in: transaction handle */
-{
-	pars_info_t*	info = pars_info_create();
-
-	pars_info_add_str_literal(info, "id", id);
-
-	return(que_eval_sql(info,
-			    "PROCEDURE DELETE_CONSTRAINT () IS\n"
-			    "BEGIN\n"
-			    "DELETE FROM SYS_FOREIGN_COLS WHERE ID = :id;\n"
-			    "DELETE FROM SYS_FOREIGN WHERE ID = :id;\n"
-			    "END;\n"
-			    , FALSE, trx));
-}
-
-/****************************************************************//**
-Delete a single constraint.
-@return error code or DB_SUCCESS */
-static MY_ATTRIBUTE((nonnull, warn_unused_result))
-dberr_t
-row_delete_constraint(
-/*==================*/
-	const char*	id,		/*!< in: constraint id */
-	const char*	database_name,	/*!< in: database name, with the
-					trailing '/' */
-	mem_heap_t*	heap,		/*!< in: memory heap */
-	trx_t*		trx)		/*!< in: transaction handle */
-{
-	dberr_t	err;
-
-	/* New format constraints have ids <databasename>/<constraintname>. */
-	err = row_delete_constraint_low(
-		mem_heap_strcat(heap, database_name, id), trx);
-
-	if ((err == DB_SUCCESS) && !strchr(id, '/')) {
-		/* Old format < 4.0.18 constraints have constraint ids
-		NUMBER_NUMBER. We only try deleting them if the
-		constraint name does not contain a '/' character, otherwise
-		deleting a new format constraint named 'foo/bar' from
-		database 'baz' would remove constraint 'bar' from database
-		'foo', if it existed. */
-
-		err = row_delete_constraint_low(id, trx);
-	}
-
-	return(err);
-}
-#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
-
 /*********************************************************************//**
 Renames a table for MySQL.
 @return error code or DB_SUCCESS */
