@@ -19418,6 +19418,59 @@ static MYSQL_SYSVAR_BOOL(encrypt_temporary_tables, innodb_encrypt_temporary_tabl
   "Enrypt the temporary table data.",
   NULL, NULL, false);
 
+#ifdef UNIV_DEBUG
+
+static char* innodb_eval_sql;
+
+static int innodb_eval_sql_validate(THD *thd, st_mysql_sys_var*,
+					void* save, st_mysql_value* value)
+{
+	char*	sql;
+	const size_t MAX_SQL = 8192;
+	char	buff[MAX_SQL];
+	int len = sizeof(buff);
+
+	ut_ad(save != NULL);
+	ut_ad(value != NULL);
+
+	trx_t * trx = trx_create();
+	if (!trx) {
+		my_error(ER_OUT_OF_RESOURCES, MYF(0));
+		return 1;
+	}
+	sql = (char*) value->val_str(value, buff, &len);
+	if (!sql) {
+		trx->error_state = DB_SUCCESS;
+		trx->free();
+		my_error(ER_OUT_OF_RESOURCES, MYF(0));
+		return 1;
+	}
+	trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
+
+	trx->op_info = "Evaluating internal SQL";
+
+	pars_info_t*	info = pars_info_create();
+	info->fatal_syntax_err = false;
+	dberr_t err = que_eval_sql(info, sql, true, trx);
+	if (err != DB_SUCCESS) {
+		trx->error_state = DB_SUCCESS;
+		trx->free();
+		ib_push_warning(trx, err, (err == DB_ERROR ? "Syntax error" : ut_strerr(err)));
+		return 1;
+	}
+	trx_commit_for_mysql(trx);
+	trx->free();
+	*static_cast<const char**>(save) = sql;
+	return 0;
+}
+
+static MYSQL_SYSVAR_STR(eval_sql,
+  innodb_eval_sql,
+  PLUGIN_VAR_OPCMDARG|PLUGIN_VAR_MEMALLOC,
+  "Evaluate internal SQL",
+  innodb_eval_sql_validate, NULL, NULL);
+#endif /* UNIV_DEBUG */
+
 static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(autoextend_increment),
   MYSQL_SYSVAR(buffer_pool_size),
@@ -19580,6 +19633,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(dict_stats_disabled_debug),
   MYSQL_SYSVAR(master_thread_disabled_debug),
   MYSQL_SYSVAR(sync_debug),
+  MYSQL_SYSVAR(eval_sql),
 #endif /* UNIV_DEBUG */
   MYSQL_SYSVAR(force_primary_key),
   MYSQL_SYSVAR(fatal_semaphore_wait_threshold),

@@ -321,13 +321,15 @@ insert_statement_start:
 
 insert_statement:
 	insert_statement_start PARS_VALUES_TOKEN '(' exp_list ')'
-				{ $$ = pars_insert_statement(
-					static_cast<sym_node_t*>($1), $4, NULL); }
+				{ if (!($$ = pars_insert_statement(
+					static_cast<sym_node_t*>($1), $4, NULL)))
+					YYABORT; }
 	| insert_statement_start select_statement
-				{ $$ = pars_insert_statement(
+				{ if (!($$ = pars_insert_statement(
 					static_cast<sym_node_t*>($1),
 					NULL,
-					static_cast<sel_node_t*>($2)); }
+					static_cast<sel_node_t*>($2))))
+					YYABORT; }
 ;
 
 column_assignment:

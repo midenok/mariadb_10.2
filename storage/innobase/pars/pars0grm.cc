@@ -526,13 +526,13 @@ static const yytype_uint16 yyrline[] =
      228,   229,   234,   235,   236,   241,   242,   243,   247,   248,
      256,   257,   258,   263,   265,   268,   272,   273,   277,   278,
      283,   284,   289,   290,   291,   295,   296,   303,   318,   323,
-     326,   334,   340,   341,   346,   352,   361,   369,   377,   384,
-     392,   400,   407,   413,   414,   419,   420,   422,   426,   433,
-     439,   449,   453,   457,   464,   471,   475,   483,   492,   493,
-     498,   499,   504,   505,   511,   519,   520,   525,   526,   530,
-     531,   535,   549,   550,   554,   559,   564,   565,   566,   570,
-     576,   578,   579,   583,   591,   597,   598,   601,   603,   604,
-     608
+     327,   336,   342,   343,   348,   354,   363,   371,   379,   386,
+     394,   402,   409,   415,   416,   421,   422,   424,   428,   435,
+     441,   451,   455,   459,   466,   473,   477,   485,   494,   495,
+     500,   501,   506,   507,   513,   521,   522,   527,   528,   532,
+     533,   537,   551,   552,   556,   561,   566,   567,   568,   572,
+     578,   580,   581,   585,   593,   599,   600,   603,   605,   606,
+     610
 };
 #endif
 
@@ -2008,384 +2008,386 @@ yyreduce:
 
   case 89:
 #line 324 "pars0grm.y"
-    { yyval = pars_insert_statement(
-					static_cast<sym_node_t*>(yyvsp[-4]), yyvsp[-1], NULL); }
-#line 2014 "pars0grm.cc"
+    { if (!(yyval = pars_insert_statement(
+					static_cast<sym_node_t*>(yyvsp[-4]), yyvsp[-1], NULL)))
+					YYABORT; }
+#line 2015 "pars0grm.cc"
     break;
 
   case 90:
-#line 327 "pars0grm.y"
-    { yyval = pars_insert_statement(
+#line 328 "pars0grm.y"
+    { if (!(yyval = pars_insert_statement(
 					static_cast<sym_node_t*>(yyvsp[-1]),
 					NULL,
-					static_cast<sel_node_t*>(yyvsp[0])); }
-#line 2023 "pars0grm.cc"
+					static_cast<sel_node_t*>(yyvsp[0]))))
+					YYABORT; }
+#line 2025 "pars0grm.cc"
     break;
 
   case 91:
-#line 334 "pars0grm.y"
+#line 336 "pars0grm.y"
     { yyval = pars_column_assignment(
 					static_cast<sym_node_t*>(yyvsp[-2]),
 					static_cast<que_node_t*>(yyvsp[0])); }
-#line 2031 "pars0grm.cc"
+#line 2033 "pars0grm.cc"
     break;
 
   case 92:
-#line 340 "pars0grm.y"
+#line 342 "pars0grm.y"
     { yyval = que_node_list_add_last(NULL, yyvsp[0]); }
-#line 2037 "pars0grm.cc"
+#line 2039 "pars0grm.cc"
     break;
 
   case 93:
-#line 342 "pars0grm.y"
+#line 344 "pars0grm.y"
     { yyval = que_node_list_add_last(yyvsp[-2], yyvsp[0]); }
-#line 2043 "pars0grm.cc"
+#line 2045 "pars0grm.cc"
     break;
 
   case 94:
-#line 348 "pars0grm.y"
+#line 350 "pars0grm.y"
     { yyval = yyvsp[0]; }
-#line 2049 "pars0grm.cc"
+#line 2051 "pars0grm.cc"
     break;
 
   case 95:
-#line 354 "pars0grm.y"
+#line 356 "pars0grm.y"
     { yyval = pars_update_statement_start(
 					FALSE,
 					static_cast<sym_node_t*>(yyvsp[-2]),
 					static_cast<col_assign_node_t*>(yyvsp[0])); }
-#line 2058 "pars0grm.cc"
+#line 2060 "pars0grm.cc"
     break;
 
   case 96:
-#line 362 "pars0grm.y"
+#line 364 "pars0grm.y"
     { yyval = pars_update_statement(
 					static_cast<upd_node_t*>(yyvsp[-1]),
 					NULL,
 					static_cast<que_node_t*>(yyvsp[0])); }
-#line 2067 "pars0grm.cc"
+#line 2069 "pars0grm.cc"
     break;
 
   case 97:
-#line 370 "pars0grm.y"
+#line 372 "pars0grm.y"
     { yyval = pars_update_statement(
 					static_cast<upd_node_t*>(yyvsp[-1]),
 					static_cast<sym_node_t*>(yyvsp[0]),
 					NULL); }
-#line 2076 "pars0grm.cc"
+#line 2078 "pars0grm.cc"
     break;
 
   case 98:
-#line 378 "pars0grm.y"
+#line 380 "pars0grm.y"
     { yyval = pars_update_statement_start(
 					TRUE,
 					static_cast<sym_node_t*>(yyvsp[0]), NULL); }
-#line 2084 "pars0grm.cc"
+#line 2086 "pars0grm.cc"
     break;
 
   case 99:
-#line 385 "pars0grm.y"
+#line 387 "pars0grm.y"
     { yyval = pars_update_statement(
 					static_cast<upd_node_t*>(yyvsp[-1]),
 					NULL,
 					static_cast<que_node_t*>(yyvsp[0])); }
-#line 2093 "pars0grm.cc"
+#line 2095 "pars0grm.cc"
     break;
 
   case 100:
-#line 393 "pars0grm.y"
+#line 395 "pars0grm.y"
     { yyval = pars_update_statement(
 					static_cast<upd_node_t*>(yyvsp[-1]),
 					static_cast<sym_node_t*>(yyvsp[0]),
 					NULL); }
-#line 2102 "pars0grm.cc"
+#line 2104 "pars0grm.cc"
     break;
 
   case 101:
-#line 401 "pars0grm.y"
+#line 403 "pars0grm.y"
     { yyval = pars_assignment_statement(
 					static_cast<sym_node_t*>(yyvsp[-2]),
 					static_cast<que_node_t*>(yyvsp[0])); }
-#line 2110 "pars0grm.cc"
+#line 2112 "pars0grm.cc"
     break;
 
   case 102:
-#line 409 "pars0grm.y"
+#line 411 "pars0grm.y"
     { yyval = pars_elsif_element(yyvsp[-2], yyvsp[0]); }
-#line 2116 "pars0grm.cc"
+#line 2118 "pars0grm.cc"
     break;
 
   case 103:
-#line 413 "pars0grm.y"
+#line 415 "pars0grm.y"
     { yyval = que_node_list_add_last(NULL, yyvsp[0]); }
-#line 2122 "pars0grm.cc"
+#line 2124 "pars0grm.cc"
     break;
 
   case 104:
-#line 415 "pars0grm.y"
+#line 417 "pars0grm.y"
     { yyval = que_node_list_add_last(yyvsp[-1], yyvsp[0]); }
-#line 2128 "pars0grm.cc"
+#line 2130 "pars0grm.cc"
     break;
 
   case 105:
-#line 419 "pars0grm.y"
+#line 421 "pars0grm.y"
     { yyval = NULL; }
-#line 2134 "pars0grm.cc"
+#line 2136 "pars0grm.cc"
     break;
 
   case 106:
-#line 421 "pars0grm.y"
+#line 423 "pars0grm.y"
     { yyval = yyvsp[0]; }
-#line 2140 "pars0grm.cc"
+#line 2142 "pars0grm.cc"
     break;
 
   case 107:
-#line 422 "pars0grm.y"
+#line 424 "pars0grm.y"
     { yyval = yyvsp[0]; }
-#line 2146 "pars0grm.cc"
+#line 2148 "pars0grm.cc"
     break;
 
   case 108:
-#line 429 "pars0grm.y"
+#line 431 "pars0grm.y"
     { yyval = pars_if_statement(yyvsp[-5], yyvsp[-3], yyvsp[-2]); }
-#line 2152 "pars0grm.cc"
+#line 2154 "pars0grm.cc"
     break;
 
   case 109:
-#line 435 "pars0grm.y"
+#line 437 "pars0grm.y"
     { yyval = pars_while_statement(yyvsp[-4], yyvsp[-2]); }
-#line 2158 "pars0grm.cc"
+#line 2160 "pars0grm.cc"
     break;
 
   case 110:
-#line 443 "pars0grm.y"
+#line 445 "pars0grm.y"
     { yyval = pars_for_statement(
 					static_cast<sym_node_t*>(yyvsp[-8]),
 					yyvsp[-6], yyvsp[-4], yyvsp[-2]); }
-#line 2166 "pars0grm.cc"
+#line 2168 "pars0grm.cc"
     break;
 
   case 111:
-#line 449 "pars0grm.y"
+#line 451 "pars0grm.y"
     { yyval = pars_exit_statement(); }
-#line 2172 "pars0grm.cc"
+#line 2174 "pars0grm.cc"
     break;
 
   case 112:
-#line 453 "pars0grm.y"
+#line 455 "pars0grm.y"
     { yyval = pars_return_statement(); }
-#line 2178 "pars0grm.cc"
+#line 2180 "pars0grm.cc"
     break;
 
   case 113:
-#line 458 "pars0grm.y"
+#line 460 "pars0grm.y"
     { yyval = pars_open_statement(
 						ROW_SEL_OPEN_CURSOR,
 						static_cast<sym_node_t*>(yyvsp[0])); }
-#line 2186 "pars0grm.cc"
+#line 2188 "pars0grm.cc"
     break;
 
   case 114:
-#line 465 "pars0grm.y"
+#line 467 "pars0grm.y"
     { yyval = pars_open_statement(
 						ROW_SEL_CLOSE_CURSOR,
 						static_cast<sym_node_t*>(yyvsp[0])); }
-#line 2194 "pars0grm.cc"
+#line 2196 "pars0grm.cc"
     break;
 
   case 115:
-#line 472 "pars0grm.y"
+#line 474 "pars0grm.y"
     { yyval = pars_fetch_statement(
 					static_cast<sym_node_t*>(yyvsp[-2]),
 					static_cast<sym_node_t*>(yyvsp[0]), NULL); }
-#line 2202 "pars0grm.cc"
+#line 2204 "pars0grm.cc"
     break;
 
   case 116:
-#line 476 "pars0grm.y"
+#line 478 "pars0grm.y"
     { yyval = pars_fetch_statement(
 					static_cast<sym_node_t*>(yyvsp[-3]),
 					static_cast<sym_node_t*>(yyvsp[0]),
 					static_cast<sym_node_t*>(yyvsp[-1])); }
-#line 2211 "pars0grm.cc"
+#line 2213 "pars0grm.cc"
     break;
 
   case 117:
-#line 484 "pars0grm.y"
+#line 486 "pars0grm.y"
     { yyval = pars_column_def(
 					static_cast<sym_node_t*>(yyvsp[-3]),
 					static_cast<pars_res_word_t*>(yyvsp[-2]),
 					static_cast<sym_node_t*>(yyvsp[-1]),
 					yyvsp[0]); }
-#line 2221 "pars0grm.cc"
+#line 2223 "pars0grm.cc"
     break;
 
   case 118:
-#line 492 "pars0grm.y"
+#line 494 "pars0grm.y"
     { yyval = que_node_list_add_last(NULL, yyvsp[0]); }
-#line 2227 "pars0grm.cc"
+#line 2229 "pars0grm.cc"
     break;
 
   case 119:
-#line 494 "pars0grm.y"
+#line 496 "pars0grm.y"
     { yyval = que_node_list_add_last(yyvsp[-2], yyvsp[0]); }
-#line 2233 "pars0grm.cc"
+#line 2235 "pars0grm.cc"
     break;
 
   case 120:
-#line 498 "pars0grm.y"
+#line 500 "pars0grm.y"
     { yyval = NULL; }
-#line 2239 "pars0grm.cc"
+#line 2241 "pars0grm.cc"
     break;
 
   case 121:
-#line 500 "pars0grm.y"
+#line 502 "pars0grm.y"
     { yyval = yyvsp[-1]; }
-#line 2245 "pars0grm.cc"
+#line 2247 "pars0grm.cc"
     break;
 
   case 122:
-#line 504 "pars0grm.y"
+#line 506 "pars0grm.y"
     { yyval = NULL; }
-#line 2251 "pars0grm.cc"
+#line 2253 "pars0grm.cc"
     break;
 
   case 123:
-#line 506 "pars0grm.y"
+#line 508 "pars0grm.y"
     { yyval = &pars_int_token;
 					/* pass any non-NULL pointer */ }
-#line 2258 "pars0grm.cc"
+#line 2260 "pars0grm.cc"
     break;
 
   case 124:
-#line 513 "pars0grm.y"
+#line 515 "pars0grm.y"
     { yyval = pars_create_table(
 					static_cast<sym_node_t*>(yyvsp[-3]),
 					static_cast<sym_node_t*>(yyvsp[-1])); }
-#line 2266 "pars0grm.cc"
+#line 2268 "pars0grm.cc"
     break;
 
   case 125:
-#line 519 "pars0grm.y"
+#line 521 "pars0grm.y"
     { yyval = que_node_list_add_last(NULL, yyvsp[0]); }
-#line 2272 "pars0grm.cc"
+#line 2274 "pars0grm.cc"
     break;
 
   case 126:
-#line 521 "pars0grm.y"
+#line 523 "pars0grm.y"
     { yyval = que_node_list_add_last(yyvsp[-2], yyvsp[0]); }
-#line 2278 "pars0grm.cc"
+#line 2280 "pars0grm.cc"
     break;
 
   case 127:
-#line 525 "pars0grm.y"
+#line 527 "pars0grm.y"
     { yyval = NULL; }
-#line 2284 "pars0grm.cc"
+#line 2286 "pars0grm.cc"
     break;
 
   case 128:
-#line 526 "pars0grm.y"
+#line 528 "pars0grm.y"
     { yyval = &pars_unique_token; }
-#line 2290 "pars0grm.cc"
+#line 2292 "pars0grm.cc"
     break;
 
   case 129:
-#line 530 "pars0grm.y"
+#line 532 "pars0grm.y"
     { yyval = NULL; }
-#line 2296 "pars0grm.cc"
+#line 2298 "pars0grm.cc"
     break;
 
   case 130:
-#line 531 "pars0grm.y"
+#line 533 "pars0grm.y"
     { yyval = &pars_clustered_token; }
-#line 2302 "pars0grm.cc"
+#line 2304 "pars0grm.cc"
     break;
 
   case 131:
-#line 540 "pars0grm.y"
+#line 542 "pars0grm.y"
     { yyval = pars_create_index(
 					static_cast<pars_res_word_t*>(yyvsp[-8]),
 					static_cast<pars_res_word_t*>(yyvsp[-7]),
 					static_cast<sym_node_t*>(yyvsp[-5]),
 					static_cast<sym_node_t*>(yyvsp[-3]),
 					static_cast<sym_node_t*>(yyvsp[-1])); }
-#line 2313 "pars0grm.cc"
+#line 2315 "pars0grm.cc"
     break;
 
   case 132:
-#line 549 "pars0grm.y"
+#line 551 "pars0grm.y"
     { yyval = yyvsp[0]; }
-#line 2319 "pars0grm.cc"
+#line 2321 "pars0grm.cc"
     break;
 
   case 133:
-#line 550 "pars0grm.y"
+#line 552 "pars0grm.y"
     { yyval = yyvsp[0]; }
-#line 2325 "pars0grm.cc"
+#line 2327 "pars0grm.cc"
     break;
 
   case 134:
-#line 555 "pars0grm.y"
+#line 557 "pars0grm.y"
     { yyval = pars_commit_statement(); }
-#line 2331 "pars0grm.cc"
+#line 2333 "pars0grm.cc"
     break;
 
   case 135:
-#line 560 "pars0grm.y"
+#line 562 "pars0grm.y"
     { yyval = pars_rollback_statement(); }
-#line 2337 "pars0grm.cc"
+#line 2339 "pars0grm.cc"
     break;
 
   case 136:
-#line 564 "pars0grm.y"
+#line 566 "pars0grm.y"
     { yyval = &pars_int_token; }
-#line 2343 "pars0grm.cc"
+#line 2345 "pars0grm.cc"
     break;
 
   case 137:
-#line 565 "pars0grm.y"
+#line 567 "pars0grm.y"
     { yyval = &pars_bigint_token; }
-#line 2349 "pars0grm.cc"
+#line 2351 "pars0grm.cc"
     break;
 
   case 138:
-#line 566 "pars0grm.y"
+#line 568 "pars0grm.y"
     { yyval = &pars_char_token; }
-#line 2355 "pars0grm.cc"
+#line 2357 "pars0grm.cc"
     break;
 
   case 139:
-#line 571 "pars0grm.y"
+#line 573 "pars0grm.y"
     { yyval = pars_variable_declaration(
 					static_cast<sym_node_t*>(yyvsp[-2]),
 					static_cast<pars_res_word_t*>(yyvsp[-1])); }
-#line 2363 "pars0grm.cc"
+#line 2365 "pars0grm.cc"
     break;
 
   case 143:
-#line 585 "pars0grm.y"
+#line 587 "pars0grm.y"
     { yyval = pars_cursor_declaration(
 					static_cast<sym_node_t*>(yyvsp[-3]),
 					static_cast<sel_node_t*>(yyvsp[-1])); }
-#line 2371 "pars0grm.cc"
+#line 2373 "pars0grm.cc"
     break;
 
   case 144:
-#line 592 "pars0grm.y"
+#line 594 "pars0grm.y"
     { yyval = pars_function_declaration(
 					static_cast<sym_node_t*>(yyvsp[-1])); }
-#line 2378 "pars0grm.cc"
+#line 2380 "pars0grm.cc"
     break;
 
   case 150:
-#line 614 "pars0grm.y"
+#line 616 "pars0grm.y"
     { yyval = pars_procedure_definition(
 					static_cast<sym_node_t*>(yyvsp[-8]), yyvsp[-1]); }
-#line 2385 "pars0grm.cc"
+#line 2387 "pars0grm.cc"
     break;
 
 
-#line 2389 "pars0grm.cc"
+#line 2391 "pars0grm.cc"
 
       default: break;
     }
@@ -2617,5 +2619,5 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 618 "pars0grm.y"
+#line 620 "pars0grm.y"
 
