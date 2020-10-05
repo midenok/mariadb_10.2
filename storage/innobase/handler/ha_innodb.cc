@@ -19425,9 +19425,14 @@ static char* innodb_eval_sql;
 static int innodb_eval_sql_validate(THD *thd, st_mysql_sys_var*,
 					void* save, st_mysql_value* value)
 {
-	char*	sql;
-	const size_t MAX_SQL = 8192;
-	char	buff[MAX_SQL];
+	/** Preamble to all SQL statements. */
+	static const char* sql_begin= "PROCEDURE P() IS\nBEGIN\n";
+
+	/** Postamble to non-committing SQL statements. */
+	static const char* sql_end= "\nEND;\n";
+
+	char	*sql, *str;
+	char	buff[8192]; // size doesn't matter: val_str() reallocates
 	int len = sizeof(buff);
 
 	ut_ad(save != NULL);
@@ -19440,18 +19445,25 @@ static int innodb_eval_sql_validate(THD *thd, st_mysql_sys_var*,
 	}
 	sql = (char*) value->val_str(value, buff, &len);
 	if (!sql) {
+mem_err:
 		trx->error_state = DB_SUCCESS;
 		trx->free();
 		my_error(ER_OUT_OF_RESOURCES, MYF(0));
 		return 1;
 	}
+	str = ut_str3cat(sql_begin, sql, sql_end);
+	if (!str) {
+		goto mem_err;
+	}
+
 	trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 
 	trx->op_info = "Evaluating internal SQL";
 
 	pars_info_t*	info = pars_info_create();
 	info->fatal_syntax_err = false;
-	dberr_t err = que_eval_sql(info, sql, true, trx);
+	dberr_t err = que_eval_sql(info, str, true, trx);
+	ut_free(str);
 	if (err != DB_SUCCESS) {
 		trx->error_state = DB_SUCCESS;
 		trx->free();
