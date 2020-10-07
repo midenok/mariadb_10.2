@@ -484,7 +484,7 @@ const struct _ft_vft_ext ft_vft_ext_result = {innobase_fts_get_version,
 					      innobase_fts_count_matches};
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-static dberr_t fk_check_legacy_storage(dict_table_t* table, trx_t* trx);
+static dberr_t fk_check_legacy_storage(const char* table_name, trx_t* trx);
 static dberr_t fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE *share);
 #endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
@@ -5526,7 +5526,7 @@ ha_innobase::open(const char* name, int, uint open_flags)
 		if (open_flags & HA_OPEN_FOR_REPAIR) {
 			err = fk_upgrade_legacy_storage(ib_table, trx, thd, table->s);
 			if (err == DB_LEGACY_FK) {
-				err = fk_check_legacy_storage(ib_table, trx);
+				err = fk_check_legacy_storage(ib_table->name.m_name, trx);
 				if (err == DB_LEGACY_FK) {
 					push_warning_printf(
 						thd,
@@ -5537,7 +5537,7 @@ ha_innobase::open(const char* name, int, uint open_flags)
 				}
 			}
 		} else {
-			err = fk_check_legacy_storage(ib_table, trx);
+			err = fk_check_legacy_storage(ib_table->name.m_name, trx);
 		}
 		if (err != DB_SUCCESS) {
 			dict_table_close(ib_table, FALSE, FALSE);
@@ -19438,10 +19438,16 @@ static int innodb_eval_sql_validate(THD *thd, st_mysql_sys_var*,
 	ut_ad(save != NULL);
 	ut_ad(value != NULL);
 
-	trx_t * trx = trx_create();
+	bool free_trx = false;
+	trx_t * trx = thd_to_trx(thd);
 	if (!trx) {
-		my_error(ER_OUT_OF_RESOURCES, MYF(0));
-		return 1;
+		trx = trx_create();
+		if (!trx) {
+			my_error(ER_OUT_OF_RESOURCES, MYF(0));
+			return 1;
+		}
+		free_trx = true;
+		trx_start_internal(trx);
 	}
 	sql = (char*) value->val_str(value, buff, &len);
 	if (!sql) {
@@ -19456,8 +19462,6 @@ mem_err:
 		goto mem_err;
 	}
 
-	trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
-
 	trx->op_info = "Evaluating internal SQL";
 
 	pars_info_t*	info = pars_info_create();
@@ -19465,13 +19469,23 @@ mem_err:
 	dberr_t err = que_eval_sql(info, str, true, trx);
 	ut_free(str);
 	if (err != DB_SUCCESS) {
-		trx->error_state = DB_SUCCESS;
-		trx->free();
+		trx->op_info = "Rollback of internal trx on innodb_eval_sql";
+		trx->dict_operation_lock_mode = RW_X_LATCH;
+		trx->rollback();
+		trx->dict_operation_lock_mode = 0;
+		trx->op_info = "";
+		ut_a(trx->error_state == DB_SUCCESS);
+		fk_check_legacy_storage("test/t2", trx);
+		if (free_trx) {
+			trx->free();
+		}
 		ib_push_warning(trx, err, (err == DB_ERROR ? "Syntax error" : ut_strerr(err)));
 		return 1;
 	}
 	trx_commit_for_mysql(trx);
-	trx->free();
+	if (free_trx) {
+		trx->free();
+	}
 	*static_cast<const char**>(save) = sql;
 	return 0;
 }
@@ -21142,7 +21156,7 @@ unsigned long
 fk_upgrade_create_fk(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
-	void*	user_arg)		/*!< in: fts cache */
+	void*	user_arg)		/*!< in: fk_legacy_data */
 {
 	fk_legacy_data &d = *(fk_legacy_data *) user_arg;
 	d.err = DB_CANNOT_ADD_CONSTRAINT;
@@ -21153,6 +21167,7 @@ fk_upgrade_create_fk(
 	dfield_t*	fld = que_node_get_val(exp);
 	char src_id[MAX_FULL_NAME_LEN + 1];
 	char dst_id[MAX_TABLE_NAME_LEN + 1];
+	char src_ref[MAX_FULL_NAME_LEN + 1];
 	ut_a(fld->len <= MAX_FULL_NAME_LEN);
 	memcpy(src_id, fld->data, fld->len);
 	src_id[fld->len] = 0;
@@ -21195,17 +21210,18 @@ fk_upgrade_create_fk(
 	char dst_db[MAX_TABLE_NAME_LEN + 1];
 	char dst_table[MAX_TABLE_NAME_LEN + 1];
 	ut_a(fld->len <= MAX_FULL_NAME_LEN);
-	memcpy(d.ref_name, fld->data, fld->len);
-	d.ref_name[fld->len] = 0;
+	memcpy(src_ref, fld->data, fld->len);
+	src_ref[fld->len] = 0;
+	memcpy(d.ref_name, src_ref, fld->len + 1);
 	LEX_CSTRING db, table;
-	table.str = (const char*) memchr(d.ref_name, '/', fld->len);
+	table.str = (const char*) memchr(src_ref, '/', fld->len);
 
 	if (table.str == NULL) {
-		table = { (char *) d.ref_name, fld->len };
+		table = { (char *) src_ref, fld->len };
 		db = { NULL, 0 };
 	} else {
 		table.str++;
-		size_t prefix_len = table.str - d.ref_name;
+		size_t prefix_len = table.str - src_ref;
 		if (prefix_len >= fld->len) {
 			ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
 					"Upgrade table %s with foreign key %s constraint"
@@ -21214,8 +21230,8 @@ fk_upgrade_create_fk(
 			return 0;
 		}
 		table.length = fld->len - prefix_len;
-		db = { d.ref_name, prefix_len - 1 };
-		d.ref_name[db.length] = 0;
+		db = { src_ref, prefix_len - 1 };
+		src_ref[db.length] = 0;
 	}
 
 	table.length = filename_to_tablename(table.str, dst_table, sizeof(dst_table));
@@ -21263,7 +21279,7 @@ unsigned long
 fk_upgrade_add_col(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
-	void*	user_arg)		/*!< in: fts cache */
+	void*	user_arg)		/*!< in: fk_legacy_data */
 {
 	fk_legacy_data &d = *(fk_legacy_data *) user_arg;
 	if (d.err != DB_LEGACY_FK) {
@@ -21321,7 +21337,7 @@ unsigned long
 fk_upgrade_push_fk(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
-	void*	user_arg)		/*!< in: fts cache */
+	void*	user_arg)		/*!< in: fk_legacy_data */
 {
 	fk_legacy_data &d = *(fk_legacy_data *) user_arg;
 	if (d.err != DB_LEGACY_FK) {
@@ -21349,17 +21365,17 @@ fk_upgrade_push_fk(
 		mutex_exit(&dict_sys.mutex);
 		ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
 				"Upgrade table %s with foreign key %s constraint"
-				" failed. Index on foreign table not found!",
+				" failed. Foreign key index not found!",
 				d.s->table_name.str, fk.foreign_id.str);
 		d.err = DB_CANNOT_ADD_CONSTRAINT;
 		return 0;
 	}
-	dict_table_t* ref_table = dict_load_table(d.ref_name, DICT_ERR_IGNORE_FK_NOKEY);
+	dict_table_t* ref_table = dict_table_open_on_name(d.ref_name, true, false, DICT_ERR_IGNORE_FK_NOKEY);
 	if (!ref_table) {
 		mutex_exit(&dict_sys.mutex);
 		ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
 				"Upgrade table %s with foreign key %s constraint"
-				" failed. Could not load referenced table!",
+				" failed. Could not open referenced table!",
 				d.s->table_name.str, fk.foreign_id.str);
 		d.err = DB_CANNOT_ADD_CONSTRAINT;
 		return 0;
@@ -21372,7 +21388,7 @@ fk_upgrade_push_fk(
 	if (!index) {
 		ib_foreign_warn(d.trx, DB_CANNOT_ADD_CONSTRAINT, d.s->table_name.str,
 				"Upgrade table %s with foreign key %s constraint"
-				" failed. Index on referenced table not found!",
+				" failed. Referenced key index not found!",
 				d.s->table_name.str, fk.foreign_id.str);
 		d.err = DB_CANNOT_ADD_CONSTRAINT;
 		return 0;
@@ -21453,9 +21469,8 @@ fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE
 	ut_ad(d.foreign_keys.elements);
 
 	// Got legacy foreign keys, update referenced shares
+	FK_table_backup fk_table_backup;
 	FK_create_vector ref_shares;
-	// FIXME: check column names on ref and on foreign?
-	// FIXME: backup main share
 	// FIXME: when table drops drop legacy keys
 	// FIXME: when table is renamed it is opened, no need to rename (legacy) foreign keys, but need to rename (legacy) referenced keys
 	if (d.s->fk_handle_create(thd, ref_shares, &d.foreign_keys)) {
@@ -21463,7 +21478,12 @@ fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE
 		goto rollback;
 	}
 
-	// Push to main share
+	if (fk_table_backup.init(d.s)) {
+		err = DB_OUT_OF_MEMORY;
+		goto rollback;
+	}
+
+	// Push to main share. Share is already locked by Open_table_context.
 	for (FK_info &fk: d.foreign_keys) {
 		if (d.s->foreign_keys.push_back(&fk, &d.s->mem_root)) {
 			err = DB_OUT_OF_MEMORY;
@@ -21477,11 +21497,6 @@ fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE
 		goto rollback;
 	}
 
-	if (d.s->fk_install_shadow_frm()) {
-		err = DB_ERROR;
-		goto rollback;
-	}
-
 	// Update referenced FRMs
 	for (FK_ddl_backup &bak: ref_shares) {
 		if (bak.sa.share->fk_install_shadow_frm()) {
@@ -21490,6 +21505,13 @@ fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE
 			goto rollback;
 		}
 	}
+
+	if (d.s->fk_install_shadow_frm()) {
+		err = DB_ERROR;
+		goto rollback;
+	}
+
+	fk_table_backup.commit();
 
 	// Drop legacy foreign keys
 	static const char	sql_drop[] =
@@ -21540,7 +21562,7 @@ unsigned long
 fk_check_upgrade(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
-	void*	user_arg)		/*!< in: fts cache */
+	void*	user_arg)		/*!< in: bool do_upgrade */
 {
 	bool &do_upgrade = *(bool *) user_arg;
 	do_upgrade = true;
@@ -21549,7 +21571,7 @@ fk_check_upgrade(
 
 static
 dberr_t
-fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
+fk_check_legacy_storage(const char* table_name, trx_t* trx)
 {
 	pars_info_t* info;
 	bool do_upgrade = false;
@@ -21559,7 +21581,7 @@ fk_check_legacy_storage(dict_table_t* table, trx_t* trx)
 		return DB_OUT_OF_MEMORY;
 	}
 	pars_info_bind_function(info, "fk_check_upgrade", fk_check_upgrade, &do_upgrade);
-	pars_info_add_str_literal(info, "for_name", table->name.m_name);
+	pars_info_add_str_literal(info, "for_name", table_name);
 	static const char	sql[] =
 		"PROCEDURE FK_PROC () IS\n"
 		"DECLARE FUNCTION fk_check_upgrade;\n"
