@@ -5412,6 +5412,7 @@ int
 ha_innobase::open(const char* name, int, uint open_flags)
 {
 	char			norm_name[FN_REFLEN];
+	dberr_t err;
 
 	DBUG_ENTER("ha_innobase::open");
 
@@ -5521,34 +5522,45 @@ ha_innobase::open(const char* name, int, uint open_flags)
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
 	trx_t *trx = thd_to_trx(thd);
-	if (trx) {
-		dberr_t err;
-		if (open_flags & HA_OPEN_FOR_REPAIR) {
-			err = fk_upgrade_legacy_storage(ib_table, trx, thd, table->s);
-			if (err == DB_LEGACY_FK) {
-				err = fk_check_legacy_storage(ib_table->name.m_name, trx);
-				if (err == DB_LEGACY_FK) {
-					push_warning_printf(
-						thd,
-						Sql_condition::WARN_LEVEL_WARN,
-						HA_ERR_FK_UPGRADE,
-						"Table %s failed to upgrade foreign keys (index is not corrupt)!",
-						table_share->table_name.str);
-				}
-			}
-		} else {
+	bool free_trx = false;
+	if (!trx) {
+		trx = trx_create();
+		if (!trx) {
+			DBUG_RETURN(HA_ERR_OUT_OF_MEM);
+		}
+		free_trx = true;
+	}
+	trx_start_if_not_started(trx, false);
+	if (open_flags & HA_OPEN_FOR_REPAIR) {
+		err = fk_upgrade_legacy_storage(ib_table, trx, thd, table->s);
+		if (err == DB_LEGACY_FK) {
 			err = fk_check_legacy_storage(ib_table->name.m_name, trx);
+			if (err == DB_LEGACY_FK) {
+				push_warning_printf(
+					thd,
+					Sql_condition::WARN_LEVEL_WARN,
+					HA_ERR_FK_UPGRADE,
+					"Table %s failed to upgrade foreign keys (index is not corrupt)!",
+					table_share->table_name.str);
+			}
 		}
-		if (err != DB_SUCCESS) {
-			dict_table_close(ib_table, FALSE, FALSE);
-			DBUG_RETURN(convert_error_code_to_mysql(
-						err, ib_table->flags, NULL));
-		}
+	} else {
+		err = fk_check_legacy_storage(ib_table->name.m_name, trx);
+	}
+	trx_commit_for_mysql(trx);
+	if (free_trx) {
+		trx->error_state = DB_SUCCESS;
+		trx->free();
+	}
+	if (err != DB_SUCCESS) {
+		dict_table_close(ib_table, FALSE, FALSE);
+		DBUG_RETURN(convert_error_code_to_mysql(
+					err, ib_table->flags, NULL));
 	}
 #endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
 	mutex_enter(&dict_sys.mutex);
-	dberr_t err = dict_load_foreigns(ib_table, table->s, NULL, false, DICT_ERR_IGNORE_FK_NOKEY);
+	err = dict_load_foreigns(ib_table, table->s, NULL, false, DICT_ERR_IGNORE_FK_NOKEY);
 	mutex_exit(&dict_sys.mutex);
 	if (err != DB_SUCCESS) {
 		dict_table_close(ib_table, FALSE, FALSE);
@@ -19426,7 +19438,7 @@ static int innodb_eval_sql_validate(THD *thd, st_mysql_sys_var*,
 					void* save, st_mysql_value* value)
 {
 	/** Preamble to all SQL statements. */
-	static const char* sql_begin= "PROCEDURE P() IS\nBEGIN\n";
+	static const char* sql_begin= "PROCEDURE P() IS\n";
 
 	/** Postamble to non-committing SQL statements. */
 	static const char* sql_end= "\nEND;\n";
@@ -19447,8 +19459,8 @@ static int innodb_eval_sql_validate(THD *thd, st_mysql_sys_var*,
 			return 1;
 		}
 		free_trx = true;
-		trx_start_internal(trx);
 	}
+	trx_start_if_not_started(trx, true);
 	sql = (char*) value->val_str(value, buff, &len);
 	if (!sql) {
 mem_err:
