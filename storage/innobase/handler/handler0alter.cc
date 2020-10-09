@@ -8889,6 +8889,42 @@ err_exit:
 rename_foreign:
 	trx->op_info = "renaming column in SYS_FOREIGN_COLS";
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+	static const char	sql_rename_ref[] =
+		"PROCEDURE FETCH_PROC () IS\n"
+		"fk_id CHAR;\n"
+
+		"DECLARE CURSOR c IS"
+		" SELECT ID FROM SYS_FOREIGN"
+ 		" WHERE REF_NAME = :ref_name;\n"
+
+		"BEGIN\n"
+		"OPEN c;\n"
+		"WHILE 1 = 1 LOOP\n"
+		"  FETCH c INTO fk_id;\n"
+		"  IF (SQL % NOTFOUND) THEN\n"
+		"    EXIT;\n"
+		"  END IF;\n"
+		"  UPDATE SYS_FOREIGN_COLS"
+		"    SET REF_COL_NAME = :new"
+		"    WHERE ID = fk_id AND REF_COL_NAME = :old;\n"
+		"END LOOP;\n"
+		"CLOSE c;\n"
+		"END;\n";
+
+	pars_info_t* info = pars_info_create();
+
+	pars_info_add_str_literal(info, "ref_name", ctx.old_table->name.m_name);
+	pars_info_add_str_literal(info, "old", from);
+	pars_info_add_str_literal(info, "new", to);
+
+	error = que_eval_sql(info, sql_rename_ref, false, trx);
+
+	if (error != DB_SUCCESS) {
+		goto err_exit;
+	}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+
 	std::set<dict_foreign_t*> fk_evict;
 	bool		foreign_modified;
 
