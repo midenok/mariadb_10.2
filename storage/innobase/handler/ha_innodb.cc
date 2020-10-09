@@ -21257,7 +21257,6 @@ fk_upgrade_create_fk(
 	}
 
 	ut_a(!que_node_get_next(exp));
-	// FIXME: update referenced tables
 	d.fk= new (&d.s->mem_root) FK_info();
 	if (!d.fk) {
 		d.err = DB_OUT_OF_MEMORY;
@@ -21483,8 +21482,6 @@ fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE
 	// Got legacy foreign keys, update referenced shares
 	FK_table_backup fk_table_backup;
 	FK_create_vector ref_shares;
-	// FIXME: when table drops drop legacy keys
-	// FIXME: when table is renamed it is opened, no need to rename (legacy) foreign keys, but need to rename (legacy) referenced keys
 	if (d.s->fk_handle_create(thd, ref_shares, &d.foreign_keys)) {
 		err = DB_ERROR;
 		goto rollback;

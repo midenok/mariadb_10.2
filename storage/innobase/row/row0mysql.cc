@@ -3270,6 +3270,66 @@ row_drop_table_from_cache(
 	return(err);
 }
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+struct row_drop_table_check_legacy_data
+{
+	char foreign_name[MAX_FULL_NAME_LEN + 1];
+	bool found;
+	row_drop_table_check_legacy_data() : found(false) {}
+};
+
+static
+unsigned long
+row_drop_table_check_legacy_step(
+/*=================*/
+	void*	row,			/*!< in: sel_node_t* */
+	void*	user_arg)		/*!< in/out: row_drop_table_check_legacy_data */
+{
+	row_drop_table_check_legacy_data &d = *(row_drop_table_check_legacy_data *) user_arg;
+	sel_node_t*	node = static_cast<sel_node_t*>(row);
+	que_node_t*	exp = node->select_list;
+	dfield_t*	fld = que_node_get_val(exp);
+	ut_a(fld->len < sizeof(d.foreign_name));
+	memcpy(d.foreign_name, fld->data, fld->len);
+	d.foreign_name[fld->len] = 0;
+	d.found = true;
+	ut_a(!que_node_get_next(exp));
+	return 0;
+}
+
+static
+dberr_t row_drop_table_check_legacy_fk(trx_t* trx, const char * table_name, row_drop_table_check_legacy_data &d)
+{
+	static const char sql_check[] =
+		"PROCEDURE FK_PROC () IS\n"
+		"DECLARE FUNCTION row_drop_table_check_legacy_step;\n"
+
+		"DECLARE CURSOR c IS"
+		" SELECT FOR_NAME FROM SYS_FOREIGN"
+ 		" WHERE REF_NAME = :ref_name;\n"
+
+		"BEGIN\n"
+		"OPEN c;\n"
+		"FETCH c INTO row_drop_table_check_legacy_step();\n"
+		"CLOSE c;\n"
+		"END;\n";
+
+	pars_info_t* info = pars_info_create();
+	if (!info) {
+		return DB_OUT_OF_MEMORY;
+	}
+	pars_info_bind_function(info, "row_drop_table_check_legacy_step", row_drop_table_check_legacy_step, &d);
+	pars_info_add_str_literal(info, "ref_name", table_name);
+
+	dberr_t err = que_eval_sql(info, sql_check, false, trx);
+	if (err != DB_SUCCESS) {
+		return err;
+	}
+
+	return DB_SUCCESS;
+}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+
 /** Drop a table for MySQL.
 If the data dictionary was not already locked by the transaction,
 the transaction will be committed.  Otherwise, the data dictionary
@@ -3453,15 +3513,41 @@ row_drop_table_for_mysql(
 				ut_print_name(ef, trx, name);
 				fputs("\n"
 				      "because it is referenced by ", ef);
-				ut_print_name(ef, trx,
-					      foreign->foreign_table_name);
+				ut_print_name(ef, trx, foreign->foreign_table_name);
 				putc('\n', ef);
 				mutex_exit(&dict_foreign_err_mutex);
 
 				goto funct_exit;
 			}
 		}
-	}
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+		row_drop_table_check_legacy_data data;
+
+		err = row_drop_table_check_legacy_fk(trx, table->name.m_name, data);
+		if (err != DB_SUCCESS) {
+			goto funct_exit;
+		}
+		if (data.found) {
+			FILE*	ef	= dict_foreign_err_file;
+
+			err = DB_CANNOT_DROP_CONSTRAINT;
+
+			mutex_enter(&dict_foreign_err_mutex);
+			rewind(ef);
+			ut_print_timestamp(ef);
+
+			fputs("  Cannot drop table ", ef);
+			ut_print_name(ef, trx, name);
+			fputs("\n"
+				"because it is referenced by ", ef);
+			ut_print_name(ef, trx, data.foreign_name);
+			putc('\n', ef);
+			mutex_exit(&dict_foreign_err_mutex);
+
+			goto funct_exit;
+		}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+	} // if (!srv_read_only_mode && trx->check_foreigns)
 
 	DBUG_EXECUTE_IF("row_drop_table_add_to_background", goto defer;);
 
@@ -3571,6 +3657,39 @@ defer:
 
 	pars_info_add_str_literal(info, "name", name);
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+	if (sqlcom != SQLCOM_TRUNCATE
+	    && strchr(name, '/')
+	    && dict_table_get_low("SYS_FOREIGN")
+	    && dict_table_get_low("SYS_FOREIGN_COLS")) {
+		err = que_eval_sql(
+			info,
+			"PROCEDURE DROP_FOREIGN_PROC () IS\n"
+			"fid CHAR;\n"
+
+			"DECLARE CURSOR fk IS\n"
+			"SELECT ID FROM SYS_FOREIGN\n"
+			"WHERE FOR_NAME = :name\n"
+			"AND TO_BINARY(FOR_NAME) = TO_BINARY(:name)\n"
+			"FOR UPDATE;\n"
+
+			"BEGIN\n"
+			"OPEN fk;\n"
+			"WHILE 1 = 1 LOOP\n"
+			"  FETCH fk INTO fid;\n"
+			"  IF (SQL % NOTFOUND) THEN RETURN; END IF;\n"
+			"  DELETE FROM SYS_FOREIGN_COLS WHERE ID=fid;\n"
+			"  DELETE FROM SYS_FOREIGN WHERE ID=fid;\n"
+			"END LOOP;\n"
+			"CLOSE fk;\n"
+			"END;\n", FALSE, trx);
+		if (err != DB_SUCCESS) {
+			goto error;
+		}
+		info = pars_info_create();
+		pars_info_add_str_literal(info, "name", name);
+	}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 	{
 		if (dict_table_get_low("SYS_VIRTUAL")) {
 			err = que_eval_sql(
@@ -3644,6 +3763,9 @@ defer:
 		}
 	}
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+error:
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 	switch (err) {
 		fil_space_t* space;
 		char* filepath;
