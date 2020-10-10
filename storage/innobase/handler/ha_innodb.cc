@@ -1806,8 +1806,8 @@ convert_error_code_to_mysql(
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
 	case DB_LEGACY_FK:
 		return(HA_ERR_FK_UPGRADE);
-	}
 #endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+	}
 }
 
 /*************************************************************//**
@@ -19487,7 +19487,6 @@ mem_err:
 		trx->dict_operation_lock_mode = 0;
 		trx->op_info = "";
 		ut_a(trx->error_state == DB_SUCCESS);
-		fk_check_legacy_storage("test/t2", trx);
 		if (free_trx) {
 			trx->free();
 		}
