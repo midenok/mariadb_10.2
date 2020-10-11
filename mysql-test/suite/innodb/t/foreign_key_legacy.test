@@ -298,6 +298,28 @@ show create table t2;
 drop table t1;
 drop tables t2, t1;
 
+--echo # Drop column
+set session debug_dbug= "+d,fk_skip_store";
+create or replace table t1(a int primary key, x int unique);
+create or replace table t2(y int references t1(x), b int);
+set session debug_dbug= @saved_debug_dbug;
+
+set global innodb_eval_sql="BEGIN
+INSERT INTO SYS_FOREIGN VALUES ('test/t2_ibfk_1', 'test/t2', 'test/t1', 1);
+INSERT INTO SYS_FOREIGN_COLS VALUES ('test/t2_ibfk_1', 0, 'y', 'x');";
+
+--error ER_DROP_INDEX_FK
+alter table t1 drop column x;
+--error ER_DROP_INDEX_FK
+alter table t2 drop column y;
+
+select * from information_schema.innodb_sys_foreign;
+select * from information_schema.innodb_sys_foreign_cols;
+
+--error ER_ROW_IS_REFERENCED_2
+drop table t1;
+drop tables t2, t1;
+
 set session debug_dbug= @saved_debug_dbug;
 set global innodb_eval_sql= default;
 set default_storage_engine= default;
