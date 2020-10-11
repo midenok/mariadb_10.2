@@ -384,6 +384,10 @@ set session debug_dbug= @saved_debug_dbug;
 set global innodb_eval_sql="BEGIN
 INSERT INTO SYS_FOREIGN VALUES ('test/t2_ibfk_1', 'test/t2', 'test/t1', 1);
 INSERT INTO SYS_FOREIGN_COLS VALUES ('test/t2_ibfk_1', 0, 'y', 'x');";
+alter table t1 drop column x, algorithm=copy;
+ERROR HY000: Can't create table `test`.`t1` (errno: 197 "Table requires foreign keys upgrade")
+alter table t1 change x x char(10);
+ERROR HY000: Can't create table `test`.`t1` (errno: 197 "Table requires foreign keys upgrade")
 alter table t1 drop column x;
 ERROR HY000: Cannot drop index 'x': needed in a foreign key constraint
 alter table t2 drop column y;

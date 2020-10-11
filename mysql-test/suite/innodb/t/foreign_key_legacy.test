@@ -308,6 +308,10 @@ set global innodb_eval_sql="BEGIN
 INSERT INTO SYS_FOREIGN VALUES ('test/t2_ibfk_1', 'test/t2', 'test/t1', 1);
 INSERT INTO SYS_FOREIGN_COLS VALUES ('test/t2_ibfk_1', 0, 'y', 'x');";
 
+--error ER_CANT_CREATE_TABLE
+alter table t1 drop column x, algorithm=copy;
+--error ER_CANT_CREATE_TABLE
+alter table t1 change x x char(10);
 --error ER_DROP_INDEX_FK
 alter table t1 drop column x;
 --error ER_DROP_INDEX_FK

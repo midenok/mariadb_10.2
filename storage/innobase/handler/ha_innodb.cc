@@ -12201,6 +12201,30 @@ create_table_info_t::create_foreign_keys()
 	return (DB_SUCCESS);
 }
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+int create_table_info_t::check_legacy_fk()
+{
+	char table_name[MAX_FULL_NAME_LEN + 1];
+	char *bufptr= table_name;
+	size_t len;
+	if (dict_table_t::build_name(LEX_STRING_WITH_LEN(m_form->s->db),
+				     LEX_STRING_WITH_LEN(m_form->s->table_name),
+				     bufptr, len)) {
+		return HA_ERR_OUT_OF_MEM;
+	}
+	row_drop_table_check_legacy_data data;
+
+	dberr_t err = row_drop_table_check_legacy_fk(m_trx, table_name, data);
+	if (err != DB_SUCCESS) {
+		return convert_error_code_to_mysql(err, 0, NULL);
+	}
+	if (data.found) {
+		return HA_ERR_FK_UPGRADE;
+	}
+	return 0;
+}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+
 /** Create the internal innodb table.
 @param create_fk	whether to add FOREIGN KEY constraints */
 int create_table_info_t::create_table(bool create_fk)
@@ -12218,6 +12242,15 @@ int create_table_info_t::create_table(bool create_fk)
 	/* Our function innobase_get_mysql_key_number_for_index assumes
 	the primary key is always number 0, if it exists */
 	ut_a(primary_key_no == -1 || primary_key_no == 0);
+
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+	if (enum_sql_command(thd_sql_command(m_thd)) == SQLCOM_ALTER_TABLE) {
+		error = check_legacy_fk();
+		if (error) {
+			DBUG_RETURN(error);
+		}
+	}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
 	error = create_table_def();
 

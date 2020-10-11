@@ -3271,13 +3271,6 @@ row_drop_table_from_cache(
 }
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-struct row_drop_table_check_legacy_data
-{
-	char foreign_name[MAX_FULL_NAME_LEN + 1];
-	bool found;
-	row_drop_table_check_legacy_data() : found(false) {}
-};
-
 static
 unsigned long
 row_drop_table_check_legacy_step(
@@ -3297,7 +3290,6 @@ row_drop_table_check_legacy_step(
 	return 0;
 }
 
-static
 dberr_t row_drop_table_check_legacy_fk(trx_t* trx, const char * table_name, row_drop_table_check_legacy_data &d)
 {
 	static const char sql_check[] =

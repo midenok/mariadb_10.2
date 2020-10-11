@@ -751,6 +751,10 @@ private:
 	/** Create the internal innodb table definition. */
 	int create_table_def();
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+	int check_legacy_fk();
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+
 	/** Connection thread handle. */
 	THD*		m_thd;
 
