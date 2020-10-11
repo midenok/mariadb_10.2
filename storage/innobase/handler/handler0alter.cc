@@ -7173,7 +7173,7 @@ err_exit:
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
 static
-unsigned long
+ibool
 innobase_drop_column_check_legacy_step(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */

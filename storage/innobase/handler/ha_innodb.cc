@@ -5521,16 +5521,10 @@ ha_innobase::open(const char* name, int, uint open_flags)
 	}
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-	trx_t *trx = thd_to_trx(thd);
-	bool free_trx = false;
+	trx_t *trx = innobase_trx_allocate(thd);
 	if (!trx) {
-		trx = trx_create();
-		if (!trx) {
-			DBUG_RETURN(HA_ERR_OUT_OF_MEM);
-		}
-		free_trx = true;
+		DBUG_RETURN(HA_ERR_OUT_OF_MEM);
 	}
-	trx_start_if_not_started(trx, false);
 	if (open_flags & HA_OPEN_FOR_REPAIR) {
 		err = fk_upgrade_legacy_storage(ib_table, trx, thd, table->s);
 		if (err == DB_LEGACY_FK) {
@@ -5548,10 +5542,8 @@ ha_innobase::open(const char* name, int, uint open_flags)
 		err = fk_check_legacy_storage(ib_table->name.m_name, trx);
 	}
 	trx_commit_for_mysql(trx);
-	if (free_trx) {
-		trx->error_state = DB_SUCCESS;
-		trx->free();
-	}
+	trx->error_state = DB_SUCCESS;
+	trx->free();
 	if (err != DB_SUCCESS) {
 		dict_table_close(ib_table, FALSE, FALSE);
 		DBUG_RETURN(convert_error_code_to_mysql(
@@ -21196,7 +21188,7 @@ struct fk_legacy_data
 };
 
 static
-unsigned long
+ibool
 fk_upgrade_create_fk(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
@@ -21318,7 +21310,7 @@ fk_upgrade_create_fk(
 }
 
 static
-unsigned long
+ibool
 fk_upgrade_add_col(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
@@ -21376,7 +21368,7 @@ fk_upgrade_add_col(
 }
 
 static
-unsigned long
+ibool
 fk_upgrade_push_fk(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
@@ -21469,11 +21461,11 @@ fk_upgrade_legacy_storage(dict_table_t* table, trx_t* trx, THD *thd, TABLE_SHARE
 
 		"DECLARE CURSOR c IS"
 		" SELECT ID, REF_NAME FROM SYS_FOREIGN"
- 		" WHERE FOR_NAME = :for_name;"
+		" WHERE FOR_NAME = :for_name;"
 
 		"DECLARE CURSOR c2 IS"
 		" SELECT FOR_COL_NAME, REF_COL_NAME FROM SYS_FOREIGN_COLS"
- 		" WHERE ID = fk_id;"
+		" WHERE ID = fk_id;"
 
 		"DECLARE CURSOR c3 IS"
 		" SELECT ID FROM SYS_FOREIGN;"
@@ -21599,7 +21591,7 @@ rollback:
 }
 
 static
-unsigned long
+ibool
 fk_check_upgrade(
 /*=================*/
 	void*	row,			/*!< in: sel_node_t* */
@@ -21629,7 +21621,7 @@ fk_check_legacy_storage(const char* table_name, trx_t* trx)
 
 		"DECLARE CURSOR c IS"
 		" SELECT ID FROM SYS_FOREIGN"
- 		" WHERE FOR_NAME = :for_name;"
+		" WHERE FOR_NAME = :for_name;"
 
 		"BEGIN\n"
 		"OPEN c;\n"
