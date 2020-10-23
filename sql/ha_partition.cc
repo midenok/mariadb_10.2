@@ -248,6 +248,7 @@ ha_partition::ha_partition(handlerton *hton, TABLE_SHARE *share)
 {
   DBUG_ENTER("ha_partition::ha_partition(table)");
   init_alloc_root(&m_mem_root, 512, 512, MYF(0));
+  init_alloc_root(&m_ordered_root, 512, 0, MYF(MY_WME));
   init_handler_variables();
   DBUG_VOID_RETURN;
 }
@@ -270,6 +271,7 @@ ha_partition::ha_partition(handlerton *hton, partition_info *part_info)
   DBUG_ENTER("ha_partition::ha_partition(part_info)");
   DBUG_ASSERT(part_info);
   init_alloc_root(&m_mem_root, 512, 512, MYF(0));
+  init_alloc_root(&m_ordered_root, 512, 0, MYF(MY_WME));
   init_handler_variables();
   m_part_info= part_info;
   m_create_handler= TRUE;
@@ -297,6 +299,7 @@ ha_partition::ha_partition(handlerton *hton, TABLE_SHARE *share,
 {
   DBUG_ENTER("ha_partition::ha_partition(clone)");
   init_alloc_root(&m_mem_root, 512, 512, MYF(0));
+  init_alloc_root(&m_ordered_root, 512, 0, MYF(MY_WME));
   init_handler_variables();
   m_part_info= part_info_arg;
   m_create_handler= TRUE;
@@ -5119,62 +5122,60 @@ bool ha_partition::init_record_priority_queue()
 {
   DBUG_ENTER("ha_partition::init_record_priority_queue");
   DBUG_ASSERT(!m_ordered_rec_buffer);
+
   /*
     Initialize the ordered record buffer.
   */
-  if (!m_ordered_rec_buffer)
+  uint alloc_len;
+  uint used_parts= bitmap_bits_set(&m_part_info->read_partitions);
+  /* Allocate record buffer for each used partition. */
+  m_priority_queue_rec_len= m_rec_length + PARTITION_BYTES_IN_POS;
+  if (!m_using_extended_keys)
+      m_priority_queue_rec_len += m_file[0]->ref_length;
+  alloc_len= used_parts * m_priority_queue_rec_len;
+  /* Allocate a key for temporary use when setting up the scan. */
+  alloc_len+= table_share->max_key_length;
+
+  if (!(m_ordered_rec_buffer= (uchar*) alloc_root(&m_ordered_root, alloc_len)))
+    DBUG_RETURN(true);
+
+  /*
+    We set-up one record per partition and each record has 2 bytes in
+    front where the partition id is written. This is used by ordered
+    index_read.
+    We also set-up a reference to the first record for temporary use in
+    setting up the scan.
+  */
+  char *ptr= (char*) m_ordered_rec_buffer;
+  uint i;
+  for (i= bitmap_get_first_set(&m_part_info->read_partitions);
+        i < m_tot_parts;
+        i= bitmap_get_next_set(&m_part_info->read_partitions, i))
   {
-    uint alloc_len;
-    uint used_parts= bitmap_bits_set(&m_part_info->read_partitions);
-    /* Allocate record buffer for each used partition. */
-    m_priority_queue_rec_len= m_rec_length + PARTITION_BYTES_IN_POS;
-    if (!m_using_extended_keys)
-       m_priority_queue_rec_len += m_file[0]->ref_length;
-    alloc_len= used_parts * m_priority_queue_rec_len;
-    /* Allocate a key for temporary use when setting up the scan. */
-    alloc_len+= table_share->max_key_length;
+    DBUG_PRINT("info", ("init rec-buf for part %u", i));
+    int2store(ptr, i);
+    ptr+= m_priority_queue_rec_len;
+  }
+  m_start_key.key= (const uchar*)ptr;
 
-    if (!(m_ordered_rec_buffer= (uchar*)my_malloc(alloc_len, MYF(MY_WME))))
-      DBUG_RETURN(true);
-
-    /*
-      We set-up one record per partition and each record has 2 bytes in
-      front where the partition id is written. This is used by ordered
-      index_read.
-      We also set-up a reference to the first record for temporary use in
-      setting up the scan.
-    */
-    char *ptr= (char*) m_ordered_rec_buffer;
-    uint i;
-    for (i= bitmap_get_first_set(&m_part_info->read_partitions);
-         i < m_tot_parts;
-         i= bitmap_get_next_set(&m_part_info->read_partitions, i))
-    {
-      DBUG_PRINT("info", ("init rec-buf for part %u", i));
-      int2store(ptr, i);
-      ptr+= m_priority_queue_rec_len;
-    }
-    m_start_key.key= (const uchar*)ptr;
-    
-    /* Initialize priority queue, initialized to reading forward. */
-    int (*cmp_func)(void *, uchar *, uchar *);
-    void *cmp_arg;
-    if (!m_using_extended_keys)
-    {
-      cmp_func= cmp_key_rowid_part_id;
-      cmp_arg=  (void*)this;
-    }
-    else
-    {
-      cmp_func= cmp_key_part_id;
-      cmp_arg= (void*)m_curr_key_info;
-    }
-    if (init_queue(&m_queue, used_parts, 0, 0, cmp_func, cmp_arg, 0, 0))
-    {
-      my_free(m_ordered_rec_buffer);
-      m_ordered_rec_buffer= NULL;
-      DBUG_RETURN(true);
-    }
+  /* Initialize priority queue, initialized to reading forward. */
+  int (*cmp_func)(void *, uchar *, uchar *);
+  void *cmp_arg;
+  if (!m_using_extended_keys)
+  {
+    cmp_func= cmp_key_rowid_part_id;
+    cmp_arg=  (void*)this;
+  }
+  else
+  {
+    cmp_func= cmp_key_part_id;
+    cmp_arg= (void*)m_curr_key_info;
+  }
+  if (init_queue(&m_queue, used_parts, 0, 0, cmp_func, cmp_arg, 0, 0))
+  {
+    free_root(&m_ordered_root, MYF(MY_WME));
+    m_ordered_rec_buffer= NULL;
+    DBUG_RETURN(true);
   }
   DBUG_RETURN(false);
 }
@@ -5190,7 +5191,7 @@ void ha_partition::destroy_record_priority_queue()
   if (m_ordered_rec_buffer)
   {
     delete_queue(&m_queue);
-    my_free(m_ordered_rec_buffer);
+    free_root(&m_ordered_root, MYF(MY_WME));
     m_ordered_rec_buffer= NULL;
   }
   DBUG_VOID_RETURN;
@@ -6181,7 +6182,15 @@ int ha_partition::handle_ordered_index_scan(uchar *buf, bool reverse_order)
       */
       error= file->read_range_first(m_start_key.key? &m_start_key: NULL,
                                     end_range, eq_range, TRUE);
-      memcpy(rec_buf_ptr, table->record[0], m_rec_length);
+      if (!error)
+      {
+        memcpy(rec_buf_ptr, table->record[0], m_rec_length);
+        if (copy_blobs(rec_buf_ptr, &m_ordered_root))
+        {
+          error= HA_ERR_OUT_OF_MEM;
+        }
+      }
+
       reverse_order= FALSE;
       break;
     }
@@ -6253,6 +6262,7 @@ void ha_partition::return_top_record(uchar *buf)
 
   part_id= uint2korr(key_buffer);
   memcpy(buf, rec_buffer, m_rec_length);
+  copy_blobs(buf, NULL);
   if (table->vfield)
   {
     uchar *rec0_save= table->record[0];
@@ -6320,6 +6330,27 @@ int ha_partition::handle_ordered_index_scan_key_not_found()
 }
 
 
+bool ha_partition::copy_blobs(uchar * rec_buf, MEM_ROOT *mem_root)
+{
+  bool err= false;
+  table->move_fields(table->field, rec_buf, table->record[0]);
+  for (Field **f= table->field; *f; f++)
+  {
+    if (!((*f)->flags & BLOB_FLAG))
+      continue;
+    Field_blob *b= static_cast<Field_blob *>(*f);
+    if (mem_root)
+      err= b->copy(&m_ordered_root);
+    else
+      err= b->copy();
+    if (err)
+      break;
+  }
+  table->move_fields(table->field, table->record[0], rec_buf);
+  return err;
+}
+
+
 /*
   Common routine to handle index_next with ordered results
 
@@ -6381,7 +6412,14 @@ int ha_partition::handle_ordered_next(uchar *buf, bool is_next_same)
   if (m_index_scan_type == partition_read_range)
   {
     error= file->read_range_next();
-    memcpy(rec_buf, table->record[0], m_rec_length);
+    if (!error)
+    {
+      memcpy(rec_buf, table->record[0], m_rec_length);
+      if (copy_blobs(rec_buf, &m_ordered_root))
+      {
+        error= HA_ERR_OUT_OF_MEM;
+      }
+    }
   }
   else if (!is_next_same)
     error= file->ha_index_next(rec_buf);

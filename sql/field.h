@@ -3476,6 +3476,17 @@ public:
     memcpy(ptr+packlength, &tmp, sizeof(char*));
     return 0;
   }
+  bool copy(MEM_ROOT *mem_root)
+  {
+    uchar *src= get_ptr();
+    uint len= get_length();
+    uchar *dst= (uchar *) alloc_root(mem_root, len);
+    if (!dst)
+      return true;
+    memcpy(dst, src, len);
+    memcpy(ptr + packlength, &dst, sizeof(char*));
+    return false;
+  }
   /* store value for the duration of the current read record */
   inline void swap_value_and_read_value()
   {
