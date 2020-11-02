@@ -1968,7 +1968,20 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
               error= vers_insert_history_row(thd, table);
               restore_record(table, record[2]);
               if (unlikely(error))
+              {
+                if (!table->file->has_transactions())
+                {
+                  table->swap_records(0, 1);
+                  table->file->position(table->record[1]);
+                  if (likely(!table->file->ha_update_row(table->record[1],
+                                                         table->record[0])))
+                    info->deleted--;
+                  else
+                    thd->transaction.stmt.modified_non_trans_table= TRUE;
+                  table->swap_records(0, 1);
+                }
                 goto err;
+              }
             }
           }
           else
