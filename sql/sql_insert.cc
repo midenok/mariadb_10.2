@@ -1875,12 +1875,14 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
               if (table->versioned(VERS_TIMESTAMP))
               {
                 store_record(table, record[2]);
+                  DBUG_ASSERT(0);
                 if ((error= vers_insert_history_row(table)))
                 {
                   info->last_errno= error;
                   table->file->print_error(error, MYF(0));
                   trg_error= 1;
                   restore_record(table, record[2]);
+                  DBUG_ASSERT(0);
                   goto ok_or_after_trg_err;
                 }
                 restore_record(table, record[2]);
