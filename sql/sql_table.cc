@@ -8237,6 +8237,8 @@ static bool mysql_inplace_alter_table(THD *thd,
                                         &table->s->tabledef_version))
     {
       my_error(HA_ERR_INCOMPATIBLE_DEFINITION, MYF(0));
+      alter_ctx->fk_ref_backup.rollback(thd);
+      // FIXME: why not goto rollback?
       goto cleanup;
     }
   }
@@ -8251,8 +8253,11 @@ static bool mysql_inplace_alter_table(THD *thd,
                             NULL);
   table_list->table= table= NULL;
 
-  if (alter_ctx->fk_install_frms())
+  // FIXME: do right after fk_handle_alter?
+  if (alter_ctx->fk_ref_backup.install_shadow_frms(thd))
     DBUG_RETURN(true);
+
+  alter_ctx->fk_ref_backup.drop_backup_frms(thd);
 
   /*
     Replace the old .FRM with the new .FRM, but keep the old name for now.
@@ -8279,6 +8284,7 @@ static bool mysql_inplace_alter_table(THD *thd,
     if (mysql_rename_table(db_type, &alter_ctx->db, &alter_ctx->table_name,
                            &alter_ctx->new_db, &alter_ctx->new_alias, 0))
     {
+      // FIXME: rollback only table name
       /*
         If the rename fails we will still have a working table
         with the old name, but with other changes applied.
@@ -8299,6 +8305,7 @@ static bool mysql_inplace_alter_table(THD *thd,
       (void) mysql_rename_table(db_type,
                                 &alter_ctx->new_db, &alter_ctx->new_alias,
                                 &alter_ctx->db, &alter_ctx->alias, NO_FK_CHECKS);
+      // FIXME: if rename succeeds rollback only table name
       DBUG_RETURN(true);
     }
     rename_table_in_stat_tables(thd, &alter_ctx->db, &alter_ctx->alias,
@@ -8308,7 +8315,7 @@ static bool mysql_inplace_alter_table(THD *thd,
   DBUG_RETURN(false);
 
  rollback:
-  alter_ctx->fk_rollback();
+  alter_ctx->fk_ref_backup.rollback(thd);
   table->file->ha_commit_inplace_alter_table(altered_table,
                                              ha_alter_info,
                                              false);
@@ -11310,7 +11317,7 @@ err_rename_back:
     }
   }
 
-  if (alter_ctx.fk_install_frms())
+  if (alter_ctx.fk_ref_backup.install_shadow_frms(thd))
     goto err_rename_back;
 
   if (alter_ctx.is_table_renamed())
@@ -11341,6 +11348,8 @@ err_rename_back:
     */
     goto err_with_mdl_after_alter;
   }
+
+  alter_ctx.fk_ref_backup.drop_backup_frms(thd);
 
   thd->variables.option_bits= option_bits_save;
 
@@ -11428,7 +11437,7 @@ err_with_mdl_after_alter:
 
 err_with_mdl:
   thd->variables.option_bits= option_bits_save;
-  alter_ctx.fk_rollback();
+  alter_ctx.fk_ref_backup.rollback(thd);
 
   /*
     An error happened while we were holding exclusive name metadata lock
@@ -12944,7 +12953,7 @@ bool Alter_table_ctx::fk_handle_alter(THD *thd)
   for (auto &key_val: fk_ref_backup)
   {
     FK_share_backup *ref_bak= &key_val.second;
-    if (ref_bak->update_frm && ref_bak->fk_write_shadow_frm(fk_ddl_info))
+    if (ref_bak->update_frm && ref_bak->fk_write_shadow_frm(fk_ref_backup))
       return true;
   }
 
@@ -12981,18 +12990,6 @@ bool Alter_table_ctx::fk_check_foreign_id(THD *thd)
 }
 
 
-void Alter_table_ctx::fk_rollback()
-{
-  for (auto &key_val: fk_ref_backup)
-  {
-    FK_share_backup *ref_bak= &key_val.second;
-    if (ref_bak->update_frm)
-      ref_bak->fk_drop_shadow_frm(fk_ddl_info);
-    ref_bak->rollback(fk_ddl_info);
-  }
-}
-
-
 void Alter_table_ctx::fk_release_locks(THD* thd)
 {
   fk_ref_backup.clear();
@@ -13005,41 +13002,6 @@ void Alter_table_ctx::fk_release_locks(THD* thd)
     if (req->ticket->get_type() == MDL_EXCLUSIVE)
       thd->mdl_context.release_all_locks_for_name(req->ticket);
   }
-}
-
-
-bool Alter_table_ctx::fk_install_frms()
-{
-  // FIXME: remake via FK_ddl_vector::install_shadow_frms()
-  // converge FK_share_backup and FK_ddl_backup
-  for (auto &key_val: fk_ref_backup)
-  {
-    FK_share_backup *ref_bak= &key_val.second;
-    DBUG_ASSERT(ref_bak->get_share());
-    if (ref_bak->update_frm && ref_bak->fk_backup_frm(fk_ddl_info))
-      return true;
-  }
-  for (auto &key_val: fk_ref_backup)
-  {
-    FK_share_backup *ref_bak= &key_val.second;
-    if (ref_bak->update_frm && ref_bak->fk_install_shadow_frm(fk_ddl_info))
-      // FIXME: test rollback
-      return true;
-  }
-  for (auto &key_val: fk_ref_backup)
-  {
-    FK_share_backup *ref_bak= &key_val.second;
-    if (ref_bak->update_frm && deactivate_ddl_log_entry(ref_bak->restore_backup_entry->entry_pos))
-      return true;
-  }
-  for (auto &key_val: fk_ref_backup)
-  {
-    FK_share_backup *ref_bak= &key_val.second;
-    if (ref_bak->update_frm)
-      ref_bak->fk_drop_backup_frm(fk_ddl_info);
-  }
-  fk_ddl_info.write_log_finish();
-  return false;
 }
 
 
