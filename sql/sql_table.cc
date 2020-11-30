@@ -10001,8 +10001,11 @@ simple_rename_or_index_change(THD *thd, TABLE_LIST *table_list,
     if (wait_while_table_is_used(thd, table, extra_func))
       DBUG_RETURN(true);
 
-    if (fk_handle_rename(thd, table_list, &alter_ctx->new_db,
-                         &alter_ctx->new_name, fk_rename_backup))
+    TABLE_LIST new_table;
+    new_table.init_one_table(&alter_ctx->new_db, &alter_ctx->new_name,
+                             &alter_ctx->new_alias, TL_IGNORE);
+
+    if (fk_handle_rename(thd, table_list, &new_table, fk_rename_backup, NULL))
       DBUG_RETURN(true);
 
     for (auto &ref: fk_rename_backup)
@@ -13158,22 +13161,38 @@ bool fk_handle_drop(THD *thd, TABLE_LIST *table, FK_ddl_vector &shares,
 }
 
 
+static
+void fk_get_old_name(TABLE_LIST *all_tables, TABLE_LIST *ren_table, Table_name &name)
+{
+  // If we already processed this table we add new table name instead the old one.
+  TABLE_LIST *t, *n;
+  for (t= all_tables; t != ren_table; t= n->next_local)
+  {
+    n= t->next_local;
+    if (0 == name.cmp(Table_name(n->db, n->table_name)))
+    {
+      name= Table_name(t->db, t->table_name);
+      return;
+    }
+  }
+}
+
+
 /*  Used in RENAME TABLE
     Rename table in foreign_keys of this and referenced tables.
     Rename table in referenced_keys of this and foreign tables.
     In case of failed operation everything must be reverted back.
 */
-bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db,
-                      const LEX_CSTRING *new_table_name,
-                      FK_ddl_vector &fk_rename_backup)
+bool fk_handle_rename(THD *thd, TABLE_LIST *ren_table, TABLE_LIST *new_table,
+                      FK_ddl_vector &fk_rename_backup, TABLE_LIST *all_tables)
 {
-  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, old_table->db.str,
-                                             old_table->table_name.str,
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, ren_table->db.str,
+                                             ren_table->table_name.str,
                                              MDL_INTENTION_EXCLUSIVE));
-  DBUG_ASSERT(!old_table->view);
+  DBUG_ASSERT(!ren_table->view);
   /* NB: we have to acquire share before rename because it must read referenced
      keys from foreign table by its old name. */
-  Share_acquire sa(thd, *old_table);
+  Share_acquire sa(thd, *ren_table);
   if (sa.is_error(thd))
     return thd->is_error();
   sa.flush_unused= true;
@@ -13181,7 +13200,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
   if (share->foreign_keys.is_empty() && share->referenced_keys.is_empty())
     return false;
   mbd::set<Table_name> tables;
-  mbd::set<Table_name> already; // FIXME: do we need it for mbd::map?
+  mbd::set<Table_name> already;
   MDL_request_list mdl_list;
   for (auto &bak: fk_rename_backup)
   {
@@ -13191,14 +13210,15 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
   }
   // NB: we do not allow same share twice in fk_rename_backup
   DBUG_ASSERT(already.size() == fk_rename_backup.size());
+  bool backed= (fk_rename_backup.find(share) != fk_rename_backup.end());
   for (FK_info &fk: share->foreign_keys)
   {
     // NB: share will be removed but updated foreign keys may be needed in multi-rename.
-    if (fk.foreign_db.strdup(&share->mem_root, *new_db) ||
-        fk.foreign_table.strdup(&share->mem_root, *new_table_name))
+    if (fk.foreign_db.strdup(&share->mem_root, new_table->db) ||
+        fk.foreign_table.strdup(&share->mem_root, new_table->table_name))
       goto mem_error;
-    if (0 == cmp_table(fk.ref_db(), old_table->db) &&
-        0 == cmp_table(fk.referenced_table, old_table->table_name))
+    if (0 == cmp_table(fk.ref_db(), ren_table->db) &&
+        0 == cmp_table(fk.referenced_table, ren_table->table_name))
     {
       /*
         NB: we don't have to lock self-references but we should update table name.
@@ -13209,14 +13229,16 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
 
         We don't have to rollback this share: it is removed from cache.
       */
-      if (0 != cmp_table(old_table->db, *new_db) &&
-          fk.referenced_db.strdup(&share->mem_root, *new_db))
+      if (0 != cmp_table(ren_table->db, new_table->db) &&
+          fk.referenced_db.strdup(&share->mem_root, new_table->db))
         goto mem_error;
-      if (fk.referenced_table.strdup(&share->mem_root, *new_table_name))
+      if (fk.referenced_table.strdup(&share->mem_root, new_table->table_name))
         goto mem_error;
       continue;
     }
     Table_name ref_table= fk.ref_table(thd->mem_root);
+    if (backed)
+      fk_get_old_name(all_tables, ren_table, ref_table);
     // NB: multi-rename may have already this table locked
     if (already.find(ref_table) != already.end())
       continue;
@@ -13232,24 +13254,26 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
         (see Foreign_key_io::parse()), so we already renamed it to new name
         in share->foreign_keys above. Just skip it here.
       */
-      DBUG_ASSERT(0 == cmp_table(*new_db, rk.foreign_db));
-      DBUG_ASSERT(0 == cmp_table(*new_table_name, rk.foreign_table));
+      DBUG_ASSERT(0 == cmp_table(new_table->db, rk.foreign_db));
+      DBUG_ASSERT(0 == cmp_table(new_table->table_name, rk.foreign_table));
       continue;
     }
-    if (0 != cmp_table(old_table->db, *new_db) &&
-        rk.referenced_db.strdup(&share->mem_root, *new_db))
+    if (0 != cmp_table(ren_table->db, new_table->db) &&
+        rk.referenced_db.strdup(&share->mem_root, new_table->table_name))
       goto mem_error;
-    if (rk.referenced_table.strdup(&share->mem_root, *new_table_name))
+    if (rk.referenced_table.strdup(&share->mem_root, new_table->table_name))
       goto mem_error;
-    if (0 == cmp_table(rk.foreign_db, old_table->db) &&
-        0 == cmp_table(rk.foreign_table, old_table->table_name))
+    if (0 == cmp_table(rk.foreign_db, ren_table->db) &&
+        0 == cmp_table(rk.foreign_table, ren_table->table_name))
     {
-      if (rk.foreign_db.strdup(&share->mem_root, *new_db) ||
-          rk.foreign_table.strdup(&share->mem_root, *new_table_name))
+      if (rk.foreign_db.strdup(&share->mem_root, new_table->db) ||
+          rk.foreign_table.strdup(&share->mem_root, new_table->table_name))
         goto mem_error;
       continue;
     }
     Table_name for_table= rk.for_table(thd->mem_root);
+    if (backed)
+      fk_get_old_name(all_tables, ren_table, for_table);
     if (already.find(for_table) != already.end())
       continue;
     if (!tables.insert(for_table))
@@ -13257,7 +13281,7 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
   }
 
   if (thd->mdl_context.upgrade_shared_lock(
-             old_table->mdl_request.ticket, MDL_EXCLUSIVE,
+             ren_table->mdl_request.ticket, MDL_EXCLUSIVE,
              thd->variables.lock_wait_timeout))
     return true;
 
@@ -13293,22 +13317,22 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
     TABLE_SHARE *ref_share= ref.first;
     for (FK_info &fk: ref_share->foreign_keys)
     {
-      if (cmp_table(fk.ref_db(), old_table->db) ||
-          cmp_table(fk.referenced_table, old_table->table_name))
+      if (cmp_table(fk.ref_db(), ren_table->db) ||
+          cmp_table(fk.referenced_table, ren_table->table_name))
         continue;
-      if (0 != cmp_table(old_table->db, *new_db) &&
-          fk.referenced_db.strdup(&share->mem_root, *new_db))
+      if (0 != cmp_table(ren_table->db, new_table->db) &&
+          fk.referenced_db.strdup(&share->mem_root, new_table->db))
         goto mem_error;
-      if (fk.referenced_table.strdup(&ref_share->mem_root, *new_table_name))
+      if (fk.referenced_table.strdup(&ref_share->mem_root, new_table->table_name))
         goto mem_error;
     }
     for (FK_info &rk: ref_share->referenced_keys)
     {
-      if (cmp_table(rk.foreign_db, old_table->db) ||
-          cmp_table(rk.foreign_table, old_table->table_name))
+      if (cmp_table(rk.foreign_db, ren_table->db) ||
+          cmp_table(rk.foreign_table, ren_table->table_name))
         continue;
-      if (rk.foreign_db.strdup(&ref_share->mem_root, *new_db) ||
-          rk.foreign_table.strdup(&ref_share->mem_root, *new_table_name))
+      if (rk.foreign_db.strdup(&ref_share->mem_root, new_table->db) ||
+          rk.foreign_table.strdup(&ref_share->mem_root, new_table->table_name))
         goto mem_error;
     }
   }

@@ -483,7 +483,7 @@ public:
   Table_name() {}
   Table_name(Lex_cstring _db, Lex_cstring _name)
     : db(_db), name(_name) {}
-  int cmp(const Table_name &rhs) const
+  int cmp(const Table_name rhs) const
   {
     int db_cmp= cmp_table(db, rhs.db);
     if (db_cmp < 0)
