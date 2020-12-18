@@ -966,10 +966,24 @@ update_begin:
             {
               store_record(table, record[2]);
               table->mark_columns_per_binlog_row_image();
-              error= vers_insert_history_row(table);
+              error= vers_insert_history_row(thd, table);
               restore_record(table, record[2]);
+              if (unlikely(error))
+              {
+                if (!table->file->has_transactions())
+                {
+                  table->swap_records(0, 1);
+                  table->file->position(table->record[1]);
+                  if (unlikely(table->file->ha_update_row(table->record[1],
+                                                          table->record[0])))
+                    thd->transaction.stmt.modified_non_trans_table= true;
+                  table->swap_records(0, 1);
+                }
+              }
+              else
+                updated_sys_ver++;
             }
-            if (likely(!error))
+            else
               updated_sys_ver++;
           }
           if (likely(!error))
@@ -2436,7 +2450,7 @@ int multi_update::send_data(List<Item> &not_used_values)
             if (table->versioned(VERS_TIMESTAMP))
             {
               store_record(table, record[2]);
-              if (vers_insert_history_row(table))
+              if (vers_insert_history_row(thd, table))
               {
                 restore_record(table, record[2]);
                 error= 1;
@@ -2751,7 +2765,7 @@ int multi_update::do_updates()
             if (table->versioned(VERS_TIMESTAMP))
             {
               store_record(table, record[2]);
-              if ((local_error= vers_insert_history_row(table)))
+              if ((local_error= vers_insert_history_row(thd, table)))
               {
                 restore_record(table, record[2]);
                 err_table = table;

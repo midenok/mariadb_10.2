@@ -1643,7 +1643,7 @@ static int last_uniq_key(TABLE *table,uint keynr)
  sets Sys_end to now() and calls ha_write_row() .
 */
 
-int vers_insert_history_row(TABLE *table)
+int vers_insert_history_row(THD *thd, TABLE *table)
 {
   DBUG_ASSERT(table->versioned(VERS_TIMESTAMP));
   if (!table->vers_write)
@@ -1655,6 +1655,10 @@ int vers_insert_history_row(TABLE *table)
 
   Field *row_start= table->vers_start_field();
   Field *row_end= table->vers_end_field();
+  /*
+    Skip concurrent events when they happen at same query time (row_start == row_end)
+    or when they happen with time jitter (row_start > row_end).
+  */
   if (row_start->cmp(row_start->ptr, row_end->ptr) >= 0)
     return 0;
 
@@ -1875,7 +1879,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
               if (table->versioned(VERS_TIMESTAMP))
               {
                 store_record(table, record[2]);
-                if ((error= vers_insert_history_row(table)))
+                if ((error= vers_insert_history_row(thd, table)))
                 {
                   info->last_errno= error;
                   table->file->print_error(error, MYF(0));
@@ -1964,10 +1968,23 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
             if (table->versioned(VERS_TIMESTAMP))
             {
               store_record(table, record[2]);
-              error= vers_insert_history_row(table);
+              error= vers_insert_history_row(thd, table);
               restore_record(table, record[2]);
               if (unlikely(error))
+              {
+                if (!table->file->has_transactions())
+                {
+                  table->swap_records(0, 1);
+                  table->file->position(table->record[1]);
+                  if (likely(!table->file->ha_update_row(table->record[1],
+                                                         table->record[0])))
+                    info->deleted--;
+                  else
+                    thd->transaction.stmt.modified_non_trans_table= TRUE;
+                  table->swap_records(0, 1);
+                }
                 goto err;
+              }
             }
           }
           else

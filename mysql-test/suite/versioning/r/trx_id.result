@@ -137,6 +137,54 @@ x
 1
 2
 3
+# Concurrency transactional vs non-transactional
+set timestamp= 1;
+create or replace table t1 (pk int primary key, x int) with system versioning;
+insert into t1 values (1, 0);
+update t1 set x= x + 1;
+set timestamp= 3;
+update t1 set x= x + 2;
+connect con1, localhost, root;
+set timestamp= 2;
+update t1 set x= x + 3;
+disconnect con1;
+connection default;
+# Concurrent events skipped when they happen at same query time (row_start == row_end)
+# or when they happen with time jitter (row_start > row_end)
+select *, row_start, row_end from t1 for system_time all order by row_end, pk;
+pk	x	row_start	row_end
+1	1	1970-01-01 03:00:01.000000	1970-01-01 03:00:03.000000
+1	6	1970-01-01 03:00:02.000000	2038-01-19 06:14:07.999999
+drop tables t1;
+set timestamp= 1;
+select count(*) into @j from mysql.transaction_registry where begin_timestamp >= commit_timestamp;
+create or replace table t1 (
+pk int primary key,
+x int,
+row_start bigint unsigned as row start invisible,
+row_end bigint unsigned as row end invisible,
+period for system_time (row_start, row_end)) with system versioning engine innodb;
+insert into t1 values (1, 0);
+update t1 set x= x + 1;
+set timestamp= 3;
+update t1 set x= x + 2;
+connect con1, localhost, root;
+set timestamp= 2;
+update t1 set x= x + 3;
+disconnect con1;
+connection default;
+# All events logged, begin_timestamp > commit_timestamp  allowed
+select *, trt_commit_ts(row_start), trt_commit_ts(row_end) from t1 for system_time all order by row_end, pk;
+pk	x	trt_commit_ts(row_start)	trt_commit_ts(row_end)
+1	0	1970-01-01 03:00:01.000000	1970-01-01 03:00:01.000000
+1	1	1970-01-01 03:00:01.000000	1970-01-01 03:00:03.000000
+1	3	1970-01-01 03:00:03.000000	1970-01-01 03:00:02.000000
+1	6	1970-01-01 03:00:02.000000	2038-01-19 06:14:07.999999
+select count(*) - @j as jitted from mysql.transaction_registry where begin_timestamp >= commit_timestamp;
+jitted
+4
+drop tables t1;
+set timestamp= default;
 #
 # MDEV-15427 IB: TRX_ID based operations inside transaction generate history
 #
@@ -386,6 +434,7 @@ DROP FUNCTION ftx;
 #
 # MDEV-16330 Allow instant change of WITH SYSTEM VERSIONING column attribute
 #
+select count(*) into @j from mysql.transaction_registry where begin_timestamp >= commit_timestamp;
 SET @@SYSTEM_VERSIONING_ALTER_HISTORY=KEEP;
 CREATE TABLE t (
 a INT,
@@ -481,8 +530,8 @@ COUNT(*)
 1
 DROP TABLE t;
 SET @@SYSTEM_VERSIONING_ALTER_HISTORY=ERROR;
-SELECT count(*) from mysql.transaction_registry where begin_timestamp>=commit_timestamp;
-count(*)
+select count(*) - @j as jitted from mysql.transaction_registry where begin_timestamp >= commit_timestamp;
+jitted
 0
 # MDEV-18875 Assertion `thd->transaction.stmt.ha_list == __null ||
 # trans == &thd->transaction.stmt' failed or bogus ER_DUP_ENTRY upon

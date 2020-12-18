@@ -1585,6 +1585,7 @@ public:
   void move_fields(Field **ptr, const uchar *to, const uchar *from);
   void remember_blob_values(String *blob_storage);
   void restore_blob_values(String *blob_storage);
+  void swap_records(uint rec0, uint rec1);
 
   uint actual_n_key_parts(KEY *keyinfo);
   ulong actual_key_flags(KEY *keyinfo);
