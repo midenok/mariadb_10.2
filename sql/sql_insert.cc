@@ -1643,7 +1643,7 @@ static int last_uniq_key(TABLE *table,uint keynr)
  sets Sys_end to now() and calls ha_write_row() .
 */
 
-int vers_insert_history_row(TABLE *table)
+int vers_insert_history_row(THD *thd, TABLE *table)
 {
   DBUG_ASSERT(table->versioned(VERS_TIMESTAMP));
   if (!table->vers_write)
@@ -1655,7 +1655,8 @@ int vers_insert_history_row(TABLE *table)
 
   Field *row_start= table->vers_start_field();
   Field *row_end= table->vers_end_field();
-  if (row_start->cmp(row_start->ptr, row_end->ptr) >= 0)
+  if (thd->lex->sql_command == SQLCOM_REPLACE &&
+      row_start->cmp(row_start->ptr, row_end->ptr) == 0)
     return 0;
 
   if (table->vfield &&
@@ -1875,7 +1876,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
               if (table->versioned(VERS_TIMESTAMP))
               {
                 store_record(table, record[2]);
-                if ((error= vers_insert_history_row(table)))
+                if ((error= vers_insert_history_row(thd, table)))
                 {
                   info->last_errno= error;
                   table->file->print_error(error, MYF(0));
@@ -1964,7 +1965,7 @@ int write_record(THD *thd, TABLE *table,COPY_INFO *info)
             if (table->versioned(VERS_TIMESTAMP))
             {
               store_record(table, record[2]);
-              error= vers_insert_history_row(table);
+              error= vers_insert_history_row(thd, table);
               restore_record(table, record[2]);
               if (unlikely(error))
                 goto err;
