@@ -968,8 +968,13 @@ update_begin:
               table->mark_columns_per_binlog_row_image();
               error= vers_insert_history_row(thd, table);
               restore_record(table, record[2]);
+              if (unlikely(error))
+              {
+              }
+              else
+                updated_sys_ver++;
             }
-            if (likely(!error))
+            else
               updated_sys_ver++;
           }
           if (likely(!error))
