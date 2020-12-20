@@ -970,6 +970,15 @@ update_begin:
               restore_record(table, record[2]);
               if (unlikely(error))
               {
+                if (!table->file->has_transactions())
+                {
+                  table->swap_records(0, 1);
+                  table->file->position(table->record[1]);
+                  if (unlikely(table->file->ha_update_row(table->record[1],
+                                                          table->record[0])))
+                    thd->transaction.stmt.modified_non_trans_table= true;
+                  table->swap_records(0, 1);
+                }
               }
               else
                 updated_sys_ver++;

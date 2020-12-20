@@ -45,6 +45,8 @@
 #include "ha_sequence.h"
 #include "sql_show.h"
 
+#include <algorithm>            // std::swap
+
 /* For MySQL 5.7 virtual fields */
 #define MYSQL57_GENERATED_FIELD 128
 #define MYSQL57_GCOL_HEADER_SIZE 4
@@ -7181,6 +7183,29 @@ void TABLE::restore_blob_values(String *blob_storage)
 }
 
 
+void TABLE::swap_records(unsigned int rec0, unsigned int rec1)
+{
+  DBUG_ASSERT(rec0 < sizeof(record) / sizeof(record[0]));
+  DBUG_ASSERT(rec1 < sizeof(record) / sizeof(record[0]));
+  DBUG_ASSERT(rec0 != rec1);
+  DBUG_ASSERT(field[0]->ptr >= record[0]);
+  DBUG_ASSERT(field[0]->ptr < record[0] + sizeof(record[0]));
+  std::swap(record[rec0], record[rec1]);
+  if (rec1 == 0)
+  {
+    std::swap(rec1, rec0);
+    goto move_fields;
+  }
+  if (rec0 == 0)
+  {
+move_fields:
+    move_fields(field, record[rec0], record[rec1]);
+    if (vfield)
+      move_fields(vfield, record[rec0], record[rec1]);
+  }
+}
+
+
 /**
   @brief
   Allocate space for keys
@@ -8898,6 +8923,7 @@ bool fk_modifies_child(enum_fk_option opt)
   static bool can_write[]= { false, false, true, true, false, true };
   return can_write[opt];
 }
+
 
 enum TR_table::enabled TR_table::use_transaction_registry= TR_table::MAYBE;
 

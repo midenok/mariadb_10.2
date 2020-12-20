@@ -1585,6 +1585,7 @@ public:
   void move_fields(Field **ptr, const uchar *to, const uchar *from);
   void remember_blob_values(String *blob_storage);
   void restore_blob_values(String *blob_storage);
+  void swap_records(uint rec0, uint rec1);
 
   uint actual_n_key_parts(KEY *keyinfo);
   ulong actual_key_flags(KEY *keyinfo);
@@ -1669,31 +1670,6 @@ public:
 
 /** Number of additional fields used in versioned tables */
 #define VERSIONING_FIELDS 2
-
-  void swap_records(uint rec0, uint rec1)
-  {
-    DBUG_ASSERT(rec0 < sizeof(record) / sizeof(record[0]));
-    DBUG_ASSERT(rec1 < sizeof(record) / sizeof(record[0]));
-    uchar *ptr0= record[rec0];
-    record[rec0]= record[rec1];
-    record[rec1]= ptr0;
-  }
-
-  // FIXME: remove
-  void swap_records2(uint rec0, uint rec1)
-  {
-    DBUG_ASSERT(rec0 < 3);
-    DBUG_ASSERT(rec1 < 3);
-    uchar *ptr0= record[rec0];
-    uchar *ptr1= record[rec1];
-    uchar *end= ptr0 + s->reclength;
-    for (; ptr0 < end; ++ptr0, ++ptr1)
-    {
-      uchar c= *ptr0;
-      *ptr0= *ptr1;
-      *ptr1= c;
-    }
-  }
 };
 
 
