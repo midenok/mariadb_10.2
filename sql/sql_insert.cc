@@ -1666,6 +1666,9 @@ int vers_insert_history_row(THD *thd, TABLE *table)
       table->update_virtual_fields(table->file, VCOL_UPDATE_FOR_READ))
     return HA_ERR_GENERIC;
 
+  if (ERROR_INJECT("fail_vers_insert_history_row", "crash_vers_insert_history_row"))
+    return true;
+
   return table->file->ha_write_row(table->record[0]);
 }
 
