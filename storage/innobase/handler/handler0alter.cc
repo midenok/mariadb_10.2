@@ -56,6 +56,7 @@ Smart ALTER TABLE
 #include "ha_innodb.h"
 #include "ut0stage.h"
 #include "span.h"
+#include <lock0priv.h>
 
 using st_::span;
 /** File format constraint for ALTER TABLE */
@@ -1873,7 +1874,7 @@ innobase_fts_check_doc_id_col(
 /** Check whether the table is empty.
 @param[in]	table	table to be checked
 @return true if table is empty */
-static bool innobase_table_is_empty(const dict_table_t *table)
+bool innobase_table_is_empty(const dict_table_t *table)
 {
   dict_index_t *clust_index= dict_table_get_first_index(table);
   mtr_t mtr;
@@ -1924,6 +1925,92 @@ next_page:
     goto next_page;
   }
   goto scan_leaf;
+}
+
+void
+fk_release_locks(dict_table_t* table)
+{
+	ut_ad(innobase_table_is_empty(table));
+	ut_ad(lock_table_has_locks(table));
+	if (table->n_rec_locks == 0) {
+		goto skip_rec_locks;
+	}
+	for (dict_index_t* index = dict_table_get_first_index(table); index;
+	     index		 = dict_table_get_next_index(index)) {
+		mtr_t	     mtr;
+		btr_pcur_t   pcur;
+		buf_block_t* block;
+		page_cur_t*  cur;
+		const rec_t* rec;
+		bool	     next_page = false;
+
+		mtr.start();
+		btr_pcur_open_at_index_side(true, index, BTR_SEARCH_LEAF,
+					    &pcur, true, 0, &mtr);
+		btr_pcur_move_to_next_user_rec(&pcur, &mtr);
+		if (!rec_is_metadata(btr_pcur_get_rec(&pcur), *index))
+			btr_pcur_move_to_prev_on_page(&pcur);
+	scan_leaf:
+		cur = btr_pcur_get_page_cur(&pcur);
+		page_cur_move_to_next(cur);
+	next_page:
+		if (next_page) {
+			uint32_t next_page_no
+				= btr_page_get_next(page_cur_get_page(cur));
+			if (next_page_no == FIL_NULL) {
+				mtr.commit();
+				continue;
+			}
+
+			next_page = false;
+			block	  = page_cur_get_block(cur);
+			block	  = btr_block_get(*index, next_page_no,
+						  BTR_SEARCH_LEAF, false, &mtr);
+			btr_leaf_page_release(page_cur_get_block(cur),
+					      BTR_SEARCH_LEAF, &mtr);
+			page_cur_set_before_first(block, cur);
+			page_cur_move_to_next(cur);
+		}
+
+		rec = page_cur_get_rec(cur);
+		if (rec_get_deleted_flag(rec, dict_table_is_comp(table)))
+			;
+		else if (!page_rec_is_supremum(rec)) {
+			ut_ad(0);
+			mtr.commit();
+			return;
+		} else {
+			lock_t*	    lock;
+			const ulint heap_no = PAGE_HEAP_NO_SUPREMUM;
+			lock_mutex_enter();
+			for (lock = lock_rec_get_first(&lock_sys.rec_hash,
+						       cur->block, heap_no);
+			     lock != NULL;) {
+				ut_ad(lock->index == index);
+				lock_t* drop = lock;
+				lock = lock_rec_get_next(heap_no, lock);
+				lock_rec_discard(drop);
+			}
+			lock_mutex_exit();
+			next_page = true;
+			goto next_page;
+		}
+		goto scan_leaf;
+	}
+	skip_rec_locks:
+	if (UT_LIST_GET_LEN(table->locks) > 0) {
+		lock_mutex_enter();
+		for (lock_t *lock = UT_LIST_GET_FIRST(table->locks);
+			lock;
+			lock = UT_LIST_GET_NEXT(un_member.tab_lock.locks, lock)) {
+			ut_ad(lock->type() == LOCK_TABLE);
+			ut_ad(lock->un_member.tab_lock.table == table);
+			mutex_enter(&lock->trx->mutex);
+			lock_release(lock);
+			mutex_exit(&lock->trx->mutex);
+		}
+		lock_mutex_exit();
+	}
 }
 
 /** Check if InnoDB supports a particular alter table in-place
@@ -7190,6 +7277,8 @@ static dberr_t
 innobase_drop_column_check_legacy_fk(trx_t* trx, const char* table_name,
 				     const char* col_name, bool& found)
 {
+	ut_ad(DB_SUCCESS == fk_legacy_storage_exists(false));
+
 	static const char sql_check[]
 		= "PROCEDURE FK_PROC () IS\n"
 		  "fk_id CHAR;\n"
@@ -7289,17 +7378,18 @@ innobase_check_foreign_key_index(
 	}
 
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-	bool found = false;
-	// NB: foreign keys always reference index by first field
-	if (DB_SUCCESS
-	    != innobase_drop_column_check_legacy_fk(
-		    trx, indexed_table->name.m_name, index->fields[0].name,
-		    found)) {
-		return false;
-	}
-	if (found) {
-		trx->error_info = index;
-		return (true);
+	if (DB_SUCCESS == fk_legacy_storage_exists(false)) {
+		bool found = false;
+		// NB: foreign keys always reference index by first field
+		if (DB_SUCCESS != innobase_drop_column_check_legacy_fk(
+			trx, indexed_table->name.m_name, index->fields[0].name,
+			found)) {
+			return false;
+		}
+		if (found) {
+			trx->error_info = index;
+			return (true);
+		}
 	}
 #endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
@@ -8966,41 +9056,48 @@ err_exit:
 	}
 
 rename_foreign:
-	trx->op_info = "renaming column in SYS_FOREIGN_COLS";
-
 #ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-	static const char sql_rename_ref[]
-		= "PROCEDURE FETCH_PROC () IS\n"
-		  "fk_id CHAR;\n"
-
-		  "DECLARE CURSOR c IS"
-		  " SELECT ID FROM SYS_FOREIGN"
-		  " WHERE REF_NAME = :ref_name;\n"
-
-		  "BEGIN\n"
-		  "OPEN c;\n"
-		  "WHILE 1 = 1 LOOP\n"
-		  "  FETCH c INTO fk_id;\n"
-		  "  IF (SQL % NOTFOUND) THEN\n"
-		  "    EXIT;\n"
-		  "  END IF;\n"
-		  "  UPDATE SYS_FOREIGN_COLS"
-		  "    SET REF_COL_NAME = :new"
-		  "    WHERE ID = fk_id AND REF_COL_NAME = :old;\n"
-		  "END LOOP;\n"
-		  "CLOSE c;\n"
-		  "END;\n";
-
-	pars_info_t* info = pars_info_create();
-
-	pars_info_add_str_literal(info, "ref_name", ctx.old_table->name.m_name);
-	pars_info_add_str_literal(info, "old", from);
-	pars_info_add_str_literal(info, "new", to);
-
-	error = que_eval_sql(info, sql_rename_ref, false, trx);
-
-	if (error != DB_SUCCESS) {
+	error = fk_legacy_storage_exists(false);
+	if (error == DB_CORRUPTION) {
 		goto err_exit;
+	}
+	if (error == DB_SUCCESS) {
+		trx->op_info = "renaming column in SYS_FOREIGN_COLS";
+
+		static const char sql_rename_ref[]
+			= "PROCEDURE FETCH_PROC () IS\n"
+			"fk_id CHAR;\n"
+
+			"DECLARE CURSOR c IS"
+			" SELECT ID FROM SYS_FOREIGN"
+			" WHERE REF_NAME = :ref_name;\n"
+
+			"BEGIN\n"
+			"OPEN c;\n"
+			"WHILE 1 = 1 LOOP\n"
+			"  FETCH c INTO fk_id;\n"
+			"  IF (SQL % NOTFOUND) THEN\n"
+			"    EXIT;\n"
+			"  END IF;\n"
+			"  UPDATE SYS_FOREIGN_COLS"
+			"    SET REF_COL_NAME = :new"
+			"    WHERE ID = fk_id AND REF_COL_NAME = :old;\n"
+			"END LOOP;\n"
+			"CLOSE c;\n"
+			"END;\n";
+
+		pars_info_t* info = pars_info_create();
+
+		pars_info_add_str_literal(info, "ref_name",
+					  ctx.old_table->name.m_name);
+		pars_info_add_str_literal(info, "old", from);
+		pars_info_add_str_literal(info, "new", to);
+
+		error = que_eval_sql(info, sql_rename_ref, false, trx);
+
+		if (error != DB_SUCCESS) {
+			goto err_exit;
+		}
 	}
 #endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 

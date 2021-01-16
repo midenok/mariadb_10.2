@@ -31,7 +31,7 @@ Created July 12, 2007 Vasil Dimov
 /* If you need to access members of the structures defined in this
 file, please write appropriate functions that retrieve them and put
 those functions in lock/ */
-#error Do not include lock0priv.h outside of the lock/ module
+// FIXME: #error Do not include lock0priv.h outside of the lock/ module
 #endif
 
 #include "hash0hash.h"
@@ -456,6 +456,11 @@ Cancels a waiting lock request and releases possible other transactions
 waiting behind it. */
 void
 lock_cancel_waiting_and_release(
+/*============================*/
+	lock_t*	lock);	/*!< in/out: waiting lock request */
+
+void
+lock_release(
 /*============================*/
 	lock_t*	lock);	/*!< in/out: waiting lock request */
 

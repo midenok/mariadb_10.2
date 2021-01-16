@@ -6072,6 +6072,35 @@ lock_cancel_waiting_and_release(
 	lock->trx->lock.cancel = false;
 }
 
+void
+lock_release(
+/*============================*/
+	lock_t*	lock)	/*!< in/out: waiting lock request */
+{
+	ut_ad(lock_mutex_own());
+	ut_ad(trx_mutex_own(lock->trx));
+
+	lock->trx->lock.cancel = true;
+
+	if (lock_get_type_low(lock) == LOCK_REC) {
+
+		lock_rec_dequeue_from_page(lock);
+	} else {
+		ut_ad(lock_get_type_low(lock) & LOCK_TABLE);
+
+		if (lock->trx->autoinc_locks != NULL) {
+			/* Release the transaction's AUTOINC locks. */
+			lock_release_autoinc_locks(lock->trx);
+		}
+
+		lock_table_dequeue(lock);
+		/* Remove the lock from table lock vector too. */
+		lock_trx_table_locks_remove(lock);
+	}
+
+	lock->trx->lock.cancel = false;
+}
+
 /*********************************************************************//**
 Unlocks AUTO_INC type locks that were possibly reserved by a trx. This
 function should be called at the the end of an SQL statement, by the

@@ -30,7 +30,7 @@ I.e. lock/lock0lock.cc contains more internal inline
 methods but they are used only in that file. */
 
 #ifndef LOCK_MODULE_IMPLEMENTATION
-#error Do not include lock0priv.ic outside of the lock/ module
+// FIXME: #error Do not include lock0priv.ic outside of the lock/ module
 #endif
 
 #include "row0row.h"
