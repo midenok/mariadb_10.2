@@ -2654,13 +2654,16 @@ skip:
 
 	dberr_t err = row_drop_table_for_mysql_in_background(name);
 
-	ut_free(name);
-
 	if (err != DB_SUCCESS) {
+		ut_free(name);
 		/* If the DROP fails for some table, we return, and let the
 		main thread retry later */
 		return(n_tables + n_tables_dropped);
 	}
+
+	DEBUG_SYNC_C("background_dropped_");
+	ut_free(name);
+
 
 	goto loop;
 }
@@ -3348,7 +3351,8 @@ row_drop_table_for_mysql(
 	trx_t*			trx,
 	enum_sql_command	sqlcom,
 	bool			create_failed,
-	bool			nonatomic)
+	bool			nonatomic,
+	bool			is_temp_name)
 {
 	dberr_t		err;
 	dict_foreign_t*	foreign;
@@ -3397,8 +3401,9 @@ row_drop_table_for_mysql(
 
 	std::vector<pfs_os_file_t> detached_handles;
 
-	const bool is_temp_name = strstr(table->name.m_name,
-					 "/" TEMP_FILE_PREFIX);
+	if (!is_temp_name) {
+		is_temp_name = strstr(table->name.m_name, "/" TEMP_FILE_PREFIX);
+	}
 
 	if (table->is_temporary()) {
 		ut_ad(table->space == fil_system.temp_space);

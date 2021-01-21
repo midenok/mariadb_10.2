@@ -1425,15 +1425,17 @@ fk_legacy_storage_exists(bool lock_dict_mutex)
 	if (lock_dict_mutex) {
 		mutex_exit(&dict_sys.mutex);
 	}
-	ut_ad(sys_foreign_err == sys_foreign_cols_err);
 
 	if (sys_foreign_err == DB_SUCCESS
 	    && sys_foreign_cols_err == DB_SUCCESS) {
 		return(DB_SUCCESS);
 	}
 
-	if (sys_foreign_err == DB_TABLE_NOT_FOUND
-	    && sys_foreign_cols_err == DB_TABLE_NOT_FOUND) {
+	// deferred drop is asynchronous
+	if ((sys_foreign_err == DB_TABLE_NOT_FOUND
+	     || sys_foreign_err == DB_SUCCESS)
+	    && (sys_foreign_cols_err == DB_TABLE_NOT_FOUND
+	     || sys_foreign_cols_err == DB_SUCCESS)) {
 		return(DB_TABLE_NOT_FOUND);
 	}
 

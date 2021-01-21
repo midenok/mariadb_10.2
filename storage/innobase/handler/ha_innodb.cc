@@ -21521,28 +21521,26 @@ fk_cleanup_legacy_storage(bool lock_dict_mutex, trx_t* trx)
 		return DB_SUCCESS;
 	}
 
-	if (sys_foreign->n_rec_locks > 0) {
+	if (lock_table_has_locks(sys_foreign)) {
 		fk_release_locks(sys_foreign);
 	}
-	if (sys_forcols->n_rec_locks > 0) {
+	if (lock_table_has_locks(sys_forcols)) {
 		fk_release_locks(sys_forcols);
 	}
-	ut_ad(sys_foreign->get_ref_count() == 0);
-	ut_ad(sys_forcols->get_ref_count() == 0);
 	ut_ad(!lock_table_has_locks(sys_foreign));
 	ut_ad(!lock_table_has_locks(sys_forcols));
 
 	bool check_foreigns = trx->check_foreigns;
 	trx->check_foreigns = false;
 	err = row_drop_table_for_mysql("SYS_FOREIGN", trx, SQLCOM_DROP_DB,
-				       false);
+				       false, true, true);
 	if (err != DB_SUCCESS) {
 		trx->check_foreigns = check_foreigns;
 		return err;
 	}
 	trx->check_foreigns = false;
 	err = row_drop_table_for_mysql("SYS_FOREIGN_COLS", trx, SQLCOM_DROP_DB,
-				       false);
+				       false, true, true);
 	trx->check_foreigns = check_foreigns;
 	return err;
 }

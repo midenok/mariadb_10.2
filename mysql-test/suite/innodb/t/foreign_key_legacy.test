@@ -27,10 +27,12 @@ flush tables;
 show create table t2;
 --enable_warnings
 
+set global innodb_background_drop_list_empty= 1;
 --error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
 --error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
+
 
 flush tables;
 --error ER_ROW_IS_REFERENCED_2
@@ -53,6 +55,7 @@ set session debug_dbug= @saved_debug_dbug;
 drop table t1;
 drop tables t2, t1;
 
+set global innodb_background_drop_list_empty= 1;
 --error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
 --error ER_BAD_TABLE_ERROR
@@ -81,6 +84,7 @@ check table D1.t1, D2.t2;
 drop database D2;
 --replace_result d1 D1 d2 D2
 check table D1.t1, D2.t2;
+set global innodb_background_drop_list_empty= 1;
 --error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
 --error ER_BAD_TABLE_ERROR
@@ -182,6 +186,7 @@ select * from information_schema.innodb_sys_foreign_cols;
 show create table t2;
 --enable_warnings
 
+set global innodb_background_drop_list_empty= 1;
 --error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
 --error ER_BAD_TABLE_ERROR
@@ -210,7 +215,10 @@ select * from information_schema.innodb_sys_foreign_cols;
 show create table t3;
 --enable_warnings
 
+set global innodb_background_drop_list_empty= 1;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
 --error ER_ROW_IS_REFERENCED_2
 drop table t1;
@@ -238,7 +246,10 @@ select * from information_schema.innodb_sys_foreign_cols;
 show create table t2;
 --enable_warnings
 
+set global innodb_background_drop_list_empty= 1;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
 drop tables t2, t0;
 
@@ -255,7 +266,10 @@ set session debug_dbug= @saved_debug_dbug;
 
 alter table t2 rename t3;
 
+set global innodb_background_drop_list_empty= 1;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
 
 show create table t3;
@@ -283,7 +297,10 @@ select * from information_schema.innodb_sys_foreign_cols;
 --disable_warnings
 show create table t2;
 --enable_warnings
+set global innodb_background_drop_list_empty= 1;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
 drop tables t2, t1;
 
@@ -300,7 +317,10 @@ set session debug_dbug= @saved_debug_dbug;
 
 alter table t2 change y z int;
 
+set global innodb_background_drop_list_empty= 1;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
 
 --disable_warnings
@@ -331,7 +351,10 @@ select * from information_schema.innodb_sys_foreign_cols;
 show create table t2;
 --enable_warnings
 
+set global innodb_background_drop_list_empty= 1;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
 --error ER_ROW_IS_REFERENCED_2
 drop table t1;
@@ -350,7 +373,10 @@ set session debug_dbug= @saved_debug_dbug;
 
 alter table t2 rename column y to z;
 
+set global innodb_background_drop_list_empty= 1;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
 
 --disable_warnings
@@ -382,7 +408,10 @@ alter table t1 drop column x;
 --error ER_DROP_INDEX_FK
 alter table t2 drop column y;
 
+set global innodb_background_drop_list_empty= 1;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign;
+--error ER_BAD_TABLE_ERROR
 select * from information_schema.innodb_sys_foreign_cols;
 
 --error ER_ROW_IS_REFERENCED_2
