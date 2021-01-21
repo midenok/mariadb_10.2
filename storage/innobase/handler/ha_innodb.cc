@@ -21502,42 +21502,6 @@ fk_cleanup_legacy_storage(bool lock_dict_mutex, trx_t* trx)
 	bool sys_foreign_nempty = false;
 	bool sys_forcols_nempty = false;
 	dberr_t err;
-// FIXME: remove
-#if 0
-	pars_info_t* info;
-	info = pars_info_create();
-	if (!info) {
-		return DB_OUT_OF_MEMORY;
-	}
-	pars_info_bind_function(info, "get_foreign_nonempty", pars_get_true,
-				&sys_foreign_nonempty);
-	pars_info_bind_function(info, "get_foreign_cols_nonempty",
-				pars_get_true, &sys_foreign_cols_nonempty);
-	static const char sql[]
-		= "PROCEDURE FK_PROC () IS\n"
-		"DECLARE FUNCTION get_foreign_nonempty;\n"
-		"DECLARE FUNCTION get_foreign_cols_nonempty;\n"
-
-		"DECLARE CURSOR c1 IS"
-		" SELECT ID FROM SYS_FOREIGN;"
-
-		"DECLARE CURSOR c2 IS"
-		" SELECT ID FROM SYS_FOREIGN_COLS;"
-
-		"BEGIN\n"
-		"OPEN c1;\n"
-		"FETCH c1 INTO get_foreign_nonempty();\n"
-		"CLOSE c1;\n"
-		"OPEN c2;\n"
-		"FETCH c2 INTO get_foreign_cols_nonempty();\n"
-		"CLOSE c2;\n"
-		"END;\n";
-
-	err = que_eval_sql(info, sql, lock_dict_mutex, trx);
-	if (err != DB_SUCCESS) {
-		return err;
-	}
-#else
 	if (lock_dict_mutex) {
 		mutex_enter(&dict_sys.mutex);
 	}
@@ -21548,7 +21512,6 @@ fk_cleanup_legacy_storage(bool lock_dict_mutex, trx_t* trx)
 	}
 	sys_foreign_nempty = !innobase_table_is_empty(sys_foreign);
 	sys_forcols_nempty = !innobase_table_is_empty(sys_forcols);
-#endif
 	if (sys_foreign_nempty != sys_forcols_nempty) {
 		ut_ad(0);
 		return DB_CORRUPTION;
