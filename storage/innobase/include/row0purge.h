@@ -227,13 +227,6 @@ public:
 
     innobase_reset_background_thd(purge_thd);
     dict_table_close(table, false, false, purge_thd, mdl_ticket);
-
-#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
-    if (table->fk_legacy_storage())
-    {
-    }
-#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
-
     table= nullptr;
     mdl_ticket= nullptr;
   }
