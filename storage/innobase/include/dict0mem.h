@@ -1935,6 +1935,25 @@ struct dict_table_t {
 		ut_ad(fk_checks > 0);
 	}
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
+	bool fk_legacy_storage() const
+	{
+		if (table->n_cols == DICT_NUM_FIELDS__SYS_FOREIGN + 1
+		    && table->indexes.count == 3
+		    && !strcmp(table->name.m_name, "SYS_FOREIGN")
+		{
+			return true;
+		}
+		else if (table->n_cols == DICT_NUM_FIELDS__SYS_FOREIGN_COLS + 1
+			 && table->indexes.count == 1
+			 && !strcmp(table->name.m_name, "SYS_FOREIGN_COLS")
+		{
+			return true;
+		}
+		return false;
+	}
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
+
 	/** For overflow fields returns potential max length stored inline */
 	inline size_t get_overflow_field_local_len() const;
 
