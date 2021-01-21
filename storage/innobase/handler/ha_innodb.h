@@ -1012,7 +1012,3 @@ dict_load_foreigns(
 @param[in]	table	table to be checked
 @return true if table is empty */
 bool innobase_table_is_empty(const dict_table_t *table);
-
-void
-fk_release_locks(dict_table_t *table);
-

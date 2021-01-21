@@ -19480,8 +19480,8 @@ static MYSQL_SYSVAR_BOOL(encrypt_temporary_tables, innodb_encrypt_temporary_tabl
   "Enrypt the temporary table data.",
   NULL, NULL, false);
 
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
 #ifdef UNIV_DEBUG
-
 static char* innodb_eval_sql;
 
 static int innodb_eval_sql_validate(THD *thd, st_mysql_sys_var*,
@@ -19568,6 +19568,7 @@ static MYSQL_SYSVAR_STR(eval_sql,
   "Evaluate internal SQL",
   innodb_eval_sql_validate, NULL, NULL);
 #endif /* UNIV_DEBUG */
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 
 static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(autoextend_increment),
@@ -19731,7 +19732,9 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(dict_stats_disabled_debug),
   MYSQL_SYSVAR(master_thread_disabled_debug),
   MYSQL_SYSVAR(sync_debug),
+#ifdef WITH_INNODB_LEGACY_FOREIGN_STORAGE
   MYSQL_SYSVAR(eval_sql),
+#endif /* WITH_INNODB_LEGACY_FOREIGN_STORAGE */
 #endif /* UNIV_DEBUG */
   MYSQL_SYSVAR(force_primary_key),
   MYSQL_SYSVAR(fatal_semaphore_wait_threshold),

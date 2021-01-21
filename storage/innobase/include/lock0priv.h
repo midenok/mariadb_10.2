@@ -31,7 +31,7 @@ Created July 12, 2007 Vasil Dimov
 /* If you need to access members of the structures defined in this
 file, please write appropriate functions that retrieve them and put
 those functions in lock/ */
-// FIXME: #error Do not include lock0priv.h outside of the lock/ module
+#error Do not include lock0priv.h outside of the lock/ module
 #endif
 
 #include "hash0hash.h"

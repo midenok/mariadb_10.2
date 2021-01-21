@@ -14,9 +14,11 @@ create or replace table t2(y int references t1(x));
 set session debug_dbug= @saved_debug_dbug;
 show create table t2;
 
+set session debug_dbug= "+d,fk_create_legacy_storage";
 set global innodb_eval_sql="BEGIN
 INSERT INTO SYS_FOREIGN VALUES ('test/t2_ibfk_1', 'test/t2', 'test/t1', 1);
 INSERT INTO SYS_FOREIGN_COLS VALUES ('test/t2_ibfk_1', 0, 'y', 'x');";
+set session debug_dbug= @saved_debug_dbug;
 
 select * from information_schema.innodb_sys_foreign;
 select * from information_schema.innodb_sys_foreign_cols;
