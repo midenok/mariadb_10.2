@@ -391,7 +391,7 @@ class set :
 public:
   const Key* insert(const Key& value, bool *inserted= NULL)
   {
-    bool ins;
+    bool ins= false;
     auto ret= exception_wrapper<std::set<Key, Compare, Allocator> >::
       insert(value, ins);
     if (inserted)
@@ -402,7 +402,7 @@ public:
   }
   const Key* insert(Key&& value, bool *inserted= NULL)
   {
-    bool ins;
+    bool ins= false;
     auto ret= exception_wrapper<std::set<Key, Compare, Allocator> >::
       insert(std::forward<Key>(value), ins);
     if (inserted)
@@ -414,7 +414,7 @@ public:
   template <class... Args>
   const Key* emplace(bool *inserted, Args&&... args)
   {
-    bool ins;
+    bool ins= false;
     auto ret= exception_wrapper<std::set<Key, Compare, Allocator> >::
       emplace(ins, std::forward<Args>(args)...);
     if (inserted)
