@@ -671,7 +671,7 @@ int FK_backup_storage::write_shadow_frms()
 {
   int err;
 #ifndef DBUG_OFF
-  FK_backup *last;
+  FK_backup *last= NULL;
   for (auto &bak: *this)
   {
     if (!bak.second.update_frm)
@@ -700,7 +700,7 @@ bool FK_backup_storage::install_shadow_frms()
   if (!size())
     return false;
 #ifndef DBUG_OFF
-  FK_backup *last;
+  FK_backup *last= NULL;
   for (auto &bak: *this)
   {
     if (!bak.second.update_frm)
