@@ -12202,14 +12202,14 @@ create_table_info_t::create_foreign_keys()
 }
 
 #ifdef WITH_INNODB_FOREIGN_UPGRADE
-int
-create_table_info_t::check_legacy_fk()
+static int
+check_legacy_fk(trx_t *trx, const TABLE *table, bool lock_dict_mutex)
 {
 	char   table_name[MAX_FULL_NAME_LEN + 1];
 	char*  bufptr = table_name;
 	size_t len;
 
-	dberr_t err = fk_legacy_storage_exists(false);
+	dberr_t err = fk_legacy_storage_exists(lock_dict_mutex);
 	if (err == DB_TABLE_NOT_FOUND) {
 		return 0;
 	}
@@ -12217,14 +12217,20 @@ create_table_info_t::check_legacy_fk()
 		return convert_error_code_to_mysql(err, 0, NULL);
 	}
 
-	if (dict_table_t::build_name(LEX_STRING_WITH_LEN(m_form->s->db),
-				     LEX_STRING_WITH_LEN(m_form->s->table_name),
+	if (dict_table_t::build_name(LEX_STRING_WITH_LEN(table->s->db),
+				     LEX_STRING_WITH_LEN(table->s->table_name),
 				     bufptr, len)) {
 		return HA_ERR_OUT_OF_MEM;
 	}
 	row_drop_table_check_legacy_data data;
 
-	err = row_drop_table_check_legacy_fk(m_trx, table_name, data);
+	if (lock_dict_mutex) {
+		dict_sys.mutex_lock();
+	}
+	err = row_drop_table_check_legacy_fk(trx, table_name, data);
+	if (lock_dict_mutex) {
+		dict_sys.mutex_unlock();
+	}
 	if (err != DB_SUCCESS) {
 		return convert_error_code_to_mysql(err, 0, NULL);
 	}
@@ -12255,7 +12261,7 @@ int create_table_info_t::create_table(bool create_fk)
 
 #ifdef WITH_INNODB_FOREIGN_UPGRADE
 	if (enum_sql_command(thd_sql_command(m_thd)) == SQLCOM_ALTER_TABLE) {
-		error = check_legacy_fk();
+		error = check_legacy_fk(m_trx, m_form, false);
 		if (error) {
 			DBUG_RETURN(error);
 		}
@@ -15012,6 +15018,14 @@ ha_innobase::extra(
 	case HA_EXTRA_END_ALTER_COPY:
 		m_prebuilt->table->skip_alter_undo = 0;
 		break;
+#ifdef WITH_INNODB_FOREIGN_UPGRADE
+	case HA_EXTRA_CHECK_LEGACY_FK: {
+		int ha_err = check_legacy_fk(m_prebuilt->trx, table, true);
+		if (ha_err == HA_ERR_FK_UPGRADE)
+			return HA_ERR_ROW_IS_REFERENCED;
+		return ha_err;
+	}
+#endif /* WITH_INNODB_FOREIGN_UPGRADE */
 	case HA_EXTRA_FAKE_START_STMT:
 		trx_register_for_2pc(m_prebuilt->trx);
 		m_prebuilt->sql_stat_start = true;

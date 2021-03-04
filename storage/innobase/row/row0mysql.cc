@@ -3508,6 +3508,8 @@ row_drop_table_for_mysql(
 
 	if (!srv_read_only_mode && trx->check_foreigns) {
 
+		/* TODO: should be removed as this checks only the case when
+		FRM is removed (Test6 in main.drop_table_force) */
 		for (dict_foreign_set::iterator it
 			= table->referenced_set.begin();
 		     it != table->referenced_set.end();
@@ -3550,7 +3552,10 @@ row_drop_table_for_mysql(
 				goto funct_exit;
 			}
 		}
+	}
+
 #ifdef WITH_INNODB_FOREIGN_UPGRADE
+	if (!srv_read_only_mode) {
 		row_drop_table_check_legacy_data data;
 
 		err = fk_legacy_storage_exists(false);
@@ -3587,8 +3592,8 @@ row_drop_table_for_mysql(
 				goto funct_exit;
 			}
 		}
+	}
 #endif	  /* WITH_INNODB_FOREIGN_UPGRADE */
-	} // if (!srv_read_only_mode && trx->check_foreigns)
 
 	DBUG_EXECUTE_IF("row_drop_table_add_to_background", goto defer;);
 

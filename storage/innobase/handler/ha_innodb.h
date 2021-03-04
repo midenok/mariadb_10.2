@@ -742,10 +742,6 @@ private:
 	/** Create the internal innodb table definition. */
 	int create_table_def();
 
-#ifdef WITH_INNODB_FOREIGN_UPGRADE
-	int check_legacy_fk();
-#endif /* WITH_INNODB_FOREIGN_UPGRADE */
-
 	/** Connection thread handle. */
 	THD*		m_thd;
 

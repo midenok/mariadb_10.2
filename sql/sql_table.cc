@@ -10399,6 +10399,11 @@ do_continue:;
   char backup_name_buff[FN_LEN];
   LEX_CSTRING backup_name;
   backup_name.str= backup_name_buff;
+  /*
+     TODO: should be removed as this is only for the InnoDB-specific check in
+     row_drop_table_for_mysql() of case when FRM is removed
+     (Test6 in main.drop_table_force).
+  */
   thd->variables.option_bits|= OPTION_NO_FOREIGN_KEY_CHECKS;
 
   DBUG_PRINT("info", ("is_table_renamed: %d  engine_changed: %d",
@@ -10508,6 +10513,18 @@ err_rename_back:
 
   if (error)
   {
+#ifdef WITH_INNODB_FOREIGN_UPGRADE
+    if (thd->is_error() &&
+        thd->get_stmt_da()->sql_errno() == ER_ROW_IS_REFERENCED_2 &&
+        alter_info->algorithm(thd) == Alter_info::ALTER_TABLE_ALGORITHM_COPY)
+    {
+      /*
+         TODO: row_drop_table_check_legacy_fk() failed and we must revert the
+         ALTER back (depends on Atomic ALTER).
+      */
+      goto err_with_mdl_after_alter;
+    }
+#endif /* WITH_INNODB_FOREIGN_UPGRADE */
     /*
       The fact that deletion of the backup failed is not critical
       error, but still worth reporting as it might indicate serious
@@ -10710,6 +10727,15 @@ copy_data_between_tables(THD *thd, TABLE *from, TABLE *to,
   Field *to_row_start= NULL, *to_row_end= NULL, *from_row_end= NULL;
   MYSQL_TIME query_start;
   DBUG_ENTER("copy_data_between_tables");
+
+#ifdef WITH_INNODB_FOREIGN_UPGRADE
+  if((error= from->file->extra(HA_EXTRA_CHECK_LEGACY_FK)))
+  {
+    from->file->print_error(error, MYF(0));
+    DBUG_RETURN(-1);
+  }
+  error= 1;
+#endif /* WITH_INNODB_FOREIGN_UPGRADE */
 
   /* Two or 3 stages; Sorting, copying data and update indexes */
   thd_progress_init(thd, 2 + MY_TEST(order));
